@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 bevy = "0.12"
+bvh_anim = "0.4"
+bevy_gltf = "0.12"
