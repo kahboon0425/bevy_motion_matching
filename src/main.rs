@@ -1,3 +1,4 @@
+use bevy::gltf::Gltf;
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::Window;
@@ -10,10 +11,53 @@ use bevy::DefaultPlugins;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_systems(PreStartup, load_character_gltf)
         .add_systems(Startup, (spawn_camera, setup))
+        .add_systems(Update, spawn_gltf_objects)
         .add_systems(Update, pan_orbit_camera)
         .run();
 }
+
+/// Helper resource for tracking our asset
+#[derive(Resource)]
+struct CharacterGltf(Handle<Gltf>);
+
+fn load_character_gltf(mut commands: Commands, ass: Res<AssetServer>) {
+    let gltf: Handle<Gltf> = ass.load("glb/model_skeleton.glb");
+    commands.insert_resource(CharacterGltf(gltf));
+}
+
+fn spawn_gltf_objects(
+    mut commands: Commands,
+    character_gltf: Res<CharacterGltf>,
+    assets_gltf: Res<Assets<Gltf>>,
+) {
+    println!("============================");
+    // if the GLTF has loaded, we can navigate its contents
+    if let Some(gltf) = assets_gltf.get(&character_gltf.0) {
+        // spawn the first scene in the file
+        // commands.spawn(SceneBundle {
+        //     scene: gltf.scenes[0].clone(),
+        //     ..Default::default()
+        // });
+
+        for key in gltf.named_nodes.keys() {
+            println!("{}", key);
+        }
+
+        // spawn the scene named "YellowCar"
+        // commands.spawn(SceneBundle {
+        //     scene: gltf.named_scenes["YellowCar"].clone(),
+        //     transform: Transform::from_xyz(1.0, 2.0, 3.0),
+        //     ..Default::default()
+        // });
+
+        // PERF: the `.clone()`s are just for asset handles, don't worry :)
+    }
+}
+
+#[derive(Component)]
+pub struct MainCharacter;
 
 pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(DirectionalLightBundle {
@@ -25,12 +69,35 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 
     // spawn the first scene in the file
-    let scene0 = asset_server.load("./glb/model_skeleton.glb#Scene0");
+    let scene0: Handle<Scene> = asset_server.load("./glb/model_skeleton.glb#Scene0");
     println!("Loaded asset: {:?}", scene0);
-    commands.spawn(SceneBundle {
-        scene: scene0,
-        ..Default::default()
-    });
+    commands
+        .spawn(SceneBundle {
+            scene: scene0,
+            ..default()
+        })
+        .insert(MainCharacter);
+}
+
+pub fn check_character(
+    // mut commands: Commands,
+    q_character: Query<(Entity, &Children), With<MainCharacter>>,
+    q_children: Query<&Children>,
+) {
+    let Ok((_characater_entity, children)) = q_character.get_single() else {
+        return;
+    };
+
+    fn recurse_loop_children(children: &Children, q_children: &Query<&Children>) {
+        for child in children {
+            println!("{:?}", child);
+            if let Ok(new_children) = q_children.get(*child) {
+                recurse_loop_children(new_children, q_children);
+            }
+        }
+    }
+
+    recurse_loop_children(children, &q_children);
 }
 
 /// Tags an entity as capable of panning and orbiting.
