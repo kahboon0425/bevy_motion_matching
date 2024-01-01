@@ -35,6 +35,7 @@ fn spawn_gltf_objects(
     println!("============================");
     // if the GLTF has loaded, we can navigate its contents
     if let Some(gltf) = assets_gltf.get(&character_gltf.0) {
+        let mut count: u32 = 0;
         // spawn the first scene in the file
         // commands.spawn(SceneBundle {
         //     scene: gltf.scenes[0].clone(),
@@ -43,7 +44,12 @@ fn spawn_gltf_objects(
 
         for key in gltf.named_nodes.keys() {
             println!("{}", key);
+            count += 1;
         }
+
+        println!("{:#?}", gltf);
+
+        println!("{}", count);
 
         // spawn the scene named "YellowCar"
         // commands.spawn(SceneBundle {
