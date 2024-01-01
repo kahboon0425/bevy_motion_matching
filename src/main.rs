@@ -69,7 +69,8 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 
     // spawn the first scene in the file
-    let scene0: Handle<Scene> = asset_server.load("./glb/model_skeleton.glb#Scene0");
+    // let scene0: Handle<Scene> = asset_server.load("./glb/model_skeleton.glb#Scene0");
+    let scene0: Handle<Scene> = asset_server.load("./glb/simple_skeleton.glb#Scene0");
     println!("Loaded asset: {:?}", scene0);
     commands
         .spawn(SceneBundle {
