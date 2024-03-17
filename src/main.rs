@@ -168,30 +168,18 @@ pub fn match_bones(
         return;
     }
 
-    // match load_bvh() {
-    //     Ok(bvh) => {
     if let Some(bvh_vec) = &bvh_data.0 {
         let bvh: Bvh = bvh_vec[1].clone();
         let frame: &bvh_anim::Frame = bvh.frames().last().unwrap();
-        println!("Loading frame 0!");
-        // for bvh in bvh_vec {
-        // for frame in bvh.frames() {
-        // println!("{:#?}", frame);
 
         println!("{:#?}", frame);
 
         for (entity, name, mut transform) in q_names.iter_mut() {
-            // println!("{}", name);
             let bone_name = &name.as_str()[6..];
-            // println!("{:#?}", bone_name);
 
             let mut joint_index: usize = 0;
-            // let mut count: usize = 0;
 
             for joint in bvh.joints() {
-                // count += 1;
-
-                // println!("{:#?}", joint);
                 if bone_name == joint.data().name() {
                     if bone_name == "Hips" {
                         continue;
@@ -201,36 +189,10 @@ pub fn match_bones(
 
                     commands.entity(entity).insert(BoneIndex(joint_index));
 
-                    // println!("{:#?}", joint.data().name());
-                    // println!("{:#?}", joint.data());
-                    // println!("{:#?}", joint.data().offset());
                     let offset_y = joint.data().offset().x;
                     let offset_x = joint.data().offset().y;
                     let offset_z = joint.data().offset().z;
 
-                    // let rotation_index_0 = joint.data().channels()[0].motion_index();
-                    // println!("{:#?}", rotation_index_0);
-                    // let rotation_index_1 = joint.data().channels()[1].motion_index();
-                    // let rotation_index_2 = joint.data().channels()[2].motion_index();
-
-                    // println!("{:#?}", rotation_x);
-
-                    // println!("{:#?}", joint.data().offset().x);
-                    // let transform = Transform::from_xyz(offset_x, offset_y, offset_z);
-                    // commands.entity(entity).insert(transform);
-
-                    // transform.translation = Vec3::new(offset_x, offset_y, offset_z);
-
-                    // println!("{:#?}", frame);
-                    // println!("{:#?}", frame[&joint.data().channels()[0]]);
-                    // let test =
-                    //     frame.get(&bvh.joints().next().unwrap().data().channels()[0]);
-
-                    // println!("------------------------------------------ {:#?}", test);
-                    // println!("{:#?}", &joint.data().channels()[0]);
-                    // println!("{:#?}", &joint.data().channels()[1]);
-                    // println!("{:#?}", &joint.data().channels()[2]);
-                    println!("{}", &joint.data().channels().len());
                     let rotation_0 = frame[&joint.data().channels()[0]];
                     let rotation_1 = frame[&joint.data().channels()[1]];
                     let rotation_2 = frame[&joint.data().channels()[2]];
@@ -242,49 +204,23 @@ pub fn match_bones(
                         rotation_2.to_radians(),
                     );
 
-                    let mut origin_rotation = transform.rotation.to_euler(EulerRot::XYZ);
-                    origin_rotation.0 = origin_rotation.0.to_degrees();
-                    origin_rotation.1 = origin_rotation.1.to_degrees();
-                    origin_rotation.2 = origin_rotation.2.to_degrees();
-
-                    let mut target_rotation = rotation.to_euler(EulerRot::XYZ);
-                    target_rotation.0 = target_rotation.0.to_degrees();
-                    target_rotation.1 = target_rotation.1.to_degrees();
-                    target_rotation.2 = target_rotation.2.to_degrees();
-
-                    println!("{:?}", origin_rotation);
-                    println!("{:?}", target_rotation);
-                    println!("{}, {}, {}\n", rotation_0, rotation_1, rotation_2);
-
-                    // println!("{:?}", rotation);
-                    // println!("{:?}", transform.rotation);
-
-                    println!("{:?}", transform.translation);
-                    println!("{}, {}, {}", offset_x, offset_y, offset_z);
+                    println!("origin transform: {:?}", transform.translation);
+                    println!("bvh offset: {}, {}, {}", offset_x, offset_y, offset_z);
 
                     // transform.translation = Vec3::new(offset_x, offset_y, offset_z);
                     transform.rotation = rotation;
 
                     // Update the rotation of the entity for each frame
-                    // commands.entity(entity).insert(BoneRotation(rotation));
-                    // println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
+                    commands.entity(entity).insert(BoneRotation(rotation));
+                    println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
                 }
 
                 joint_index += 1;
             }
-            // }
-
-            // println!("Joint Count{}", count);
         }
-        // }
-        // println!("..........");
     } else {
         println!("BVH data not available");
     }
-
-    // Err(err) => {
-    //     println!("Error loading BVH: {}", err);
-    // }
 }
 
 pub fn keyboard_input(
