@@ -172,7 +172,7 @@ pub fn match_bones(
     //     Ok(bvh) => {
     if let Some(bvh_vec) = &bvh_data.0 {
         let bvh: Bvh = bvh_vec[1].clone();
-        let frame: &bvh_anim::Frame = bvh.frames().last().unwrap();
+        let frame: &bvh_anim::Frame = bvh.frames().next().unwrap();
         println!("Loading frame 0!");
         // for bvh in bvh_vec {
         // for frame in bvh.frames() {
@@ -193,6 +193,10 @@ pub fn match_bones(
 
                 // println!("{:#?}", joint);
                 if bone_name == joint.data().name() {
+                    if bone_name == "Hips" {
+                        continue;
+                    }
+
                     println!("{:#?} = {:#?}", bone_name, joint.data().name());
 
                     commands.entity(entity).insert(BoneIndex(joint_index));
@@ -226,32 +230,43 @@ pub fn match_bones(
                     // println!("{:#?}", &joint.data().channels()[0]);
                     // println!("{:#?}", &joint.data().channels()[1]);
                     // println!("{:#?}", &joint.data().channels()[2]);
-                    let rotation_z = frame[&joint.data().channels()[0]];
-                    let rotation_y = frame[&joint.data().channels()[1]];
-                    let rotation_x = frame[&joint.data().channels()[2]];
+                    println!("{}", &joint.data().channels().len());
+                    let rotation_0 = frame[&joint.data().channels()[0]];
+                    let rotation_1 = frame[&joint.data().channels()[1]];
+                    let rotation_2 = frame[&joint.data().channels()[2]];
 
                     let rotation = Quat::from_euler(
-                        EulerRot::XYZ,
-                        offset_x.to_radians(),
-                        offset_y.to_radians(),
-                        offset_z.to_radians(),
+                        EulerRot::ZYX,
+                        rotation_0.to_radians(),
+                        rotation_1.to_radians(),
+                        rotation_2.to_radians(),
                     );
 
-                    // let quat_x = Quat::from_rotation_x(rotation_x.to_radians());
-                    // let quat_y = Quat::from_rotation_y(rotation_y.to_radians());
-                    // let quat_z = Quat::from_rotation_z(rotation_z.to_radians());
+                    let mut origin_rotation = transform.rotation.to_euler(EulerRot::XYZ);
+                    origin_rotation.0 = origin_rotation.0.to_degrees();
+                    origin_rotation.1 = origin_rotation.1.to_degrees();
+                    origin_rotation.2 = origin_rotation.2.to_degrees();
 
-                    // Combine the rotations along different axes
-                    // let rotation = quat_x * quat_y * quat_z;
-                    println!("{:?}", transform.rotation.to_euler(EulerRot::XYZ));
-                    println!("{:?}", transform.translation);
-                    println!("{}, {}, {}", offset_x, offset_y, offset_z);
+                    let mut target_rotation = rotation.to_euler(EulerRot::XYZ);
+                    target_rotation.0 = target_rotation.0.to_degrees();
+                    target_rotation.1 = target_rotation.1.to_degrees();
+                    target_rotation.2 = target_rotation.2.to_degrees();
+
+                    println!("{:?}", origin_rotation);
+                    println!("{:?}", target_rotation);
+                    println!("{}, {}, {}\n", rotation_0, rotation_1, rotation_2);
+
+                    // println!("{:?}", rotation);
+                    // println!("{:?}", transform.rotation);
+
+                    // println!("{:?}", transform.translation);
+                    // println!("{}, {}, {}", offset_x, offset_y, offset_z);
 
                     transform.translation = Vec3::new(offset_x, offset_y, offset_z);
                     // transform.rotation = rotation;
 
                     // Update the rotation of the entity for each frame
-                    commands.entity(entity).insert(BoneRotation(rotation));
+                    // commands.entity(entity).insert(BoneRotation(rotation));
                     // println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
                 }
 
