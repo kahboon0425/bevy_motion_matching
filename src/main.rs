@@ -44,7 +44,7 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 
     // spawn the first scene in the file
-    let scene: Handle<Scene> = asset_server.load("./glb/model_skeleton.glb#Scene0");
+    let scene: Handle<Scene> = asset_server.load("./glb/model_skeleton_origin.glb#Scene0");
     println!("Loaded asset: {:?}", scene);
     commands
         .spawn(SceneBundle {
@@ -172,7 +172,7 @@ pub fn match_bones(
     //     Ok(bvh) => {
     if let Some(bvh_vec) = &bvh_data.0 {
         let bvh: Bvh = bvh_vec[1].clone();
-        let frame: &bvh_anim::Frame = bvh.frames().next().unwrap();
+        let frame: &bvh_anim::Frame = bvh.frames().last().unwrap();
         println!("Loading frame 0!");
         // for bvh in bvh_vec {
         // for frame in bvh.frames() {
@@ -259,11 +259,11 @@ pub fn match_bones(
                     // println!("{:?}", rotation);
                     // println!("{:?}", transform.rotation);
 
-                    // println!("{:?}", transform.translation);
-                    // println!("{}, {}, {}", offset_x, offset_y, offset_z);
+                    println!("{:?}", transform.translation);
+                    println!("{}, {}, {}", offset_x, offset_y, offset_z);
 
-                    transform.translation = Vec3::new(offset_x, offset_y, offset_z);
-                    // transform.rotation = rotation;
+                    // transform.translation = Vec3::new(offset_x, offset_y, offset_z);
+                    transform.rotation = rotation;
 
                     // Update the rotation of the entity for each frame
                     // commands.entity(entity).insert(BoneRotation(rotation));
