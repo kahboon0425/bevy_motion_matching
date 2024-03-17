@@ -200,8 +200,8 @@ pub fn match_bones(
                     // println!("{:#?}", joint.data().name());
                     // println!("{:#?}", joint.data());
                     // println!("{:#?}", joint.data().offset());
-                    let offset_x = joint.data().offset().x;
-                    let offset_y = joint.data().offset().y;
+                    let offset_y = joint.data().offset().x;
+                    let offset_x = joint.data().offset().y;
                     let offset_z = joint.data().offset().z;
 
                     // let rotation_index_0 = joint.data().channels()[0].motion_index();
@@ -223,18 +223,18 @@ pub fn match_bones(
                     //     frame.get(&bvh.joints().next().unwrap().data().channels()[0]);
 
                     // println!("------------------------------------------ {:#?}", test);
-                    println!("{:#?}", &joint.data().channels()[0]);
-                    println!("{:#?}", &joint.data().channels()[1]);
-                    println!("{:#?}", &joint.data().channels()[2]);
+                    // println!("{:#?}", &joint.data().channels()[0]);
+                    // println!("{:#?}", &joint.data().channels()[1]);
+                    // println!("{:#?}", &joint.data().channels()[2]);
                     let rotation_z = frame[&joint.data().channels()[0]];
                     let rotation_y = frame[&joint.data().channels()[1]];
                     let rotation_x = frame[&joint.data().channels()[2]];
 
                     let rotation = Quat::from_euler(
                         EulerRot::XYZ,
-                        rotation_y.to_radians(),
-                        rotation_x.to_radians(),
-                        rotation_z.to_radians(),
+                        offset_x.to_radians(),
+                        offset_y.to_radians(),
+                        offset_z.to_radians(),
                     );
 
                     // let quat_x = Quat::from_rotation_x(rotation_x.to_radians());
@@ -243,8 +243,12 @@ pub fn match_bones(
 
                     // Combine the rotations along different axes
                     // let rotation = quat_x * quat_y * quat_z;
-                    // println!("{}", rotation);
-                    transform.rotation = rotation;
+                    println!("{:?}", transform.rotation.to_euler(EulerRot::XYZ));
+                    println!("{:?}", transform.translation);
+                    println!("{}, {}, {}", offset_x, offset_y, offset_z);
+
+                    transform.translation = Vec3::new(offset_x, offset_y, offset_z);
+                    // transform.rotation = rotation;
 
                     // Update the rotation of the entity for each frame
                     commands.entity(entity).insert(BoneRotation(rotation));
