@@ -17,7 +17,7 @@ fn main() {
             (
                 match_bones,
                 // spawn_gltf_objects,
-                keyboard_input,
+                // keyboard_input_system,
             ),
         )
         // .add_systems(Update, spawn_gltf_objects)
@@ -70,7 +70,7 @@ pub fn check_character(
     fn recurse_loop_children(children: &Children, q_children: &Query<&Children>) {
         for child in children {
             // process the current child
-            println!("{:?}", child);
+            // println!("{:?}", child);
             // * get the actual value (entity ID) that the reference is pointing to
             if let Ok(_new_children) = q_children.get(*child) {
                 // recursively process the children of the current child                recurse_loop_children(new_children, q_children);
@@ -91,7 +91,7 @@ fn load_bvh() -> Result<Vec<Bvh>, LoadError> {
         for entry in entries {
             if let Ok(entry) = entry {
                 if let Some(filename) = entry.file_name().to_str() {
-                    println!("Loading animation file: {}", filename);
+                    // println!("Loading animation file: {}", filename);
 
                     let filename: String = animation_file_path.to_owned() + filename;
 
@@ -121,15 +121,24 @@ fn load_bvh() -> Result<Vec<Bvh>, LoadError> {
 }
 
 #[derive(Resource)]
-pub struct BvhData(pub Option<Vec<Bvh>>);
+pub struct BvhData {
+    pub bvh_animation: Option<Vec<Bvh>>,
+    pub current_frame_index: usize,
+}
 
 pub fn store_bvh(mut commands: Commands) {
     match load_bvh() {
         Ok(bvhs) => {
-            commands.insert_resource(BvhData(Some(bvhs)));
+            commands.insert_resource(BvhData {
+                bvh_animation: Some(bvhs),
+                current_frame_index: 0,
+            });
         }
         Err(err) => {
-            commands.insert_resource(BvhData(None));
+            commands.insert_resource(BvhData {
+                bvh_animation: None,
+                current_frame_index: 0,
+            });
             println!("{:#?}", err);
         }
     }
@@ -144,7 +153,7 @@ pub struct BoneRotation(pub Quat);
 pub fn match_bones(
     mut commands: Commands,
     mut q_names: Query<(Entity, &Name, &mut Transform)>,
-    bvh_data: Res<BvhData>,
+    mut bvh_data: ResMut<BvhData>,
     mut bvh_to_character: ResMut<BvhToCharacter>,
     server: Res<AssetServer>,
 ) {
@@ -168,54 +177,80 @@ pub fn match_bones(
         return;
     }
 
-    if let Some(bvh_vec) = &bvh_data.0 {
+    if let Some(bvh_vec) = &bvh_data.bvh_animation {
         let bvh: Bvh = bvh_vec[1].clone();
-        let frame: &bvh_anim::Frame = bvh.frames().last().unwrap();
 
-        println!("{:#?}", frame);
+        let mut count: usize = 0;
+        // for bvh in bvh_vec {
+        let frame_index = bvh_data.current_frame_index;
 
-        for (entity, name, mut transform) in q_names.iter_mut() {
-            let bone_name = &name.as_str()[6..];
+        if frame_index < bvh.frames().len() {
+            // if frame_index <= 200 {
+            println!("Frame Index: {}", frame_index);
+            println!("Bvh frame length: {}", bvh.frames().len());
+            // let Some(frame) = &bvh.frames()
+            if let Some(frame) = bvh.frames().nth(frame_index) {
+                // let frame: &bvh_anim::Frame = bvh.frames().last().unwrap();
 
-            let mut joint_index: usize = 0;
+                // println!("{:#?}", frame);
 
-            for joint in bvh.joints() {
-                if bone_name == joint.data().name() {
-                    if bone_name == "Hips" {
-                        continue;
+                for (entity, name, mut transform) in q_names.iter_mut() {
+                    let bone_name = &name.as_str()[6..];
+
+                    let mut joint_index: usize = 0;
+
+                    for joint in bvh.joints() {
+                        if bone_name == joint.data().name() {
+                            if bone_name == "Hips" {
+                                continue;
+                            }
+
+                            // println!("{:#?} = {:#?}", bone_name, joint.data().name());
+
+                            commands.entity(entity).insert(BoneIndex(joint_index));
+
+                            let offset_y = joint.data().offset().x;
+                            let offset_x = joint.data().offset().y;
+                            let offset_z = joint.data().offset().z;
+
+                            let rotation_0 = frame[&joint.data().channels()[0]];
+                            let rotation_1 = frame[&joint.data().channels()[1]];
+                            let rotation_2 = frame[&joint.data().channels()[2]];
+
+                            let rotation = Quat::from_euler(
+                                EulerRot::ZYX,
+                                rotation_0.to_radians(),
+                                rotation_1.to_radians(),
+                                rotation_2.to_radians(),
+                            );
+
+                            // println!("origin transform: {:?}", transform.translation);
+                            // println!("bvh offset: {}, {}, {}", offset_x, offset_y, offset_z);
+
+                            // transform.translation = Vec3::new(offset_x, offset_y, offset_z);
+                            transform.rotation = rotation;
+
+                            // Update the rotation of the entity for each frame
+                            commands.entity(entity).insert(BoneRotation(rotation));
+                            // println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
+                        }
+
+                        joint_index += 1;
                     }
-
-                    println!("{:#?} = {:#?}", bone_name, joint.data().name());
-
-                    commands.entity(entity).insert(BoneIndex(joint_index));
-
-                    let offset_y = joint.data().offset().x;
-                    let offset_x = joint.data().offset().y;
-                    let offset_z = joint.data().offset().z;
-
-                    let rotation_0 = frame[&joint.data().channels()[0]];
-                    let rotation_1 = frame[&joint.data().channels()[1]];
-                    let rotation_2 = frame[&joint.data().channels()[2]];
-
-                    let rotation = Quat::from_euler(
-                        EulerRot::ZYX,
-                        rotation_0.to_radians(),
-                        rotation_1.to_radians(),
-                        rotation_2.to_radians(),
-                    );
-
-                    println!("origin transform: {:?}", transform.translation);
-                    println!("bvh offset: {}, {}, {}", offset_x, offset_y, offset_z);
-
-                    // transform.translation = Vec3::new(offset_x, offset_y, offset_z);
-                    transform.rotation = rotation;
-
-                    // Update the rotation of the entity for each frame
-                    commands.entity(entity).insert(BoneRotation(rotation));
-                    println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
                 }
 
-                joint_index += 1;
+                // if count >= 100 {
+                //     break;
+                // }
+
+                // count += 1;
+            }
+
+            bvh_data.current_frame_index += 1;
+
+            if bvh_data.current_frame_index >= bvh.frames().len() {
+                // if bvh_data.current_frame_index >= 200 {
+                bvh_data.current_frame_index = 0;
             }
         }
     } else {
@@ -223,19 +258,19 @@ pub fn match_bones(
     }
 }
 
-pub fn keyboard_input(
-    keys: Res<Input<KeyCode>>,
-    q_bone: Query<(Entity, &BoneIndex, &Name, &Transform)>,
-) {
-    if keys.just_pressed(KeyCode::Space) {
-        let target_bone_index = 5;
-        for (entity, bone_index, bone_name, transform) in q_bone.iter() {
-            if bone_index.0 == target_bone_index {
-                println!("{:#?}: {:#?}", bone_index.0, bone_name);
-            }
-        }
-    }
-}
+// pub fn keyboard_input(
+//     keys: Res<Input<KeyCode>>,
+//     q_bone: Query<(Entity, &BoneIndex, &Name, &Transform)>,
+// ) {
+//     if keys.just_pressed(KeyCode::Space) {
+//         let target_bone_index = 5;
+//         for (entity, bone_index, bone_name, transform) in q_bone.iter() {
+//             if bone_index.0 == target_bone_index {
+//                 println!("{:#?}: {:#?}", bone_index.0, bone_name);
+//             }
+//         }
+//     }
+// }
 
 /// Tags an entity as capable of panning and orbiting.
 #[derive(Component)]
