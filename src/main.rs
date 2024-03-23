@@ -201,33 +201,51 @@ pub fn match_bones(
 
                     for joint in bvh.joints() {
                         if bone_name == joint.data().name() {
-                            if bone_name == "Hips" {
-                                continue;
-                            }
+                            // if bone_name == "Hips" {
+                            //     continue;
+                            // }
 
                             // println!("{:#?} = {:#?}", bone_name, joint.data().name());
 
                             commands.entity(entity).insert(BoneIndex(joint_index));
 
-                            let offset_y = joint.data().offset().x;
-                            let offset_x = joint.data().offset().y;
-                            let offset_z = joint.data().offset().z;
+                            let mut offset_x = joint.data().offset().x;
+                            let mut offset_y = joint.data().offset().y;
+                            let mut offset_z = joint.data().offset().z;
 
-                            let rotation_0 = frame[&joint.data().channels()[0]];
-                            let rotation_1 = frame[&joint.data().channels()[1]];
-                            let rotation_2 = frame[&joint.data().channels()[2]];
+                            let rotation0;
+                            let rotation1;
+                            let rotation2;
+
+                            // let mut position0 = 0.0;
+                            // let mut position1 = 0.0;
+                            // let mut position2 = 0.0;
+
+                            if joint.data().channels().len() == 3 {
+                                rotation0 = frame[&joint.data().channels()[0]];
+                                rotation1 = frame[&joint.data().channels()[1]];
+                                rotation2 = frame[&joint.data().channels()[2]];
+                            } else {
+                                offset_x += frame[&joint.data().channels()[0]];
+                                offset_y += frame[&joint.data().channels()[1]];
+                                offset_z += frame[&joint.data().channels()[2]];
+
+                                rotation0 = frame[&joint.data().channels()[3]];
+                                rotation1 = frame[&joint.data().channels()[4]];
+                                rotation2 = frame[&joint.data().channels()[5]];
+                            }
 
                             let rotation = Quat::from_euler(
                                 EulerRot::ZYX,
-                                rotation_0.to_radians(),
-                                rotation_1.to_radians(),
-                                rotation_2.to_radians(),
+                                rotation0.to_radians(),
+                                rotation1.to_radians(),
+                                rotation2.to_radians(),
                             );
 
                             // println!("origin transform: {:?}", transform.translation);
                             // println!("bvh offset: {}, {}, {}", offset_x, offset_y, offset_z);
 
-                            // transform.translation = Vec3::new(offset_x, offset_y, offset_z);
+                            transform.translation = Vec3::new(offset_x, offset_y, offset_z);
                             transform.rotation = rotation;
 
                             // Update the rotation of the entity for each frame
