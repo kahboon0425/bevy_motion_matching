@@ -1,40 +1,30 @@
-use std::fs;
-use std::io::BufReader;
-
-use bevy::asset::LoadState;
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::Window;
 use bevy::DefaultPlugins;
-use bvh_anim::{self, errors::LoadError, Bvh};
+
+mod animation_loader;
+mod animation_player;
+mod character_loader;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_systems(Startup, (spawn_camera, setup, store_bvh))
         .add_systems(
-            Update,
+            Startup,
             (
-                match_bones,
-                // spawn_gltf_objects,
-                // keyboard_input_system,
+                spawn_camera,
+                character_loader::spawn_character,
+                setup,
+                animation_loader::store_bvh,
             ),
         )
-        // .add_systems(Update, spawn_gltf_objects)
+        .add_systems(Update, (animation_player::match_bones,))
         .add_systems(Update, pan_orbit_camera)
         .run();
 }
 
-#[derive(Resource)]
-pub struct BvhToCharacter {
-    pub scene_handle: Handle<Scene>,
-    pub loaded: bool,
-}
-
-#[derive(Component)]
-pub struct MainCharacter;
-
-pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+pub fn setup(mut commands: Commands) {
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             // shadows_enabled: true,
@@ -42,253 +32,7 @@ pub fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         },
         ..default()
     });
-
-    // spawn the first scene in the file
-    let scene: Handle<Scene> = asset_server.load("./glb/model_skeleton_origin.glb#Scene0");
-    println!("Loaded asset: {:?}", scene);
-    commands
-        .spawn(SceneBundle {
-            scene: scene.clone(),
-            ..default()
-        })
-        .insert(MainCharacter);
-
-    commands.insert_resource(BvhToCharacter {
-        loaded: false,
-        scene_handle: scene,
-    });
 }
-
-pub fn check_character(
-    q_character: Query<(Entity, &Children), With<MainCharacter>>,
-    q_children: Query<&Children>,
-) {
-    let Ok((_characater_entity, children)) = q_character.get_single() else {
-        return;
-    };
-
-    fn recurse_loop_children(children: &Children, q_children: &Query<&Children>) {
-        for child in children {
-            // process the current child
-            // println!("{:?}", child);
-            // * get the actual value (entity ID) that the reference is pointing to
-            if let Ok(_new_children) = q_children.get(*child) {
-                // recursively process the children of the current child                recurse_loop_children(new_children, q_children);
-            }
-        }
-    }
-
-    recurse_loop_children(children, &q_children);
-}
-
-fn load_bvh() -> Result<Vec<Bvh>, LoadError> {
-    let animation_file_path: &str = "./assets/walking-animation-dataset/";
-
-    let mut loaded_bvhs: Vec<Bvh> = Vec::new();
-
-    let mut count: usize = 0;
-    if let Ok(entries) = fs::read_dir(animation_file_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                if let Some(filename) = entry.file_name().to_str() {
-                    // println!("Loading animation file: {}", filename);
-
-                    let filename: String = animation_file_path.to_owned() + filename;
-
-                    let bvh_file: fs::File = fs::File::open(&filename).unwrap();
-                    let bvh_reader: BufReader<fs::File> = BufReader::new(bvh_file);
-
-                    let bvh: Bvh = bvh_anim::from_reader(bvh_reader)?;
-
-                    loaded_bvhs.push(bvh);
-
-                    if count >= 2 {
-                        break;
-                    }
-                    count += 1;
-                }
-            }
-        }
-
-        if loaded_bvhs.is_empty() {
-            println!("No BVH files found");
-        }
-    } else {
-        println!("Failed to read directory");
-    }
-
-    Ok(loaded_bvhs)
-}
-
-#[derive(Resource)]
-pub struct BvhData {
-    pub bvh_animation: Option<Vec<Bvh>>,
-    pub current_frame_index: usize,
-}
-
-pub fn store_bvh(mut commands: Commands) {
-    match load_bvh() {
-        Ok(bvhs) => {
-            commands.insert_resource(BvhData {
-                bvh_animation: Some(bvhs),
-                current_frame_index: 0,
-            });
-        }
-        Err(err) => {
-            commands.insert_resource(BvhData {
-                bvh_animation: None,
-                current_frame_index: 0,
-            });
-            println!("{:#?}", err);
-        }
-    }
-}
-
-#[derive(Component)]
-pub struct BoneIndex(pub usize);
-
-#[derive(Component)]
-pub struct BoneRotation(pub Quat);
-
-pub fn match_bones(
-    mut commands: Commands,
-    mut q_names: Query<(Entity, &Name, &mut Transform)>,
-    mut bvh_data: ResMut<BvhData>,
-    mut bvh_to_character: ResMut<BvhToCharacter>,
-    server: Res<AssetServer>,
-) {
-    // if bvh_to_character.loaded == true {
-    //     return;
-    // }
-
-    println!("Checking load state");
-    let load_state: LoadState = server
-        .get_load_state(bvh_to_character.scene_handle.clone())
-        .unwrap();
-
-    match load_state {
-        LoadState::Loaded => {
-            bvh_to_character.loaded = true;
-        }
-        _ => {}
-    }
-
-    if bvh_to_character.loaded == false {
-        return;
-    }
-
-    if let Some(bvh_vec) = &bvh_data.bvh_animation {
-        let bvh: Bvh = bvh_vec[1].clone();
-
-        let mut count: usize = 0;
-        // for bvh in bvh_vec {
-        let frame_index = bvh_data.current_frame_index;
-
-        if frame_index < bvh.frames().len() {
-            // if frame_index <= 200 {
-            println!("Frame Index: {}", frame_index);
-            println!("Bvh frame length: {}", bvh.frames().len());
-            // let Some(frame) = &bvh.frames()
-            if let Some(frame) = bvh.frames().nth(frame_index) {
-                // let frame: &bvh_anim::Frame = bvh.frames().last().unwrap();
-
-                // println!("{:#?}", frame);
-
-                for (entity, name, mut transform) in q_names.iter_mut() {
-                    let bone_name = &name.as_str()[6..];
-
-                    let mut joint_index: usize = 0;
-
-                    for joint in bvh.joints() {
-                        if bone_name == joint.data().name() {
-                            // if bone_name == "Hips" {
-                            //     continue;
-                            // }
-
-                            // println!("{:#?} = {:#?}", bone_name, joint.data().name());
-
-                            commands.entity(entity).insert(BoneIndex(joint_index));
-
-                            let mut offset_x = joint.data().offset().x;
-                            let mut offset_y = joint.data().offset().y;
-                            let mut offset_z = joint.data().offset().z;
-
-                            let rotation0;
-                            let rotation1;
-                            let rotation2;
-
-                            // let mut position0 = 0.0;
-                            // let mut position1 = 0.0;
-                            // let mut position2 = 0.0;
-
-                            if joint.data().channels().len() == 3 {
-                                rotation0 = frame[&joint.data().channels()[0]];
-                                rotation1 = frame[&joint.data().channels()[1]];
-                                rotation2 = frame[&joint.data().channels()[2]];
-                            } else {
-                                offset_x += frame[&joint.data().channels()[0]];
-                                offset_y += frame[&joint.data().channels()[1]];
-                                offset_z += frame[&joint.data().channels()[2]];
-
-                                rotation0 = frame[&joint.data().channels()[3]];
-                                rotation1 = frame[&joint.data().channels()[4]];
-                                rotation2 = frame[&joint.data().channels()[5]];
-                            }
-
-                            let rotation = Quat::from_euler(
-                                EulerRot::ZYX,
-                                rotation0.to_radians(),
-                                rotation1.to_radians(),
-                                rotation2.to_radians(),
-                            );
-
-                            // println!("origin transform: {:?}", transform.translation);
-                            // println!("bvh offset: {}, {}, {}", offset_x, offset_y, offset_z);
-
-                            transform.translation = Vec3::new(offset_x, offset_y, offset_z);
-                            transform.rotation = rotation;
-
-                            // Update the rotation of the entity for each frame
-                            commands.entity(entity).insert(BoneRotation(rotation));
-                            // println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
-                        }
-
-                        joint_index += 1;
-                    }
-                }
-
-                // if count >= 100 {
-                //     break;
-                // }
-
-                // count += 1;
-            }
-
-            bvh_data.current_frame_index += 1;
-
-            if bvh_data.current_frame_index >= bvh.frames().len() {
-                // if bvh_data.current_frame_index >= 200 {
-                bvh_data.current_frame_index = 0;
-            }
-        }
-    } else {
-        println!("BVH data not available");
-    }
-}
-
-// pub fn keyboard_input(
-//     keys: Res<Input<KeyCode>>,
-//     q_bone: Query<(Entity, &BoneIndex, &Name, &Transform)>,
-// ) {
-//     if keys.just_pressed(KeyCode::Space) {
-//         let target_bone_index = 5;
-//         for (entity, bone_index, bone_name, transform) in q_bone.iter() {
-//             if bone_index.0 == target_bone_index {
-//                 println!("{:#?}: {:#?}", bone_index.0, bone_name);
-//             }
-//         }
-//     }
-// }
 
 /// Tags an entity as capable of panning and orbiting.
 #[derive(Component)]
