@@ -10,19 +10,18 @@ impl Plugin for InputTrajectory {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct InputVec2 {
-    x: f32,
-    y: f32,
+#[derive(Component, Default, Clone)]
+pub struct TrajectoryPositions {
+    positions: Vec<Vec2>,
 }
 
-pub static FPS_20_INPUT_VEC2: Mutex<InputVec2> = Mutex::new(InputVec2 { x: 0.0, y: 0.0 });
-pub static FPS_40_INPUT_VEC2: Mutex<InputVec2> = Mutex::new(InputVec2 { x: 0.0, y: 0.0 });
-pub static FPS_60_INPUT_VEC2: Mutex<InputVec2> = Mutex::new(InputVec2 { x: 0.0, y: 0.0 });
+pub static FPS_20_INPUT_VEC2: Mutex<Vec2> = Mutex::new(Vec2::ZERO);
+pub static FPS_40_INPUT_VEC2: Mutex<Vec2> = Mutex::new(Vec2::ZERO);
+pub static FPS_60_INPUT_VEC2: Mutex<Vec2> = Mutex::new(Vec2::ZERO);
 
-pub static FPS_20_INPUT_PREDICTIONS: Mutex<Vec<InputVec2>> = Mutex::new(Vec::new());
-pub static FPS_40_INPUT_PREDICTIONS: Mutex<Vec<InputVec2>> = Mutex::new(Vec::new());
-pub static FPS_60_INPUT_PREDICTIONS: Mutex<Vec<InputVec2>> = Mutex::new(Vec::new());
+pub static FPS_20_INPUT_PREDICTIONS: Mutex<Vec<Vec2>> = Mutex::new(Vec::new());
+pub static FPS_40_INPUT_PREDICTIONS: Mutex<Vec<Vec2>> = Mutex::new(Vec::new());
+pub static FPS_60_INPUT_PREDICTIONS: Mutex<Vec<Vec2>> = Mutex::new(Vec::new());
 
 pub fn calc_fps_delay_duration_ms(fps: u64) -> u64 {
     // assuming bevy runs normally on 60fps
