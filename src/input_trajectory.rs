@@ -2,6 +2,14 @@ use std::sync::Mutex;
 
 use bevy::{input::gamepad::GamepadAxisChangedEvent, prelude::*};
 
+pub struct InputTrajectory;
+
+impl Plugin for InputTrajectory {
+    fn build(&self, app: &mut App) {
+        todo!()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct InputVec2 {
     x: f32,

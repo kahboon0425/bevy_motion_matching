@@ -2,12 +2,12 @@ use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::Window;
 use bevy::DefaultPlugins;
-use input_matching::{movement_events_20fps, movement_events_40fps, movement_events_60fps};
+use input_trajectory::{movement_events_20fps, movement_events_40fps, movement_events_60fps};
 
 mod animation_loader;
 mod animation_player;
 mod character_loader;
-mod input_matching;
+mod input_trajectory;
 
 fn main() {
     App::new()
