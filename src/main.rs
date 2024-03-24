@@ -2,10 +2,12 @@ use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::Window;
 use bevy::DefaultPlugins;
+use input_matching::{movement_events_20fps, movement_events_40fps, movement_events_60fps};
 
 mod animation_loader;
 mod animation_player;
 mod character_loader;
+mod input_matching;
 
 fn main() {
     App::new()
@@ -21,6 +23,14 @@ fn main() {
         )
         .add_systems(Update, (animation_player::match_bones,))
         .add_systems(Update, pan_orbit_camera)
+        .add_systems(
+            Update,
+            (
+                movement_events_60fps,
+                movement_events_40fps,
+                movement_events_20fps,
+            ),
+        )
         .run();
 }
 
