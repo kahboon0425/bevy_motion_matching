@@ -12,24 +12,30 @@ pub struct BoneIndex(pub usize);
 pub struct BoneRotation(pub Quat);
 
 #[derive(Resource)]
-pub struct GTransform {
-    pub current: Vec3,
-    pub previous: Vec3,
+pub struct FootTransforms {
+    pub left_foot_current: Vec3,
+    pub left_foot_previous: Vec3,
+    pub right_foot_current: Vec3,
+    pub right_foot_previous: Vec3,
 }
 
-impl GTransform {
+impl FootTransforms {
     pub fn new() -> Self {
         Self {
-            current: Vec3::ZERO,
-            previous: Vec3::ZERO,
+            left_foot_current: Vec3::ZERO,
+            left_foot_previous: Vec3::ZERO,
+            right_foot_current: Vec3::ZERO,
+            right_foot_previous: Vec3::ZERO,
         }
     }
 }
 
 #[derive(Event)]
-pub struct CharacterPositionEvent {
-    pub current_position: Vec3,
-    pub previous_position: Vec3,
+pub struct FootTransformsEvent {
+    pub left_foot_current: Vec3,
+    pub left_foot_previous: Vec3,
+    pub right_foot_current: Vec3,
+    pub right_foot_previous: Vec3,
 }
 
 pub fn match_bones(
@@ -37,9 +43,9 @@ pub fn match_bones(
     mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform)>,
     mut bvh_data: ResMut<BvhData>,
     mut bvh_to_character: ResMut<BvhToCharacter>,
-    mut g_transform: ResMut<GTransform>,
+    mut foot_transforms: ResMut<FootTransforms>,
     server: Res<AssetServer>,
-    mut event_writer: EventWriter<CharacterPositionEvent>,
+    mut event_writer: EventWriter<FootTransformsEvent>,
 ) {
     // if bvh_to_character.loaded == true {
     //     return;
@@ -129,17 +135,23 @@ pub fn match_bones(
                             commands.entity(entity).insert(BoneRotation(rotation));
                             // println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
 
-                            // Store the current position as the previous
-                            let previous_position = g_transform.current;
-                            // Get the new current position
-                            let current_position = global_transform.translation();
+                            if bone_name == "LeftFoot" {
+                                // Store the current position as the previous for the left foot
+                                foot_transforms.left_foot_previous =
+                                    foot_transforms.left_foot_current;
+                                // Update the current position for the left foot
+                                foot_transforms.left_foot_current = global_transform.translation();
+                            } else if bone_name == "RightFoot" {
+                                foot_transforms.right_foot_previous =
+                                    foot_transforms.right_foot_current;
+                                foot_transforms.right_foot_current = global_transform.translation();
+                            }
 
-                            g_transform.previous = previous_position;
-                            g_transform.current = current_position;
-
-                            event_writer.send(CharacterPositionEvent {
-                                current_position: g_transform.current,
-                                previous_position: g_transform.previous,
+                            event_writer.send(FootTransformsEvent {
+                                left_foot_current: foot_transforms.left_foot_current,
+                                left_foot_previous: foot_transforms.left_foot_previous,
+                                right_foot_current: foot_transforms.right_foot_current,
+                                right_foot_previous: foot_transforms.right_foot_previous,
                             });
                         }
 
@@ -163,7 +175,7 @@ pub struct MyRoundGizmos {}
 
 pub fn draw_movement_arrows(
     mut gizmos: Gizmos,
-    mut event_reader: EventReader<CharacterPositionEvent>,
+    mut event_reader: EventReader<FootTransformsEvent>,
 ) {
     // gizmos.arrow(
     //     Vec3::new(11.766598, -0.000002, -0.00001),
@@ -172,15 +184,20 @@ pub fn draw_movement_arrows(
     // );
 
     for event in event_reader.read() {
-        gizmos.arrow(
-            event.previous_position,
-            event.current_position,
-            Color::YELLOW,
-        );
+        if event.left_foot_previous != event.left_foot_current {
+            gizmos.arrow(
+                event.left_foot_previous,
+                event.left_foot_current,
+                Color::YELLOW,
+            );
+        }
 
-        println!(
-            "Character moved from {:?} to {:?}",
-            event.previous_position, event.current_position
-        );
+        if event.right_foot_previous != event.right_foot_current {
+            gizmos.arrow(
+                event.right_foot_previous,
+                event.right_foot_current,
+                Color::BLUE,
+            );
+        }
     }
 }

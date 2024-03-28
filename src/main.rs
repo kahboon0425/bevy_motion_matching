@@ -1,4 +1,4 @@
-use animation_player::{CharacterPositionEvent, GTransform, MyRoundGizmos};
+use animation_player::{FootTransforms, FootTransformsEvent, MyRoundGizmos};
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::Window;
@@ -10,9 +10,9 @@ mod character_loader;
 
 fn main() {
     App::new()
-        .insert_resource(GTransform::new())
+        .insert_resource(FootTransforms::new())
         .add_plugins(DefaultPlugins)
-        .add_event::<CharacterPositionEvent>()
+        .add_event::<FootTransformsEvent>()
         .init_gizmo_group::<MyRoundGizmos>()
         .add_systems(
             Startup,
