@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::{asset::LoadState, prelude::*};
 use bvh_anim::Bvh;
 
@@ -9,12 +11,35 @@ pub struct BoneIndex(pub usize);
 #[derive(Component)]
 pub struct BoneRotation(pub Quat);
 
+#[derive(Resource)]
+pub struct GTransform {
+    pub current: Vec3,
+    pub previous: Vec3,
+}
+
+impl GTransform {
+    pub fn new() -> Self {
+        Self {
+            current: Vec3::ZERO,
+            previous: Vec3::ZERO,
+        }
+    }
+}
+
+#[derive(Event)]
+pub struct CharacterPositionEvent {
+    pub current_position: Vec3,
+    pub previous_position: Vec3,
+}
+
 pub fn match_bones(
     mut commands: Commands,
-    mut q_names: Query<(Entity, &Name, &mut Transform)>,
+    mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform)>,
     mut bvh_data: ResMut<BvhData>,
     mut bvh_to_character: ResMut<BvhToCharacter>,
+    mut g_transform: ResMut<GTransform>,
     server: Res<AssetServer>,
+    mut event_writer: EventWriter<CharacterPositionEvent>,
 ) {
     // if bvh_to_character.loaded == true {
     //     return;
@@ -42,15 +67,15 @@ pub fn match_bones(
         let frame_index = bvh_data.current_frame_index;
 
         if frame_index < bvh.frames().len() {
-            println!("Frame Index: {}", frame_index);
-            println!("Bvh frame length: {}", bvh.frames().len());
+            // println!("Frame Index: {}", frame_index);
+            // println!("Bvh frame length: {}", bvh.frames().len());
             // let Some(frame) = &bvh.frames()
             if let Some(frame) = bvh.frames().nth(frame_index) {
                 // let frame: &bvh_anim::Frame = bvh.frames().last().unwrap();
 
                 // println!("{:#?}", frame);
 
-                for (entity, name, mut transform) in q_names.iter_mut() {
+                for (entity, name, mut transform, global_transform) in q_names.iter_mut() {
                     let bone_name = &name.as_str()[6..];
 
                     let mut joint_index: usize = 0;
@@ -72,10 +97,6 @@ pub fn match_bones(
                             let rotation0;
                             let rotation1;
                             let rotation2;
-
-                            // let mut position0 = 0.0;
-                            // let mut position1 = 0.0;
-                            // let mut position2 = 0.0;
 
                             if joint.data().channels().len() == 3 {
                                 rotation0 = frame[&joint.data().channels()[0]];
@@ -107,17 +128,24 @@ pub fn match_bones(
                             // Update the rotation of the entity for each frame
                             commands.entity(entity).insert(BoneRotation(rotation));
                             // println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
+
+                            // Store the current position as the previous
+                            let previous_position = g_transform.current;
+                            // Get the new current position
+                            let current_position = global_transform.translation();
+
+                            g_transform.previous = previous_position;
+                            g_transform.current = current_position;
+
+                            event_writer.send(CharacterPositionEvent {
+                                current_position: g_transform.current,
+                                previous_position: g_transform.previous,
+                            });
                         }
 
                         joint_index += 1;
                     }
                 }
-
-                // if count >= 100 {
-                //     break;
-                // }
-
-                // count += 1;
             }
 
             bvh_data.current_frame_index += 1;
@@ -128,5 +156,31 @@ pub fn match_bones(
         }
     } else {
         println!("BVH data not available");
+    }
+}
+#[derive(Default, Reflect, GizmoConfigGroup)]
+pub struct MyRoundGizmos {}
+
+pub fn draw_movement_arrows(
+    mut gizmos: Gizmos,
+    mut event_reader: EventReader<CharacterPositionEvent>,
+) {
+    // gizmos.arrow(
+    //     Vec3::new(11.766598, -0.000002, -0.00001),
+    //     Vec3::new(25.19977, 0.000143, 0.000407),
+    //     Color::YELLOW,
+    // );
+
+    for event in event_reader.read() {
+        gizmos.arrow(
+            event.previous_position,
+            event.current_position,
+            Color::YELLOW,
+        );
+
+        println!(
+            "Character moved from {:?} to {:?}",
+            event.previous_position, event.current_position
+        );
     }
 }
