@@ -1,5 +1,12 @@
 use bevy::prelude::*;
 
+pub struct CharacterLoaderPlugin;
+
+impl Plugin for CharacterLoaderPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, spawn_character);
+    }
+}
 #[derive(Resource)]
 pub struct BvhToCharacter {
     pub scene_handle: Handle<Scene>,

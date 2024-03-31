@@ -1,8 +1,10 @@
-use animation_player::{FootTransforms, FootTransformsEvent, MyRoundGizmos};
+use animation_loader::AnimationLoaderPlugin;
+use animation_player::{AnimationPlayerPlugin, MyRoundGizmos};
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::Window;
 use bevy::DefaultPlugins;
+use character_loader::CharacterLoaderPlugin;
 
 mod animation_loader;
 mod animation_player;
@@ -10,27 +12,14 @@ mod character_loader;
 
 fn main() {
     App::new()
-        .insert_resource(FootTransforms::new())
-        .add_plugins(DefaultPlugins)
-        .add_event::<FootTransformsEvent>()
+        .add_plugins((
+            DefaultPlugins,
+            CharacterLoaderPlugin,
+            AnimationLoaderPlugin,
+            AnimationPlayerPlugin,
+        ))
         .init_gizmo_group::<MyRoundGizmos>()
-        .add_systems(
-            Startup,
-            (
-                spawn_camera,
-                character_loader::spawn_character,
-                setup,
-                animation_loader::store_bvh,
-                // animation_player::spawn_arrow,
-            ),
-        )
-        .add_systems(
-            Update,
-            (
-                animation_player::match_bones,
-                animation_player::draw_movement_arrows,
-            ),
-        )
+        .add_systems(Startup, (spawn_camera, setup))
         .add_systems(Update, pan_orbit_camera)
         .run();
 }
