@@ -1,9 +1,17 @@
-use std::f32::consts::PI;
-
 use bevy::{asset::LoadState, prelude::*};
 use bvh_anim::Bvh;
 
 use crate::{animation_loader::BvhData, character_loader::BvhToCharacter};
+
+pub struct AnimationPlayerPlugin;
+
+impl Plugin for AnimationPlayerPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, (match_bones, draw_movement_arrows));
+        app.insert_resource(HipTransforms::new());
+        app.add_event::<HipTransformsEvent>();
+    }
+}
 
 #[derive(Component)]
 pub struct BoneIndex(pub usize);
@@ -12,30 +20,24 @@ pub struct BoneIndex(pub usize);
 pub struct BoneRotation(pub Quat);
 
 #[derive(Resource)]
-pub struct FootTransforms {
-    pub left_foot_current: Vec3,
-    pub left_foot_previous: Vec3,
-    pub right_foot_current: Vec3,
-    pub right_foot_previous: Vec3,
+pub struct HipTransforms {
+    pub hip_current_transform: Vec3,
+    pub hip_previous_transform: Vec3,
 }
 
-impl FootTransforms {
+impl HipTransforms {
     pub fn new() -> Self {
         Self {
-            left_foot_current: Vec3::ZERO,
-            left_foot_previous: Vec3::ZERO,
-            right_foot_current: Vec3::ZERO,
-            right_foot_previous: Vec3::ZERO,
+            hip_current_transform: Vec3::ZERO,
+            hip_previous_transform: Vec3::ZERO,
         }
     }
 }
 
 #[derive(Event)]
-pub struct FootTransformsEvent {
-    pub left_foot_current: Vec3,
-    pub left_foot_previous: Vec3,
-    pub right_foot_current: Vec3,
-    pub right_foot_previous: Vec3,
+pub struct HipTransformsEvent {
+    pub current_transform: Vec3,
+    pub previous_transform: Vec3,
 }
 
 pub fn match_bones(
@@ -43,9 +45,9 @@ pub fn match_bones(
     mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform)>,
     mut bvh_data: ResMut<BvhData>,
     mut bvh_to_character: ResMut<BvhToCharacter>,
-    mut foot_transforms: ResMut<FootTransforms>,
+    mut hip_transforms: ResMut<HipTransforms>,
     server: Res<AssetServer>,
-    mut event_writer: EventWriter<FootTransformsEvent>,
+    mut event_writer: EventWriter<HipTransformsEvent>,
 ) {
     // if bvh_to_character.loaded == true {
     //     return;
@@ -135,23 +137,17 @@ pub fn match_bones(
                             commands.entity(entity).insert(BoneRotation(rotation));
                             // println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
 
-                            if bone_name == "LeftFoot" {
+                            if bone_name == "Hips" {
                                 // Store the current position as the previous for the left foot
-                                foot_transforms.left_foot_previous =
-                                    foot_transforms.left_foot_current;
+                                hip_transforms.hip_previous_transform =
+                                    hip_transforms.hip_current_transform;
                                 // Update the current position for the left foot
-                                foot_transforms.left_foot_current = global_transform.translation();
-                            } else if bone_name == "RightFoot" {
-                                foot_transforms.right_foot_previous =
-                                    foot_transforms.right_foot_current;
-                                foot_transforms.right_foot_current = global_transform.translation();
+                                hip_transforms.hip_current_transform =
+                                    global_transform.translation();
                             }
-
-                            event_writer.send(FootTransformsEvent {
-                                left_foot_current: foot_transforms.left_foot_current,
-                                left_foot_previous: foot_transforms.left_foot_previous,
-                                right_foot_current: foot_transforms.right_foot_current,
-                                right_foot_previous: foot_transforms.right_foot_previous,
+                            event_writer.send(HipTransformsEvent {
+                                current_transform: hip_transforms.hip_current_transform,
+                                previous_transform: hip_transforms.hip_previous_transform,
                             });
                         }
 
@@ -173,31 +169,38 @@ pub fn match_bones(
 #[derive(Default, Reflect, GizmoConfigGroup)]
 pub struct MyRoundGizmos {}
 
-pub fn draw_movement_arrows(
-    mut gizmos: Gizmos,
-    mut event_reader: EventReader<FootTransformsEvent>,
-) {
-    // gizmos.arrow(
-    //     Vec3::new(11.766598, -0.000002, -0.00001),
-    //     Vec3::new(25.19977, 0.000143, 0.000407),
-    //     Color::YELLOW,
-    // );
-
+pub fn draw_movement_arrows(mut gizmos: Gizmos, mut event_reader: EventReader<HipTransformsEvent>) {
     for event in event_reader.read() {
-        if event.left_foot_previous != event.left_foot_current {
+        if event.previous_transform != event.current_transform {
             gizmos.arrow(
-                event.left_foot_previous,
-                event.left_foot_current,
+                event.previous_transform,
+                event.current_transform,
                 Color::YELLOW,
             );
         }
+    }
+}
 
-        if event.right_foot_previous != event.right_foot_current {
-            gizmos.arrow(
-                event.right_foot_previous,
-                event.right_foot_current,
-                Color::BLUE,
-            );
+#[derive(Resource)]
+pub struct Time {
+    pub time: f32,
+}
+
+pub fn frame_interpolation(
+    mut commands: Commands,
+    // q_names: Query<(Entity, &Name, &Transform)>,
+    mut bvh_data: ResMut<BvhData>,
+    // time: Res<Time>,
+) {
+    if let Some(bvh_vec) = &bvh_data.bvh_animation {
+        let bvh: &Bvh = &bvh_vec[1];
+
+        let duration_per_frame = 0.033333;
+        let total_duration = duration_per_frame * bvh.frames().len() as f32;
+        // let frame_index = (time.time / duration_per_frame).floor();
+
+        if let Some(frame) = bvh.frames().nth(0) {
+            println!("Frame 0 {:?}", frame);
         }
     }
 }
