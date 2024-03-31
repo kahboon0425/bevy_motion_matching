@@ -1,3 +1,4 @@
+use animation_player::{FootTransforms, FootTransformsEvent, MyRoundGizmos};
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
 use bevy::window::Window;
@@ -11,7 +12,10 @@ mod input_trajectory;
 
 fn main() {
     App::new()
+        .insert_resource(FootTransforms::new())
         .add_plugins(DefaultPlugins)
+        .add_event::<FootTransformsEvent>()
+        .init_gizmo_group::<MyRoundGizmos>()
         .add_systems(
             Startup,
             (
@@ -19,9 +23,16 @@ fn main() {
                 character_loader::spawn_character,
                 setup,
                 animation_loader::store_bvh,
+                // animation_player::spawn_arrow,
             ),
         )
-        .add_systems(Update, (animation_player::match_bones,))
+        .add_systems(
+            Update,
+            (
+                animation_player::match_bones,
+                animation_player::draw_movement_arrows,
+            ),
+        )
         .add_systems(Update, pan_orbit_camera)
         .add_systems(
             Update,
@@ -68,7 +79,7 @@ fn pan_orbit_camera(
     windows: Query<&Window>,
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
-    input_mouse: Res<Input<MouseButton>>,
+    input_mouse: Res<ButtonInput<MouseButton>>,
     mut query: Query<(&mut PanOrbitCamera, &mut Transform, &Projection)>,
 ) {
     // change input mapping for orbit and panning here

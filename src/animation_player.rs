@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::{asset::LoadState, prelude::*};
 use bvh_anim::Bvh;
 
@@ -9,12 +11,41 @@ pub struct BoneIndex(pub usize);
 #[derive(Component)]
 pub struct BoneRotation(pub Quat);
 
+#[derive(Resource)]
+pub struct FootTransforms {
+    pub left_foot_current: Vec3,
+    pub left_foot_previous: Vec3,
+    pub right_foot_current: Vec3,
+    pub right_foot_previous: Vec3,
+}
+
+impl FootTransforms {
+    pub fn new() -> Self {
+        Self {
+            left_foot_current: Vec3::ZERO,
+            left_foot_previous: Vec3::ZERO,
+            right_foot_current: Vec3::ZERO,
+            right_foot_previous: Vec3::ZERO,
+        }
+    }
+}
+
+#[derive(Event)]
+pub struct FootTransformsEvent {
+    pub left_foot_current: Vec3,
+    pub left_foot_previous: Vec3,
+    pub right_foot_current: Vec3,
+    pub right_foot_previous: Vec3,
+}
+
 pub fn match_bones(
     mut commands: Commands,
-    mut q_names: Query<(Entity, &Name, &mut Transform)>,
+    mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform)>,
     mut bvh_data: ResMut<BvhData>,
     mut bvh_to_character: ResMut<BvhToCharacter>,
+    mut foot_transforms: ResMut<FootTransforms>,
     server: Res<AssetServer>,
+    mut event_writer: EventWriter<FootTransformsEvent>,
 ) {
     // if bvh_to_character.loaded == true {
     //     return;
@@ -42,15 +73,15 @@ pub fn match_bones(
         let frame_index = bvh_data.current_frame_index;
 
         if frame_index < bvh.frames().len() {
-            println!("Frame Index: {}", frame_index);
-            println!("Bvh frame length: {}", bvh.frames().len());
+            // println!("Frame Index: {}", frame_index);
+            // println!("Bvh frame length: {}", bvh.frames().len());
             // let Some(frame) = &bvh.frames()
             if let Some(frame) = bvh.frames().nth(frame_index) {
                 // let frame: &bvh_anim::Frame = bvh.frames().last().unwrap();
 
                 // println!("{:#?}", frame);
 
-                for (entity, name, mut transform) in q_names.iter_mut() {
+                for (entity, name, mut transform, global_transform) in q_names.iter_mut() {
                     let bone_name = &name.as_str()[6..];
 
                     let mut joint_index: usize = 0;
@@ -72,10 +103,6 @@ pub fn match_bones(
                             let rotation0;
                             let rotation1;
                             let rotation2;
-
-                            // let mut position0 = 0.0;
-                            // let mut position1 = 0.0;
-                            // let mut position2 = 0.0;
 
                             if joint.data().channels().len() == 3 {
                                 rotation0 = frame[&joint.data().channels()[0]];
@@ -107,17 +134,30 @@ pub fn match_bones(
                             // Update the rotation of the entity for each frame
                             commands.entity(entity).insert(BoneRotation(rotation));
                             // println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
+
+                            if bone_name == "LeftFoot" {
+                                // Store the current position as the previous for the left foot
+                                foot_transforms.left_foot_previous =
+                                    foot_transforms.left_foot_current;
+                                // Update the current position for the left foot
+                                foot_transforms.left_foot_current = global_transform.translation();
+                            } else if bone_name == "RightFoot" {
+                                foot_transforms.right_foot_previous =
+                                    foot_transforms.right_foot_current;
+                                foot_transforms.right_foot_current = global_transform.translation();
+                            }
+
+                            event_writer.send(FootTransformsEvent {
+                                left_foot_current: foot_transforms.left_foot_current,
+                                left_foot_previous: foot_transforms.left_foot_previous,
+                                right_foot_current: foot_transforms.right_foot_current,
+                                right_foot_previous: foot_transforms.right_foot_previous,
+                            });
                         }
 
                         joint_index += 1;
                     }
                 }
-
-                // if count >= 100 {
-                //     break;
-                // }
-
-                // count += 1;
             }
 
             bvh_data.current_frame_index += 1;
@@ -128,5 +168,36 @@ pub fn match_bones(
         }
     } else {
         println!("BVH data not available");
+    }
+}
+#[derive(Default, Reflect, GizmoConfigGroup)]
+pub struct MyRoundGizmos {}
+
+pub fn draw_movement_arrows(
+    mut gizmos: Gizmos,
+    mut event_reader: EventReader<FootTransformsEvent>,
+) {
+    // gizmos.arrow(
+    //     Vec3::new(11.766598, -0.000002, -0.00001),
+    //     Vec3::new(25.19977, 0.000143, 0.000407),
+    //     Color::YELLOW,
+    // );
+
+    for event in event_reader.read() {
+        if event.left_foot_previous != event.left_foot_current {
+            gizmos.arrow(
+                event.left_foot_previous,
+                event.left_foot_current,
+                Color::YELLOW,
+            );
+        }
+
+        if event.right_foot_previous != event.right_foot_current {
+            gizmos.arrow(
+                event.right_foot_previous,
+                event.right_foot_current,
+                Color::BLUE,
+            );
+        }
     }
 }
