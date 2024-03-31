@@ -2,10 +2,28 @@ use bevy::prelude::*;
 use bvh_anim::{errors::LoadError, Bvh};
 use std::{fs, io::BufReader};
 
+pub struct AnimationLoaderPlugin;
+
+impl Plugin for AnimationLoaderPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, store_bvh);
+        app.insert_resource(BvhData::new());
+    }
+}
+
 #[derive(Resource)]
 pub struct BvhData {
     pub bvh_animation: Option<Vec<Bvh>>,
     pub current_frame_index: usize,
+}
+
+impl BvhData {
+    pub fn new() -> Self {
+        Self {
+            bvh_animation: None,
+            current_frame_index: 0,
+        }
+    }
 }
 
 pub fn load_bvh() -> Result<Vec<Bvh>, LoadError> {
