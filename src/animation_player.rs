@@ -7,9 +7,11 @@ pub struct AnimationPlayerPlugin;
 
 impl Plugin for AnimationPlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (match_bones, draw_movement_arrows));
+        app.add_systems(Update, (match_bones, draw_movement_arrows, animation_time));
         app.insert_resource(HipTransforms::new());
+        app.insert_resource(Time { time: 30.0 });
         app.add_event::<HipTransformsEvent>();
+        app.add_event::<FrameUpdateEvent>();
     }
 }
 
@@ -40,6 +42,16 @@ pub struct HipTransformsEvent {
     pub previous_transform: Vec3,
 }
 
+#[derive(Event)]
+pub struct FrameUpdateEvent {
+    pub time: f32,
+}
+
+#[derive(Resource)]
+pub struct Time {
+    pub time: f32,
+}
+
 pub fn match_bones(
     mut commands: Commands,
     mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform)>,
@@ -48,8 +60,9 @@ pub fn match_bones(
     mut hip_transforms: ResMut<HipTransforms>,
     server: Res<AssetServer>,
     mut event_writer: EventWriter<HipTransformsEvent>,
+    time: ResMut<Time>,
+    event_reader: EventReader<FrameUpdateEvent>,
 ) {
-    let interpolation_factor = 0.0;
     // if bvh_to_character.loaded == true {
     //     return;
     // }
@@ -70,16 +83,19 @@ pub fn match_bones(
         return;
     }
 
+    let interpolation_factor = get_pose(time, &mut bvh_data, event_reader);
+
     if let Some(bvh_vec) = &bvh_data.bvh_animation {
         let bvh: Bvh = bvh_vec[1].clone();
 
-        let frame_index = bvh_data.current_frame_index;
-        // Loop back to start if at the end
-        let next_frame_index = (frame_index + 1) % bvh.frames().len();
+        let current_frame_index = bvh_data.current_frame_index;
 
-        if frame_index < bvh.frames().len() {
+        // Loop back to start if at the end
+        let next_frame_index = (current_frame_index + 1) % bvh.frames().len();
+
+        if current_frame_index < bvh.frames().len() {
             if let (Some(current_frame), Some(next_frame)) = (
-                bvh.frames().nth(frame_index),
+                bvh.frames().nth(current_frame_index),
                 bvh.frames().nth(next_frame_index),
             ) {
                 println!("Current Frame{:?}", current_frame);
@@ -196,6 +212,11 @@ pub fn match_bones(
 
             bvh_data.current_frame_index += 1;
 
+            println!(
+                "Current Frame Index Resources: {}",
+                bvh_data.current_frame_index
+            );
+
             if bvh_data.current_frame_index >= bvh.frames().len() {
                 bvh_data.current_frame_index = 0;
             }
@@ -218,4 +239,33 @@ pub fn draw_movement_arrows(mut gizmos: Gizmos, mut event_reader: EventReader<Hi
             );
         }
     }
+}
+
+pub fn get_pose(
+    mut time: ResMut<Time>,
+    bvh_data: &mut ResMut<BvhData>,
+    mut event_reader: EventReader<FrameUpdateEvent>,
+) -> f32 {
+    let duration_per_frame = 0.033333;
+    // let total_duration = num_frames as f32 * duration_per_frame;
+    let mut frame_index: usize = (time.time / duration_per_frame).floor() as usize;
+
+    println!("Current Frame Index: {}", frame_index);
+
+    for event in event_reader.read() {
+        if time.time != event.time {
+            time.time = event.time;
+            frame_index = (time.time / duration_per_frame).floor() as usize;
+            bvh_data.current_frame_index = frame_index;
+        }
+    }
+    // Find how much time has passed since the last frame (finds the remainder)
+    // Calculate how far this is through the frame (divides the remainder)
+    let factor: f32 = (time.time % duration_per_frame) / duration_per_frame;
+
+    return factor;
+}
+
+pub fn animation_time(mut event_writer: EventWriter<FrameUpdateEvent>) {
+    event_writer.send(FrameUpdateEvent { time: 30.0 });
 }
