@@ -49,6 +49,7 @@ pub fn match_bones(
     server: Res<AssetServer>,
     mut event_writer: EventWriter<HipTransformsEvent>,
 ) {
+    let interpolation_factor = 0.0;
     // if bvh_to_character.loaded == true {
     //     return;
     // }
@@ -73,15 +74,16 @@ pub fn match_bones(
         let bvh: Bvh = bvh_vec[1].clone();
 
         let frame_index = bvh_data.current_frame_index;
+        // Loop back to start if at the end
+        let next_frame_index = (frame_index + 1) % bvh.frames().len();
 
         if frame_index < bvh.frames().len() {
-            // println!("Frame Index: {}", frame_index);
-            // println!("Bvh frame length: {}", bvh.frames().len());
-            // let Some(frame) = &bvh.frames()
-            if let Some(frame) = bvh.frames().nth(frame_index) {
-                // let frame: &bvh_anim::Frame = bvh.frames().last().unwrap();
-
-                // println!("{:#?}", frame);
+            if let (Some(current_frame), Some(next_frame)) = (
+                bvh.frames().nth(frame_index),
+                bvh.frames().nth(next_frame_index),
+            ) {
+                println!("Current Frame{:?}", current_frame);
+                println!("Next Frame{:?}", next_frame);
 
                 for (entity, name, mut transform, global_transform) in q_names.iter_mut() {
                     let bone_name = &name.as_str()[6..];
@@ -98,44 +100,80 @@ pub fn match_bones(
 
                             commands.entity(entity).insert(BoneIndex(joint_index));
 
-                            let mut offset_x = joint.data().offset().x;
-                            let mut offset_y = joint.data().offset().y;
-                            let mut offset_z = joint.data().offset().z;
+                            let mut current_offset_x = joint.data().offset().x;
+                            let mut current_offset_y = joint.data().offset().y;
+                            let mut current_offset_z = joint.data().offset().z;
 
-                            let rotation0;
-                            let rotation1;
-                            let rotation2;
+                            let mut next_offset_x = joint.data().offset().x;
+                            let mut next_offset_y = joint.data().offset().y;
+                            let mut next_offset_z = joint.data().offset().z;
+
+                            let current_rotation0: f32;
+                            let current_rotation1: f32;
+                            let current_rotation2: f32;
+
+                            let next_rotation0: f32;
+                            let next_rotation1: f32;
+                            let next_rotation2: f32;
 
                             if joint.data().channels().len() == 3 {
-                                rotation0 = frame[&joint.data().channels()[0]];
-                                rotation1 = frame[&joint.data().channels()[1]];
-                                rotation2 = frame[&joint.data().channels()[2]];
-                            } else {
-                                offset_x += frame[&joint.data().channels()[0]];
-                                offset_y += frame[&joint.data().channels()[1]];
-                                offset_z += frame[&joint.data().channels()[2]];
+                                current_rotation0 = current_frame[&joint.data().channels()[0]];
+                                current_rotation1 = current_frame[&joint.data().channels()[1]];
+                                current_rotation2 = current_frame[&joint.data().channels()[2]];
 
-                                rotation0 = frame[&joint.data().channels()[3]];
-                                rotation1 = frame[&joint.data().channels()[4]];
-                                rotation2 = frame[&joint.data().channels()[5]];
+                                next_rotation0 = next_frame[&joint.data().channels()[0]];
+                                next_rotation1 = next_frame[&joint.data().channels()[1]];
+                                next_rotation2 = next_frame[&joint.data().channels()[2]];
+                            } else {
+                                current_offset_x += current_frame[&joint.data().channels()[0]];
+                                current_offset_y += current_frame[&joint.data().channels()[1]];
+                                current_offset_z += current_frame[&joint.data().channels()[2]];
+
+                                next_offset_x += next_frame[&joint.data().channels()[0]];
+                                next_offset_y += next_frame[&joint.data().channels()[1]];
+                                next_offset_z += next_frame[&joint.data().channels()[2]];
+
+                                current_rotation0 = current_frame[&joint.data().channels()[3]];
+                                current_rotation1 = current_frame[&joint.data().channels()[4]];
+                                current_rotation2 = current_frame[&joint.data().channels()[5]];
+
+                                next_rotation0 = next_frame[&joint.data().channels()[3]];
+                                next_rotation1 = next_frame[&joint.data().channels()[4]];
+                                next_rotation2 = next_frame[&joint.data().channels()[5]];
                             }
 
-                            let rotation = Quat::from_euler(
+                            let current_rotation = Quat::from_euler(
                                 EulerRot::ZYX,
-                                rotation0.to_radians(),
-                                rotation1.to_radians(),
-                                rotation2.to_radians(),
+                                current_rotation0.to_radians(),
+                                current_rotation1.to_radians(),
+                                current_rotation2.to_radians(),
                             );
+
+                            let next_rotation = Quat::from_euler(
+                                EulerRot::ZYX,
+                                next_rotation0.to_radians(),
+                                next_rotation1.to_radians(),
+                                next_rotation2.to_radians(),
+                            );
+
+                            let current_position =
+                                Vec3::new(current_offset_x, current_offset_y, current_offset_z);
+
+                            let next_position =
+                                Vec3::new(next_offset_x, next_offset_y, next_offset_z);
+
+                            let interpolated_position =
+                                current_position.lerp(next_position, interpolation_factor);
+
+                            let interpolated_rotation =
+                                current_rotation.slerp(next_rotation, interpolation_factor);
+
+                            transform.rotation = interpolated_rotation;
 
                             // println!("origin transform: {:?}", transform.translation);
                             // println!("bvh offset: {}, {}, {}", offset_x, offset_y, offset_z);
 
-                            transform.translation = Vec3::new(offset_x, offset_y, offset_z);
-                            transform.rotation = rotation;
-
-                            // Update the rotation of the entity for each frame
-                            commands.entity(entity).insert(BoneRotation(rotation));
-                            // println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
+                            transform.translation = interpolated_position;
 
                             if bone_name == "Hips" {
                                 // Store the current position as the previous for the left foot
@@ -166,6 +204,7 @@ pub fn match_bones(
         println!("BVH data not available");
     }
 }
+
 #[derive(Default, Reflect, GizmoConfigGroup)]
 pub struct MyRoundGizmos {}
 
@@ -177,30 +216,6 @@ pub fn draw_movement_arrows(mut gizmos: Gizmos, mut event_reader: EventReader<Hi
                 event.current_transform,
                 Color::YELLOW,
             );
-        }
-    }
-}
-
-#[derive(Resource)]
-pub struct Time {
-    pub time: f32,
-}
-
-pub fn frame_interpolation(
-    mut commands: Commands,
-    // q_names: Query<(Entity, &Name, &Transform)>,
-    mut bvh_data: ResMut<BvhData>,
-    // time: Res<Time>,
-) {
-    if let Some(bvh_vec) = &bvh_data.bvh_animation {
-        let bvh: &Bvh = &bvh_vec[1];
-
-        let duration_per_frame = 0.033333;
-        let total_duration = duration_per_frame * bvh.frames().len() as f32;
-        // let frame_index = (time.time / duration_per_frame).floor();
-
-        if let Some(frame) = bvh.frames().nth(0) {
-            println!("Frame 0 {:?}", frame);
         }
     }
 }
