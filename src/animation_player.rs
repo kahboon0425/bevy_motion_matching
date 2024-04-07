@@ -7,10 +7,10 @@ pub struct AnimationPlayerPlugin;
 
 impl Plugin for AnimationPlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (match_bones, draw_movement_arrows, query_pose));
+        app.add_systems(Update, (match_bones, draw_movement_arrows, test));
         app.insert_resource(HipTransforms::new());
-        app.insert_resource(CustomTime { time: 30.0 });
         app.add_event::<HipTransformsEvent>();
+        app.add_event::<TargetTimeEvent>();
     }
 }
 
@@ -71,8 +71,8 @@ pub struct HipTransformsEvent {
     pub previous_transform: Vec3,
 }
 
-#[derive(Resource)]
-pub struct CustomTime {
+#[derive(Event)]
+pub struct TargetTimeEvent {
     pub time: f32,
 }
 
@@ -85,7 +85,8 @@ pub fn match_bones(
     server: Res<AssetServer>,
     mut event_writer: EventWriter<HipTransformsEvent>,
     time: Res<Time>,
-    custom_time: Res<CustomTime>,
+    mut local_time: Local<f32>,
+    mut event_reader: EventReader<TargetTimeEvent>,
 ) {
     // if bvh_to_character.loaded == true {
     //     return;
@@ -109,7 +110,11 @@ pub fn match_bones(
 
     let bvh_animation_data = bvh_data.get_bvh_animation_data(1);
 
-    let (frame_index, interpolation_factor) = get_pose(custom_time, time, bvh_animation_data);
+    for event in event_reader.read() {
+        *local_time = event.time;
+    }
+
+    let (frame_index, interpolation_factor) = get_pose(*local_time, bvh_animation_data);
 
     let current_frame_index = frame_index;
 
@@ -186,6 +191,8 @@ pub fn match_bones(
             }
         }
     }
+
+    *local_time += time.delta_seconds();
 }
 
 #[derive(Default, Reflect, GizmoConfigGroup)]
@@ -203,33 +210,23 @@ pub fn draw_movement_arrows(mut gizmos: Gizmos, mut event_reader: EventReader<Hi
     }
 }
 
-pub fn get_pose(custom_time: Res<CustomTime>, time: Res<Time>, bvh_data: &Bvh) -> (usize, f32) {
+pub fn get_pose(local_time: f32, bvh_data: &Bvh) -> (usize, f32) {
     let duration_per_frame = bvh_data.frame_time().as_secs_f32();
-
-    println!("Frame time: {:?}", bvh_data.frame_time()); //33.33ms
-    println!("Frame time in seconds: {:?}", duration_per_frame); // 0.033333
-
-    // return how much time has advanced since startup
-    let elapsed_time = time.elapsed_seconds() as f32;
-    println!("Elapsed Time: {}", elapsed_time);
 
     let total_animation_time = duration_per_frame * bvh_data.frames().len() as f32;
 
-    // current animation time
-    let animation_time = elapsed_time % total_animation_time;
+    let animation_time = local_time % total_animation_time;
 
-    // get animation data at specific time
-    let targeted_time = (custom_time.time + elapsed_time) % total_animation_time;
-
-    // % ensure looping through frame
     let frame_index =
         (animation_time / duration_per_frame).floor() as usize % bvh_data.frames().len();
 
-    let factor = (animation_time % duration_per_frame) / duration_per_frame;
+    let interpolation_factor = (animation_time % duration_per_frame) / duration_per_frame;
 
-    (frame_index, factor)
+    (frame_index, interpolation_factor)
 }
 
-pub fn query_pose(mut custom_time: ResMut<CustomTime>) {
-    custom_time.time = 100.0;
+pub fn test(input: Res<ButtonInput<KeyCode>>, mut target_time_event: EventWriter<TargetTimeEvent>) {
+    if input.just_pressed(KeyCode::Space) {
+        target_time_event.send(TargetTimeEvent { time: 50.0 });
+    }
 }
