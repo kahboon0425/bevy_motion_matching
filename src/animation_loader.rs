@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bvh_anim::{errors::LoadError, Bvh, Frames};
+use bvh_anim::{errors::LoadError, Bvh};
 use std::{fs, io::BufReader};
 
 pub struct AnimationLoaderPlugin;
@@ -38,8 +38,6 @@ pub fn load_bvh() -> Result<Vec<Bvh>, LoadError> {
         for entry in entries {
             if let Ok(entry) = entry {
                 if let Some(filename) = entry.file_name().to_str() {
-                    // println!("Loading animation file: {}", filename);
-
                     let filename: String = animation_file_path.to_owned() + filename;
 
                     let bvh_file: fs::File = fs::File::open(&filename).unwrap();
