@@ -1,5 +1,5 @@
 use bevy::{asset::LoadState, prelude::*};
-use bvh_anim::Bvh;
+use bvh_anim::{Bvh, Channel, Frame};
 
 use crate::{animation_loader::BvhData, character_loader::BvhToCharacter};
 
@@ -7,9 +7,40 @@ pub struct AnimationPlayerPlugin;
 
 impl Plugin for AnimationPlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (match_bones, draw_movement_arrows));
+        app.add_systems(Update, (match_bones, draw_movement_arrows, test));
         app.insert_resource(HipTransforms::new());
         app.add_event::<HipTransformsEvent>();
+        app.add_event::<TargetTimeEvent>();
+    }
+}
+
+#[derive(Debug)]
+pub struct FrameData<'a>(pub &'a Frame);
+
+impl<'a> FrameData<'a> {
+    pub fn get_rotation(&self, channels: &[Channel]) -> Quat {
+        Quat::from_euler(
+            EulerRot::ZYX,
+            self.0[&channels[0]].to_radians(),
+            self.0[&channels[1]].to_radians(),
+            self.0[&channels[2]].to_radians(),
+        )
+    }
+
+    pub fn get_translation_rotation(&self, channels: &[Channel]) -> (Vec3, Quat) {
+        (
+            Vec3::new(
+                self.0[&channels[0]],
+                self.0[&channels[1]],
+                self.0[&channels[2]],
+            ),
+            Quat::from_euler(
+                EulerRot::ZYX,
+                self.0[&channels[3]].to_radians(),
+                self.0[&channels[4]].to_radians(),
+                self.0[&channels[5]].to_radians(),
+            ),
+        )
     }
 }
 
@@ -40,20 +71,23 @@ pub struct HipTransformsEvent {
     pub previous_transform: Vec3,
 }
 
+#[derive(Event)]
+pub struct TargetTimeEvent {
+    pub time: f32,
+}
+
 pub fn match_bones(
     mut commands: Commands,
     mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform)>,
-    mut bvh_data: ResMut<BvhData>,
+    bvh_data: Res<BvhData>,
     mut bvh_to_character: ResMut<BvhToCharacter>,
     mut hip_transforms: ResMut<HipTransforms>,
     server: Res<AssetServer>,
     mut event_writer: EventWriter<HipTransformsEvent>,
+    time: Res<Time>,
+    mut local_time: Local<f32>,
+    mut event_reader: EventReader<TargetTimeEvent>,
 ) {
-    // if bvh_to_character.loaded == true {
-    //     return;
-    // }
-
-    println!("Checking load state");
     let load_state: LoadState = server
         .get_load_state(bvh_to_character.scene_handle.clone())
         .unwrap();
@@ -69,103 +103,90 @@ pub fn match_bones(
         return;
     }
 
-    if let Some(bvh_vec) = &bvh_data.bvh_animation {
-        let bvh: Bvh = bvh_vec[1].clone();
+    let bvh_animation_data = bvh_data.get_bvh_animation_data(1);
 
-        let frame_index = bvh_data.current_frame_index;
+    for event in event_reader.read() {
+        *local_time = event.time;
+    }
 
-        if frame_index < bvh.frames().len() {
-            // println!("Frame Index: {}", frame_index);
-            // println!("Bvh frame length: {}", bvh.frames().len());
-            // let Some(frame) = &bvh.frames()
-            if let Some(frame) = bvh.frames().nth(frame_index) {
-                // let frame: &bvh_anim::Frame = bvh.frames().last().unwrap();
+    let (frame_index, interpolation_factor) = get_pose(*local_time, bvh_animation_data);
 
-                // println!("{:#?}", frame);
+    let current_frame_index = frame_index;
 
-                for (entity, name, mut transform, global_transform) in q_names.iter_mut() {
-                    let bone_name = &name.as_str()[6..];
+    // Loop back to start if at the end
+    let next_frame_index = (current_frame_index + 1) % bvh_animation_data.frames().len();
 
-                    let mut joint_index: usize = 0;
+    if let (Some(current_frame), Some(next_frame)) = (
+        bvh_animation_data.frames().nth(current_frame_index),
+        bvh_animation_data.frames().nth(next_frame_index),
+    ) {
+        let current_frame = FrameData(current_frame);
+        let next_frame = FrameData(next_frame);
 
-                    for joint in bvh.joints() {
-                        if bone_name == joint.data().name() {
-                            // if bone_name == "Hips" {
-                            //     continue;
-                            // }
+        for (entity, name, mut transform, global_transform) in q_names.iter_mut() {
+            let bone_name = &name.as_str()[6..];
 
-                            // println!("{:#?} = {:#?}", bone_name, joint.data().name());
+            let mut joint_index: usize = 0;
 
-                            commands.entity(entity).insert(BoneIndex(joint_index));
+            for joint in bvh_animation_data.joints() {
+                if bone_name == joint.data().name() {
+                    commands.entity(entity).insert(BoneIndex(joint_index));
 
-                            let mut offset_x = joint.data().offset().x;
-                            let mut offset_y = joint.data().offset().y;
-                            let mut offset_z = joint.data().offset().z;
+                    let offset = joint.data().offset();
 
-                            let rotation0;
-                            let rotation1;
-                            let rotation2;
+                    let mut current_translation = Vec3::new(offset.x, offset.y, offset.z);
+                    let mut next_translation = Vec3::new(offset.x, offset.y, offset.z);
 
-                            if joint.data().channels().len() == 3 {
-                                rotation0 = frame[&joint.data().channels()[0]];
-                                rotation1 = frame[&joint.data().channels()[1]];
-                                rotation2 = frame[&joint.data().channels()[2]];
-                            } else {
-                                offset_x += frame[&joint.data().channels()[0]];
-                                offset_y += frame[&joint.data().channels()[1]];
-                                offset_z += frame[&joint.data().channels()[2]];
+                    let channels = joint.data().channels();
 
-                                rotation0 = frame[&joint.data().channels()[3]];
-                                rotation1 = frame[&joint.data().channels()[4]];
-                                rotation2 = frame[&joint.data().channels()[5]];
-                            }
+                    let current_rotation;
+                    let next_rotation;
 
-                            let rotation = Quat::from_euler(
-                                EulerRot::ZYX,
-                                rotation0.to_radians(),
-                                rotation1.to_radians(),
-                                rotation2.to_radians(),
-                            );
+                    if channels.len() == 3 {
+                        current_rotation = current_frame.get_rotation(channels);
+                        next_rotation = next_frame.get_rotation(channels);
+                    } else {
+                        let current_offset;
+                        let next_offset;
+                        (current_offset, current_rotation) =
+                            current_frame.get_translation_rotation(channels);
+                        (next_offset, next_rotation) =
+                            next_frame.get_translation_rotation(channels);
 
-                            // println!("origin transform: {:?}", transform.translation);
-                            // println!("bvh offset: {}, {}, {}", offset_x, offset_y, offset_z);
-
-                            transform.translation = Vec3::new(offset_x, offset_y, offset_z);
-                            transform.rotation = rotation;
-
-                            // Update the rotation of the entity for each frame
-                            commands.entity(entity).insert(BoneRotation(rotation));
-                            // println!("Bone Name: {}, Rotation: {:?}", bone_name, rotation);
-
-                            if bone_name == "Hips" {
-                                // Store the current position as the previous for the left foot
-                                hip_transforms.hip_previous_transform =
-                                    hip_transforms.hip_current_transform;
-                                // Update the current position for the left foot
-                                hip_transforms.hip_current_transform =
-                                    global_transform.translation();
-                            }
-                            event_writer.send(HipTransformsEvent {
-                                current_transform: hip_transforms.hip_current_transform,
-                                previous_transform: hip_transforms.hip_previous_transform,
-                            });
-                        }
-
-                        joint_index += 1;
+                        current_translation += current_offset;
+                        next_translation += next_offset;
                     }
+
+                    let interpolated_translation =
+                        Vec3::lerp(current_translation, next_translation, interpolation_factor);
+
+                    let interpolated_rotation =
+                        Quat::slerp(current_rotation, next_rotation, interpolation_factor);
+
+                    transform.rotation = interpolated_rotation;
+                    transform.translation = interpolated_translation;
+
+                    if bone_name == "Hips" {
+                        // Store the current position as the previous for the left foot
+                        hip_transforms.hip_previous_transform =
+                            hip_transforms.hip_current_transform;
+                        // Update the current position for the left foot
+                        hip_transforms.hip_current_transform = global_transform.translation();
+                    }
+                    event_writer.send(HipTransformsEvent {
+                        current_transform: hip_transforms.hip_current_transform,
+                        previous_transform: hip_transforms.hip_previous_transform,
+                    });
                 }
-            }
 
-            bvh_data.current_frame_index += 1;
-
-            if bvh_data.current_frame_index >= bvh.frames().len() {
-                bvh_data.current_frame_index = 0;
+                joint_index += 1;
             }
         }
-    } else {
-        println!("BVH data not available");
     }
+
+    *local_time += time.delta_seconds();
 }
+
 #[derive(Default, Reflect, GizmoConfigGroup)]
 pub struct MyRoundGizmos {}
 
@@ -181,26 +202,23 @@ pub fn draw_movement_arrows(mut gizmos: Gizmos, mut event_reader: EventReader<Hi
     }
 }
 
-#[derive(Resource)]
-pub struct Time {
-    pub time: f32,
+pub fn get_pose(local_time: f32, bvh_data: &Bvh) -> (usize, f32) {
+    let duration_per_frame = bvh_data.frame_time().as_secs_f32();
+
+    let total_animation_time = duration_per_frame * bvh_data.frames().len() as f32;
+
+    let animation_time = local_time % total_animation_time;
+
+    let frame_index =
+        (animation_time / duration_per_frame).floor() as usize % bvh_data.frames().len();
+
+    let interpolation_factor = (animation_time % duration_per_frame) / duration_per_frame;
+
+    (frame_index, interpolation_factor)
 }
 
-pub fn frame_interpolation(
-    mut commands: Commands,
-    // q_names: Query<(Entity, &Name, &Transform)>,
-    mut bvh_data: ResMut<BvhData>,
-    // time: Res<Time>,
-) {
-    if let Some(bvh_vec) = &bvh_data.bvh_animation {
-        let bvh: &Bvh = &bvh_vec[1];
-
-        let duration_per_frame = 0.033333;
-        let total_duration = duration_per_frame * bvh.frames().len() as f32;
-        // let frame_index = (time.time / duration_per_frame).floor();
-
-        if let Some(frame) = bvh.frames().nth(0) {
-            println!("Frame 0 {:?}", frame);
-        }
+pub fn test(input: Res<ButtonInput<KeyCode>>, mut target_time_event: EventWriter<TargetTimeEvent>) {
+    if input.just_pressed(KeyCode::Space) {
+        target_time_event.send(TargetTimeEvent { time: 50.0 });
     }
 }

@@ -13,16 +13,18 @@ impl Plugin for AnimationLoaderPlugin {
 
 #[derive(Resource)]
 pub struct BvhData {
-    pub bvh_animation: Option<Vec<Bvh>>,
-    pub current_frame_index: usize,
+    pub bvh_animation: Vec<Bvh>,
 }
 
 impl BvhData {
     pub fn new() -> Self {
         Self {
-            bvh_animation: None,
-            current_frame_index: 0,
+            bvh_animation: Vec::new(),
         }
+    }
+
+    pub fn get_bvh_animation_data(&self, animation_data_index: usize) -> &Bvh {
+        return &self.bvh_animation[animation_data_index];
     }
 }
 
@@ -36,8 +38,6 @@ pub fn load_bvh() -> Result<Vec<Bvh>, LoadError> {
         for entry in entries {
             if let Ok(entry) = entry {
                 if let Some(filename) = entry.file_name().to_str() {
-                    // println!("Loading animation file: {}", filename);
-
                     let filename: String = animation_file_path.to_owned() + filename;
 
                     let bvh_file: fs::File = fs::File::open(&filename).unwrap();
@@ -69,14 +69,12 @@ pub fn store_bvh(mut commands: Commands) {
     match load_bvh() {
         Ok(bvhs) => {
             commands.insert_resource(BvhData {
-                bvh_animation: Some(bvhs),
-                current_frame_index: 0,
+                bvh_animation: bvhs,
             });
         }
         Err(err) => {
             commands.insert_resource(BvhData {
-                bvh_animation: None,
-                current_frame_index: 0,
+                bvh_animation: Vec::new(),
             });
             println!("{:#?}", err);
         }
