@@ -1,140 +1,136 @@
-use std::sync::Mutex;
+use bevy::prelude::*;
 
-use bevy::{input::gamepad::GamepadAxisChangedEvent, prelude::*};
+pub struct InputTrajectoryPlugin;
 
-pub struct InputTrajectory;
-
-impl Plugin for InputTrajectory {
+impl Plugin for InputTrajectoryPlugin {
     fn build(&self, app: &mut App) {
-        todo!()
+        app.insert_resource(TrajectoryConfig::new(5, 0.05))
+            .add_systems(Startup, setup_input_trajectory)
+            .add_systems(
+                Update,
+                (
+                    (
+                        update_trajectory_data_len.run_if(trajectory_config_changed),
+                        update_trajectory,
+                    )
+                        .chain(),
+                    update_player_translation,
+                ),
+            );
     }
 }
 
+/// Configuration for all trajectories.
+#[derive(Resource)]
+pub struct TrajectoryConfig {
+    count: usize,
+    interval: f32,
+}
+
+impl TrajectoryConfig {
+    pub fn new(count: usize, interval: f32) -> Self {
+        Self { count, interval }
+    }
+}
+
+/// Translations that defines the trajectory.
 #[derive(Component, Default, Clone)]
-pub struct TrajectoryPositions {
-    positions: Vec<Vec2>,
+pub struct Trajectory {
+    current: Vec2,
+    histories: Vec<Vec2>,
+    predictions: Vec<Vec2>,
 }
 
-pub static FPS_20_INPUT_VEC2: Mutex<Vec2> = Mutex::new(Vec2::ZERO);
-pub static FPS_40_INPUT_VEC2: Mutex<Vec2> = Mutex::new(Vec2::ZERO);
-pub static FPS_60_INPUT_VEC2: Mutex<Vec2> = Mutex::new(Vec2::ZERO);
+#[derive(Component)]
+pub struct PlayerMarker;
 
-pub static FPS_20_INPUT_PREDICTIONS: Mutex<Vec<Vec2>> = Mutex::new(Vec::new());
-pub static FPS_40_INPUT_PREDICTIONS: Mutex<Vec<Vec2>> = Mutex::new(Vec::new());
-pub static FPS_60_INPUT_PREDICTIONS: Mutex<Vec<Vec2>> = Mutex::new(Vec::new());
-
-pub fn calc_fps_delay_duration_ms(fps: u64) -> u64 {
-    // assuming bevy runs normally on 60fps
-    return 1 / 60 * 1000 * (60 - fps);
+fn setup_input_trajectory(mut commands: Commands) {
+    commands
+        .spawn((Trajectory::default(), SpatialBundle::default()))
+        .insert(PlayerMarker);
 }
 
-// for now movement only consider the left joystick
-// not too sure about the implementations for the 40fps and 20fps versions (i assume bevy runs normally on 60fps)
-// reference: https://github.com/bevyengine/bevy/issues/1343#issuecomment-997513775
-pub fn movement_events_60fps(mut axis_changed_events: EventReader<GamepadAxisChangedEvent>) {
-    let mut input_predictions = FPS_60_INPUT_PREDICTIONS.lock().unwrap();
-    let mut input_vec2 = FPS_60_INPUT_VEC2.lock().unwrap();
+fn trajectory_config_changed(trajectory_config: Res<TrajectoryConfig>) -> bool {
+    trajectory_config.is_added() || trajectory_config.is_changed()
+}
 
-    for axis_changed_event in axis_changed_events.read() {
-        log_movement_event(axis_changed_event);
-
-        if axis_changed_event.axis_type == GamepadAxisType::LeftStickX {
-            // x-axis position value
-            input_vec2.x = axis_changed_event.value;
+fn update_trajectory_data_len(
+    mut q_trajectory: Query<&mut Trajectory, With<PlayerMarker>>,
+    trajectory_config: Res<TrajectoryConfig>,
+) {
+    for mut trajectory in q_trajectory.iter_mut() {
+        if trajectory.histories.len() != trajectory_config.count {
+            trajectory.histories = vec![trajectory.current; trajectory_config.count];
         }
-        if axis_changed_event.axis_type == GamepadAxisType::LeftStickY {
-            // y-axis position value
-            input_vec2.y = axis_changed_event.value;
+        if trajectory.predictions.len() != trajectory_config.count {
+            trajectory.predictions = vec![trajectory.current; trajectory_config.count];
         }
-
-        let cloned_input_vec2 = input_vec2.clone();
-        if input_predictions.len() > 5 {
-            let overflow_count = input_predictions.len() - 5;
-            for _ in 0..overflow_count {
-                input_predictions.remove(0);
-            }
-        }
-        input_predictions.push(cloned_input_vec2);
-
-        println!("===============Movement Prediction (for 60fps)======================");
-        for el in &*input_predictions {
-            println!("x: {}; y: {}", el.x, el.y);
-        }
-        println!("====================================================================");
     }
 }
 
-pub fn movement_events_40fps(mut axis_changed_events: EventReader<GamepadAxisChangedEvent>) {
-    let mut input_predictions = FPS_40_INPUT_PREDICTIONS.lock().unwrap();
-    let mut input_vec2 = FPS_40_INPUT_VEC2.lock().unwrap();
-    use std::{thread, time};
+fn update_trajectory(
+    mut q_trajectory: Query<(&mut Trajectory, &Transform), With<PlayerMarker>>,
+    trajectory_config: Res<TrajectoryConfig>,
+    time: Res<Time>,
+    mut time_passed: Local<f32>,
+    mut gizmos: Gizmos,
+) {
+    *time_passed += time.delta_seconds();
 
-    for axis_changed_event in axis_changed_events.read() {
-        log_movement_event(axis_changed_event);
+    for (trajectory, transform) in q_trajectory.iter() {
+        // Draw arrow gizmos of the smoothed out trajectory
+        let mut end = transform.translation.xz();
+        let mut last_translation = trajectory.current;
 
-        if axis_changed_event.axis_type == GamepadAxisType::LeftStickX {
-            input_vec2.x = axis_changed_event.value;
+        for history in trajectory.histories.iter() {
+            let start = Vec2::lerp(*history, last_translation, *time_passed);
+            last_translation = *history;
+
+            gizmos.arrow_2d(start, end, Color::YELLOW);
+            end = start;
         }
-        if axis_changed_event.axis_type == GamepadAxisType::LeftStickY {
-            input_vec2.y = axis_changed_event.value;
-        }
+    }
 
-        let cloned_input_vec2 = input_vec2.clone();
-        if input_predictions.len() > 5 {
-            let overflow_count = input_predictions.len() - 5;
-            for _ in 0..overflow_count {
-                input_predictions.remove(0);
+    if *time_passed >= trajectory_config.interval {
+        // Updates the histories and current trajectory
+        for (mut trajectory, transform) in q_trajectory.iter_mut() {
+            let mut translation = transform.translation.xz();
+
+            std::mem::swap(&mut trajectory.current, &mut translation);
+            for history in trajectory.histories.iter_mut() {
+                std::mem::swap(history, &mut translation)
             }
         }
-        input_predictions.push(cloned_input_vec2);
 
-        println!("===============Movement Prediction (for 40fps)======================");
-        for el in &*input_predictions {
-            println!("x: {}; y: {}", el.x, el.y);
-        }
-        println!("====================================================================");
-
-        thread::sleep(time::Duration::from_millis(calc_fps_delay_duration_ms(40)));
+        // Resets timer
+        *time_passed = 0.0;
     }
 }
 
-pub fn movement_events_20fps(mut axis_changed_events: EventReader<GamepadAxisChangedEvent>) {
-    let mut input_predictions = FPS_20_INPUT_PREDICTIONS.lock().unwrap();
-    let mut input_vec2 = FPS_20_INPUT_VEC2.lock().unwrap();
-    use std::{thread, time};
+fn update_player_translation(
+    mut q_player: Query<&mut Transform, With<PlayerMarker>>,
+    key_input: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
+) {
+    const SPEED: f32 = 2.0;
+    let mut direction = Vec2::ZERO;
 
-    for axis_changed_event in axis_changed_events.read() {
-        log_movement_event(axis_changed_event);
-
-        if axis_changed_event.axis_type == GamepadAxisType::LeftStickX {
-            input_vec2.x = axis_changed_event.value;
-        }
-        if axis_changed_event.axis_type == GamepadAxisType::LeftStickY {
-            input_vec2.y = axis_changed_event.value;
-        }
-
-        let cloned_input_vec2 = input_vec2.clone();
-        if input_predictions.len() > 5 {
-            let overflow_count = input_predictions.len() - 5;
-            for _ in 0..overflow_count {
-                input_predictions.remove(0);
-            }
-        }
-        input_predictions.push(cloned_input_vec2);
-
-        println!("===============Movement Prediction (for 20fps)======================");
-        for el in &*input_predictions {
-            println!("x: {}; y: {}", el.x, el.y);
-        }
-        println!("====================================================================");
-
-        thread::sleep(time::Duration::from_millis(calc_fps_delay_duration_ms(20)));
+    if key_input.pressed(KeyCode::KeyW) {
+        direction.y += 1.0;
     }
-}
+    if key_input.pressed(KeyCode::KeyS) {
+        direction.y -= 1.0;
+    }
+    if key_input.pressed(KeyCode::KeyD) {
+        direction.x += 1.0;
+    }
+    if key_input.pressed(KeyCode::KeyA) {
+        direction.x -= 1.0;
+    }
 
-pub fn log_movement_event(axis_changed_event: &GamepadAxisChangedEvent) {
-    info!(
-        "{:?} of {:?} is changed to {}",
-        axis_changed_event.axis_type, axis_changed_event.gamepad, axis_changed_event.value
-    );
+    direction *= time.delta_seconds() * SPEED;
+    for mut transform in q_player.iter_mut() {
+        transform.translation.x += direction.x;
+        transform.translation.z += direction.y;
+    }
 }
