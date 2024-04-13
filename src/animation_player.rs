@@ -1,7 +1,10 @@
 use bevy::{asset::LoadState, prelude::*};
 use bvh_anim::{Bvh, Channel, Frame};
 
-use crate::{animation_loader::BvhData, character_loader::BvhToCharacter};
+use crate::{
+    animation_loader::{BvhAsset, BvhHandle},
+    character_loader::BvhToCharacter,
+};
 
 pub struct AnimationPlayerPlugin;
 
@@ -79,7 +82,8 @@ pub struct TargetTimeEvent {
 pub fn match_bones(
     mut commands: Commands,
     mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform)>,
-    bvh_data: Res<BvhData>,
+    bvh_asset: Res<Assets<BvhAsset>>,
+    q_bvh_handler: Query<&BvhHandle>,
     mut bvh_to_character: ResMut<BvhToCharacter>,
     mut hip_transforms: ResMut<HipTransforms>,
     server: Res<AssetServer>,
@@ -103,7 +107,10 @@ pub fn match_bones(
         return;
     }
 
-    let bvh_animation_data = bvh_data.get_bvh_animation_data(1);
+    let mut bvh_handler_iter = q_bvh_handler.iter();
+    let _ = bvh_handler_iter.next().unwrap();
+    let bvh_handler = bvh_handler_iter.next().unwrap();
+    let bvh_animation_data = &bvh_asset.get(bvh_handler.bvh_assets.id()).unwrap().asset;
 
     for event in event_reader.read() {
         *local_time = event.time;

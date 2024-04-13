@@ -1,4 +1,9 @@
-use bevy::prelude::*;
+use bevy::{
+    asset::{Asset, Handle},
+    ecs::system::SystemParamItem,
+    prelude::*,
+    render::render_asset::{self, RenderAsset, RenderAssetPlugin, RenderAssetUsages},
+};
 use bvh_anim::{errors::LoadError, Bvh};
 use std::{fs, io::BufReader};
 
@@ -6,25 +11,36 @@ pub struct AnimationLoaderPlugin;
 
 impl Plugin for AnimationLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, store_bvh);
-        app.insert_resource(BvhData::new());
+        app.add_plugins(RenderAssetPlugin::<BvhAsset>::default())
+            .init_asset::<BvhAsset>()
+            .add_systems(Startup, store_bvh);
     }
 }
 
-#[derive(Resource)]
-pub struct BvhData {
-    pub bvh_animation: Vec<Bvh>,
+#[derive(Component, Clone, Default)]
+pub struct BvhHandle {
+    pub bvh_assets: Handle<BvhAsset>,
 }
 
-impl BvhData {
-    pub fn new() -> Self {
-        Self {
-            bvh_animation: Vec::new(),
-        }
+#[derive(Asset, TypePath, Clone, Default)]
+pub struct BvhAsset {
+    pub asset: Bvh,
+}
+
+impl RenderAsset for BvhAsset {
+    type PreparedAsset = Self;
+
+    type Param = ();
+
+    fn asset_usage(&self) -> RenderAssetUsages {
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD
     }
 
-    pub fn get_bvh_animation_data(&self, animation_data_index: usize) -> &Bvh {
-        return &self.bvh_animation[animation_data_index];
+    fn prepare_asset(
+        self,
+        _param: &mut SystemParamItem<Self::Param>,
+    ) -> Result<Self::PreparedAsset, render_asset::PrepareAssetError<Self>> {
+        Ok(self)
     }
 }
 
@@ -65,17 +81,18 @@ pub fn load_bvh() -> Result<Vec<Bvh>, LoadError> {
     Ok(loaded_bvhs)
 }
 
-pub fn store_bvh(mut commands: Commands) {
+pub fn store_bvh(mut commands: Commands, mut assets: ResMut<Assets<BvhAsset>>) {
     match load_bvh() {
         Ok(bvhs) => {
-            commands.insert_resource(BvhData {
-                bvh_animation: bvhs,
-            });
+            for bvh in bvhs {
+                // Create a new BvhAsset and insert it into the asset server
+                commands.spawn(BvhHandle {
+                    bvh_assets: assets.add(BvhAsset { asset: bvh.into() }),
+                    ..default()
+                });
+            }
         }
         Err(err) => {
-            commands.insert_resource(BvhData {
-                bvh_animation: Vec::new(),
-            });
             println!("{:#?}", err);
         }
     }
