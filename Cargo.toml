@@ -8,5 +8,4 @@ edition = "2021"
 [dependencies]
 bevy = "0.13"
 bevy_gltf = "0.13"
-bevy_egui = "0.26"
 bvh_anim = "0.4"

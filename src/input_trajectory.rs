@@ -4,14 +4,15 @@ pub struct InputTrajectoryPlugin;
 
 impl Plugin for InputTrajectoryPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(TrajectoryConfig::new(5, 0.05))
+        app.insert_resource(TrajectoryConfig::new(20, 0.033))
             .add_systems(Startup, setup_input_trajectory)
             .add_systems(
                 Update,
                 (
                     (
-                        update_trajectory_data_len.run_if(trajectory_config_changed),
+                        update_trajectory_data_len.run_if(resource_changed::<TrajectoryConfig>),
                         update_trajectory,
+                        draw_trajectory,
                     )
                         .chain(),
                     update_player_translation,
@@ -50,10 +51,6 @@ fn setup_input_trajectory(mut commands: Commands) {
         .insert(PlayerMarker);
 }
 
-fn trajectory_config_changed(trajectory_config: Res<TrajectoryConfig>) -> bool {
-    trajectory_config.is_added() || trajectory_config.is_changed()
-}
-
 fn update_trajectory_data_len(
     mut q_trajectory: Query<&mut Trajectory, With<PlayerMarker>>,
     trajectory_config: Res<TrajectoryConfig>,
@@ -68,28 +65,14 @@ fn update_trajectory_data_len(
     }
 }
 
+/// Update the trajectory every interval.
 fn update_trajectory(
     mut q_trajectory: Query<(&mut Trajectory, &Transform), With<PlayerMarker>>,
     trajectory_config: Res<TrajectoryConfig>,
     time: Res<Time>,
     mut time_passed: Local<f32>,
-    mut gizmos: Gizmos,
 ) {
     *time_passed += time.delta_seconds();
-
-    for (trajectory, transform) in q_trajectory.iter() {
-        // Draw arrow gizmos of the smoothed out trajectory
-        let mut end = transform.translation.xz();
-        let mut last_translation = trajectory.current;
-
-        for history in trajectory.histories.iter() {
-            let start = Vec2::lerp(*history, last_translation, *time_passed);
-            last_translation = *history;
-
-            gizmos.arrow_2d(start, end, Color::YELLOW);
-            end = start;
-        }
-    }
 
     if *time_passed >= trajectory_config.interval {
         // Updates the histories and current trajectory
@@ -104,6 +87,20 @@ fn update_trajectory(
 
         // Resets timer
         *time_passed = 0.0;
+    }
+}
+
+fn draw_trajectory(q_trajectory: Query<&Trajectory>, mut gizmos: Gizmos) {
+    for trajectory in q_trajectory.iter() {
+        // Draw arrow gizmos of the smoothed out trajectory
+        let mut end = trajectory.current;
+
+        for history in trajectory.histories.iter() {
+            let start = *history;
+
+            gizmos.arrow_2d(start, end, Color::YELLOW);
+            end = start;
+        }
     }
 }
 
@@ -128,6 +125,7 @@ fn update_player_translation(
         direction.x -= 1.0;
     }
 
+    direction = Vec2::normalize(direction);
     direction *= time.delta_seconds() * SPEED;
     for mut transform in q_player.iter_mut() {
         transform.translation.x += direction.x;
