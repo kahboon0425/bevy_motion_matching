@@ -1,25 +1,22 @@
-use animation_loader::AnimationLoaderPlugin;
-use animation_player::{AnimationPlayerPlugin, MyRoundGizmos};
+use animation_player::MyRoundGizmos;
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
-use bevy::window::Window;
-use bevy::DefaultPlugins;
-use camera::CameraPlugin;
-use character_loader::CharacterLoaderPlugin;
 
 mod animation_loader;
 mod animation_player;
 mod camera;
 mod character_loader;
+mod input_trajectory;
 
 fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins,
-            CharacterLoaderPlugin,
-            AnimationLoaderPlugin,
-            AnimationPlayerPlugin,
-            CameraPlugin,
+            character_loader::CharacterLoaderPlugin,
+            animation_loader::AnimationLoaderPlugin,
+            animation_player::AnimationPlayerPlugin,
+            input_trajectory::InputTrajectoryPlugin,
+            camera::CameraPlugin,
         ))
         .init_gizmo_group::<MyRoundGizmos>()
         .add_systems(Startup, setup)
@@ -29,13 +26,7 @@ fn main() {
 }
 
 pub fn setup(mut commands: Commands) {
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            // shadows_enabled: true,
-            ..Default::default()
-        },
-        ..default()
-    });
+    commands.spawn(DirectionalLightBundle::default());
 }
 
 /// Tags an entity as capable of panning and orbiting.
