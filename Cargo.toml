@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 bevy = "0.13"
-bevy_gltf = "0.13"
 bvh_anim = "0.4"
+bevy_gltf = "0.13"
+bevy_third_person_camera = "0.1.10"

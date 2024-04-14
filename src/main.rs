@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 mod animation_loader;
 mod animation_player;
+mod camera;
 mod character_loader;
 mod input_trajectory;
 
@@ -15,10 +16,12 @@ fn main() {
             animation_loader::AnimationLoaderPlugin,
             animation_player::AnimationPlayerPlugin,
             input_trajectory::InputTrajectoryPlugin,
+            camera::CameraPlugin,
         ))
         .init_gizmo_group::<MyRoundGizmos>()
-        .add_systems(Startup, (spawn_camera, setup))
-        .add_systems(Update, pan_orbit_camera)
+        .add_systems(Startup, setup)
+        // .add_systems(Startup, spawn_camera)
+        // .add_systems(Update, pan_orbit_camera)
         .run();
 }
 
@@ -146,7 +149,7 @@ fn get_primary_window_size(windows: &Query<&Window>) -> Vec2 {
 }
 
 /// Spawn a camera like this
-fn spawn_camera(mut commands: Commands) {
+fn spawn_camera(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     let translation = Vec3::new(-2.0, 2.5, 5.0);
     let radius = translation.length();
 
@@ -160,4 +163,11 @@ fn spawn_camera(mut commands: Commands) {
             ..Default::default()
         },
     ));
+
+    commands.spawn((PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.9, 0.5, 0.5)),
+        // material: materials.add(Color::rgb(10.0, 14.0, 25.0)),
+        transform: Transform::from_xyz(0.0, 0.5, 0.0),
+        ..default()
+    },));
 }
