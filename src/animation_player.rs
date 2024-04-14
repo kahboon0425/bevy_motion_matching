@@ -92,11 +92,6 @@ pub fn match_bones(
     mut local_time: Local<f32>,
     mut event_reader: EventReader<TargetTimeEvent>,
 ) {
-    // if bvh_to_character.loaded == true {
-    //     return;
-    // }
-
-    println!("Checking load state");
     let load_state: LoadState = server
         .get_load_state(bvh_to_character.scene_handle.clone())
         .unwrap();
@@ -131,9 +126,6 @@ pub fn match_bones(
     ) {
         let current_frame = FrameData(current_frame);
         let next_frame = FrameData(next_frame);
-
-        // println!("Current Frame{:?}", current_frame);
-        // println!("Next Frame{:?}", next_frame);
 
         for (entity, name, mut transform, global_transform) in q_names.iter_mut() {
             let bone_name = &name.as_str()[6..];
