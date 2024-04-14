@@ -1,7 +1,10 @@
 use bevy::{asset::LoadState, prelude::*};
 use bvh_anim::{Bvh, Channel, Frame};
 
-use crate::{animation_loader::BvhData, character_loader::BvhToCharacter};
+use crate::{
+    animation_loader::BvhData,
+    character_loader::{BvhToCharacter, MainCharacter},
+};
 
 pub struct AnimationPlayerPlugin;
 
@@ -78,7 +81,8 @@ pub struct TargetTimeEvent {
 
 pub fn match_bones(
     mut commands: Commands,
-    mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform)>,
+    mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform), Without<MainCharacter>>,
+    mut q_character: Query<&mut Transform, With<MainCharacter>>,
     bvh_data: Res<BvhData>,
     mut bvh_to_character: ResMut<BvhToCharacter>,
     mut hip_transforms: ResMut<HipTransforms>,
@@ -128,8 +132,8 @@ pub fn match_bones(
         let current_frame = FrameData(current_frame);
         let next_frame = FrameData(next_frame);
 
-        println!("Current Frame{:?}", current_frame);
-        println!("Next Frame{:?}", next_frame);
+        // println!("Current Frame{:?}", current_frame);
+        // println!("Next Frame{:?}", next_frame);
 
         for (entity, name, mut transform, global_transform) in q_names.iter_mut() {
             let bone_name = &name.as_str()[6..];
@@ -172,15 +176,21 @@ pub fn match_bones(
                         Quat::slerp(current_rotation, next_rotation, interpolation_factor);
 
                     transform.rotation = interpolated_rotation;
-                    transform.translation = interpolated_translation;
-
+                    // transform.translation = interpolated_translation;
                     if bone_name == "Hips" {
+                        for mut c_transform in q_character.iter_mut() {
+                            c_transform.translation = interpolated_translation * 0.01;
+                            c_transform.translation.y = 0.0;
+                        }
                         // Store the current position as the previous for the left foot
                         hip_transforms.hip_previous_transform =
                             hip_transforms.hip_current_transform;
                         // Update the current position for the left foot
                         hip_transforms.hip_current_transform = global_transform.translation();
+                    } else {
+                        transform.translation = interpolated_translation;
                     }
+
                     event_writer.send(HipTransformsEvent {
                         current_transform: hip_transforms.hip_current_transform,
                         previous_transform: hip_transforms.hip_previous_transform,
