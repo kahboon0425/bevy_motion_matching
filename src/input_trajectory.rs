@@ -126,7 +126,6 @@ fn update_player_translation(
     }
 
     direction = Vec2::normalize_or_zero(direction);
-    println!("{direction:#?}");
     direction *= time.delta_seconds() * SPEED;
     for mut transform in q_player.iter_mut() {
         transform.translation.x += direction.x;
