@@ -1,10 +1,13 @@
 use bevy::prelude::*;
 
+use crate::ui::DrawArrowEvent;
+
 pub struct InputTrajectoryPlugin;
 
 impl Plugin for InputTrajectoryPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TrajectoryConfig::new(20, 0.033))
+            .insert_resource(ArrowDrawState { should_draw: true })
             .add_systems(Startup, setup_input_trajectory)
             .add_systems(
                 Update,
@@ -19,6 +22,11 @@ impl Plugin for InputTrajectoryPlugin {
                 ),
             );
     }
+}
+
+#[derive(Default, Resource)]
+pub struct ArrowDrawState {
+    pub should_draw: bool,
 }
 
 /// Configuration for all trajectories.
@@ -90,16 +98,27 @@ fn update_trajectory(
     }
 }
 
-fn draw_trajectory(q_trajectory: Query<&Trajectory>, mut gizmos: Gizmos) {
-    for trajectory in q_trajectory.iter() {
-        // Draw arrow gizmos of the smoothed out trajectory
-        let mut end = trajectory.current;
+fn draw_trajectory(
+    q_trajectory: Query<&Trajectory>,
+    mut gizmos: Gizmos,
+    mut event_reader: EventReader<DrawArrowEvent>,
+    mut draw_state: ResMut<ArrowDrawState>,
+) {
+    for event in event_reader.read() {
+        println!("Draw Or Hide: {:?}", event.0);
+        draw_state.should_draw = event.0;
+    }
+    if draw_state.should_draw {
+        for trajectory in q_trajectory.iter() {
+            // Draw arrow gizmos of the smoothed out trajectory
+            let mut end = trajectory.current;
 
-        for history in trajectory.histories.iter() {
-            let start = *history;
+            for history in trajectory.histories.iter() {
+                let start = *history;
 
-            gizmos.arrow_2d(start, end, Color::YELLOW);
-            end = start;
+                gizmos.arrow_2d(start, end, Color::YELLOW);
+                end = start;
+            }
         }
     }
 }
