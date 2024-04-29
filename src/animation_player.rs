@@ -3,7 +3,7 @@ use bvh_anim::{Bvh, Channel, Frame};
 
 use crate::{
     animation_loader::{BvhAsset, BvhHandle},
-    character_loader::BvhToCharacter,
+    character_loader::{BvhToCharacter, MainCharacter},
 };
 
 pub struct AnimationPlayerPlugin;
@@ -81,9 +81,10 @@ pub struct TargetTimeEvent {
 
 pub fn match_bones(
     mut commands: Commands,
-    mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform)>,
     bvh_asset: Res<Assets<BvhAsset>>,
     q_bvh_handler: Query<&BvhHandle>,
+    mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform), Without<MainCharacter>>,
+    mut q_character: Query<&mut Transform, With<MainCharacter>>,
     mut bvh_to_character: ResMut<BvhToCharacter>,
     mut hip_transforms: ResMut<HipTransforms>,
     server: Res<AssetServer>,
@@ -171,15 +172,21 @@ pub fn match_bones(
                         Quat::slerp(current_rotation, next_rotation, interpolation_factor);
 
                     transform.rotation = interpolated_rotation;
-                    transform.translation = interpolated_translation;
-
+                    // transform.translation = interpolated_translation;
                     if bone_name == "Hips" {
+                        for mut c_transform in q_character.iter_mut() {
+                            c_transform.translation = interpolated_translation * 0.01;
+                            c_transform.translation.y = 0.0;
+                        }
                         // Store the current position as the previous for the left foot
                         hip_transforms.hip_previous_transform =
                             hip_transforms.hip_current_transform;
                         // Update the current position for the left foot
                         hip_transforms.hip_current_transform = global_transform.translation();
+                    } else {
+                        transform.translation = interpolated_translation;
                     }
+
                     event_writer.send(HipTransformsEvent {
                         current_transform: hip_transforms.hip_current_transform,
                         previous_transform: hip_transforms.hip_previous_transform,

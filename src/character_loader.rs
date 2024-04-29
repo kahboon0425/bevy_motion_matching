@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_third_person_camera::ThirdPersonCameraTarget;
 
 pub struct CharacterLoaderPlugin;
 
@@ -33,7 +34,8 @@ pub fn spawn_character(mut commands: Commands, asset_server: Res<AssetServer>) {
             scene: scene.clone(),
             ..default()
         })
-        .insert(MainCharacter);
+        .insert(MainCharacter)
+        .insert(ThirdPersonCameraTarget);
 
     commands.insert_resource(BvhToCharacter {
         loaded: false,
