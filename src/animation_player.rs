@@ -51,9 +51,6 @@ impl<'a> FrameData<'a> {
 }
 
 #[derive(Component)]
-pub struct BoneIndex(pub usize);
-
-#[derive(Component)]
 pub struct BoneRotation(pub Quat);
 
 #[derive(Component, Default, Debug)]
@@ -111,7 +108,6 @@ pub fn store_bones(
 }
 
 pub fn match_bones(
-    mut commands: Commands,
     q_bone_map: Query<&BoneMap, With<MainCharacter>>,
     mut q_transform: Query<(&mut Transform, &GlobalTransform), Without<MainCharacter>>,
     mut q_character: Query<&mut Transform, With<MainCharacter>>,
@@ -159,18 +155,11 @@ pub fn match_bones(
         let current_frame = FrameData(current_frame);
         let next_frame = FrameData(next_frame);
 
-        let mut joint_index: usize = 0;
-
         for joint in bvh_animation_data.joints() {
             let bone_names = joint.data().name().to_str().unwrap();
             for bone_map in q_bone_map.iter() {
-                if let Some(bone_entity) = &bone_map.0.get(bone_names) {
-                    commands
-                        .entity(**bone_entity)
-                        .insert(BoneIndex(joint_index));
-
-                    if let Ok((mut transform, global_transform)) =
-                        q_transform.get_mut(**bone_entity)
+                if let Some(&bone_entity) = bone_map.0.get(bone_names) {
+                    if let Ok((mut transform, global_transform)) = q_transform.get_mut(bone_entity)
                     {
                         let offset = joint.data().offset();
 
@@ -224,8 +213,6 @@ pub fn match_bones(
                             previous_transform: hip_transforms.hip_previous_transform,
                         });
                     }
-
-                    joint_index += 1;
                 }
             }
         }
