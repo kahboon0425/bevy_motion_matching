@@ -1,4 +1,4 @@
-use bevy::{asset::LoadState, prelude::*};
+use bevy::{asset::LoadState, prelude::*, utils::hashbrown::HashMap};
 use bvh_anim::{Bvh, Channel, Frame};
 
 use crate::{
@@ -10,10 +10,13 @@ pub struct AnimationPlayerPlugin;
 
 impl Plugin for AnimationPlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (match_bones, draw_movement_arrows, test));
-        app.insert_resource(HipTransforms::new());
-        app.add_event::<HipTransformsEvent>();
-        app.add_event::<TargetTimeEvent>();
+        app.add_systems(Update, match_bones)
+            .add_systems(Update, draw_movement_arrows)
+            .add_systems(Update, test)
+            .insert_resource(HipTransforms::new())
+            .add_event::<HipTransformsEvent>()
+            .add_event::<TargetTimeEvent>()
+            .add_systems(Update, store_bones);
     }
 }
 
@@ -48,10 +51,10 @@ impl<'a> FrameData<'a> {
 }
 
 #[derive(Component)]
-pub struct BoneIndex(pub usize);
-
-#[derive(Component)]
 pub struct BoneRotation(pub Quat);
+
+#[derive(Component, Default, Debug)]
+pub struct BoneMap(pub HashMap<String, Entity>);
 
 #[derive(Resource)]
 pub struct HipTransforms {
@@ -79,9 +82,34 @@ pub struct TargetTimeEvent {
     pub time: f32,
 }
 
-pub fn match_bones(
+pub fn store_bones(
     mut commands: Commands,
-    mut q_names: Query<(Entity, &Name, &mut Transform, &GlobalTransform), Without<MainCharacter>>,
+    q_character: Query<Entity, (With<MainCharacter>, Without<BoneMap>)>,
+    q_names: Query<&Name>,
+    children: Query<&Children>,
+    bvh_to_character: ResMut<BvhToCharacter>,
+) {
+    if bvh_to_character.loaded == false {
+        return;
+    }
+
+    for character_entity in q_character.iter() {
+        let mut bone_map = BoneMap::default();
+
+        for bone_entity in children.iter_descendants(character_entity) {
+            if let Ok(name) = q_names.get(bone_entity) {
+                let bone_name = name[6..].to_string();
+                bone_map.0.insert(bone_name, bone_entity);
+            }
+        }
+
+        commands.entity(character_entity).insert(bone_map);
+    }
+}
+
+pub fn match_bones(
+    q_bone_map: Query<&BoneMap, With<MainCharacter>>,
+    mut q_transform: Query<(&mut Transform, &GlobalTransform), Without<MainCharacter>>,
     mut q_character: Query<&mut Transform, With<MainCharacter>>,
     bvh_data: Res<BvhData>,
     mut bvh_to_character: ResMut<BvhToCharacter>,
@@ -127,69 +155,65 @@ pub fn match_bones(
         let current_frame = FrameData(current_frame);
         let next_frame = FrameData(next_frame);
 
-        for (entity, name, mut transform, global_transform) in q_names.iter_mut() {
-            let bone_name = &name.as_str()[6..];
+        for joint in bvh_animation_data.joints() {
+            let bone_names = joint.data().name().to_str().unwrap();
+            for bone_map in q_bone_map.iter() {
+                if let Some(&bone_entity) = bone_map.0.get(bone_names) {
+                    if let Ok((mut transform, global_transform)) = q_transform.get_mut(bone_entity)
+                    {
+                        let offset = joint.data().offset();
 
-            let mut joint_index: usize = 0;
+                        let mut current_translation = Vec3::new(offset.x, offset.y, offset.z);
+                        let mut next_translation = Vec3::new(offset.x, offset.y, offset.z);
 
-            for joint in bvh_animation_data.joints() {
-                if bone_name == joint.data().name() {
-                    commands.entity(entity).insert(BoneIndex(joint_index));
+                        let channels = joint.data().channels();
 
-                    let offset = joint.data().offset();
+                        let current_rotation;
+                        let next_rotation;
 
-                    let mut current_translation = Vec3::new(offset.x, offset.y, offset.z);
-                    let mut next_translation = Vec3::new(offset.x, offset.y, offset.z);
+                        if channels.len() == 3 {
+                            current_rotation = current_frame.get_rotation(channels);
+                            next_rotation = next_frame.get_rotation(channels);
+                        } else {
+                            let current_offset;
+                            let next_offset;
+                            (current_offset, current_rotation) =
+                                current_frame.get_translation_rotation(channels);
+                            (next_offset, next_rotation) =
+                                next_frame.get_translation_rotation(channels);
 
-                    let channels = joint.data().channels();
-
-                    let current_rotation;
-                    let next_rotation;
-
-                    if channels.len() == 3 {
-                        current_rotation = current_frame.get_rotation(channels);
-                        next_rotation = next_frame.get_rotation(channels);
-                    } else {
-                        let current_offset;
-                        let next_offset;
-                        (current_offset, current_rotation) =
-                            current_frame.get_translation_rotation(channels);
-                        (next_offset, next_rotation) =
-                            next_frame.get_translation_rotation(channels);
-
-                        current_translation += current_offset;
-                        next_translation += next_offset;
-                    }
-
-                    let interpolated_translation =
-                        Vec3::lerp(current_translation, next_translation, interpolation_factor);
-
-                    let interpolated_rotation =
-                        Quat::slerp(current_rotation, next_rotation, interpolation_factor);
-
-                    transform.rotation = interpolated_rotation;
-                    // transform.translation = interpolated_translation;
-                    if bone_name == "Hips" {
-                        for mut c_transform in q_character.iter_mut() {
-                            c_transform.translation = interpolated_translation * 0.01;
-                            c_transform.translation.y = 0.0;
+                            current_translation += current_offset;
+                            next_translation += next_offset;
                         }
-                        // Store the current position as the previous for the left foot
-                        hip_transforms.hip_previous_transform =
-                            hip_transforms.hip_current_transform;
-                        // Update the current position for the left foot
-                        hip_transforms.hip_current_transform = global_transform.translation();
-                    } else {
-                        transform.translation = interpolated_translation;
+
+                        let interpolated_translation =
+                            Vec3::lerp(current_translation, next_translation, interpolation_factor);
+
+                        let interpolated_rotation =
+                            Quat::slerp(current_rotation, next_rotation, interpolation_factor);
+
+                        transform.rotation = interpolated_rotation;
+
+                        if bone_names == "Hips" {
+                            for mut c_transform in q_character.iter_mut() {
+                                c_transform.translation = interpolated_translation * 0.01;
+                                c_transform.translation.y = 0.0;
+                            }
+                            // Store the current position as the previous for the left foot
+                            hip_transforms.hip_previous_transform =
+                                hip_transforms.hip_current_transform;
+                            // Update the current position for the left foot
+                            hip_transforms.hip_current_transform = global_transform.translation();
+                        } else {
+                            transform.translation = interpolated_translation;
+                        }
+
+                        event_writer.send(HipTransformsEvent {
+                            current_transform: hip_transforms.hip_current_transform,
+                            previous_transform: hip_transforms.hip_previous_transform,
+                        });
                     }
-
-                    event_writer.send(HipTransformsEvent {
-                        current_transform: hip_transforms.hip_current_transform,
-                        previous_transform: hip_transforms.hip_previous_transform,
-                    });
                 }
-
-                joint_index += 1;
             }
         }
     }
