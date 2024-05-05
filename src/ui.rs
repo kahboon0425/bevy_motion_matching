@@ -13,8 +13,7 @@ impl Plugin for UiPlugin {
         app.add_systems(Update, ui)
             .add_plugins(EguiPlugin)
             .insert_resource(ShowDrawArrow { show: true })
-            .insert_resource(SelectedFiles::default())
-            .add_event::<DrawArrowEvent>();
+            .insert_resource(SelectedFiles::default());
     }
 }
 
@@ -27,9 +26,6 @@ pub struct ShowDrawArrow {
 pub struct SelectedFiles {
     pub files: HashSet<String>,
 }
-
-#[derive(Event, Debug)]
-pub struct DrawArrowEvent(pub bool);
 
 pub fn animation_files_menu(
     ui: &mut egui::Ui,
@@ -54,17 +50,8 @@ pub fn build_button(ui: &mut egui::Ui) {
     }
 }
 
-pub fn arrow_checkbox(
-    ui: &mut egui::Ui,
-    mut show_draw_arrow: ResMut<ShowDrawArrow>,
-    mut event_writer: EventWriter<DrawArrowEvent>,
-) {
-    if ui
-        .checkbox(&mut show_draw_arrow.show, "Show Arrows")
-        .changed()
-    {
-        event_writer.send(DrawArrowEvent(show_draw_arrow.show));
-    }
+pub fn arrow_checkbox(ui: &mut egui::Ui, mut show_draw_arrow: ResMut<ShowDrawArrow>) {
+    ui.checkbox(&mut show_draw_arrow.show, "Show Arrows");
 }
 
 pub fn multiple_files_selection_menu(
@@ -92,7 +79,6 @@ pub fn ui(
     mut contexts: EguiContexts,
     file_name: ResMut<BvhFile>,
     animation_file_selection_event: EventWriter<AnimationSelectEvent>,
-    draw_arrow_event: EventWriter<DrawArrowEvent>,
     show_draw_arrow: ResMut<ShowDrawArrow>,
     selected_files: ResMut<SelectedFiles>,
 ) {
@@ -103,7 +89,7 @@ pub fn ui(
             ui.heading("Properties");
             animation_files_menu(ui, &file_name, animation_file_selection_event);
             build_button(ui);
-            arrow_checkbox(ui, show_draw_arrow, draw_arrow_event);
+            arrow_checkbox(ui, show_draw_arrow);
             multiple_files_selection_menu(ui, &file_name, selected_files);
         });
 }
