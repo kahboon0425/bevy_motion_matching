@@ -98,7 +98,9 @@ fn draw_trajectory(q_trajectory: Query<&Trajectory>, mut gizmos: Gizmos) {
         for history in trajectory.histories.iter() {
             let start = *history;
 
-            gizmos.arrow_2d(start, end, Color::YELLOW);
+            let arrow_start = Vec3::new(start.x, 0.0, start.y);
+            let arrow_end = Vec3::new(end.x, 0.0, end.y);
+            gizmos.arrow(arrow_start, arrow_end, Color::YELLOW);
             end = start;
         }
     }
