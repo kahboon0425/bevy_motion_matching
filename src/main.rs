@@ -7,6 +7,7 @@ mod animation_player;
 mod camera;
 mod character_loader;
 mod input_trajectory;
+mod ui;
 
 fn main() {
     App::new()
@@ -17,6 +18,7 @@ fn main() {
             animation_player::AnimationPlayerPlugin,
             input_trajectory::InputTrajectoryPlugin,
             camera::CameraPlugin,
+            ui::UiPlugin,
         ))
         .init_gizmo_group::<MyRoundGizmos>()
         .add_systems(Startup, setup)

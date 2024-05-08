@@ -135,7 +135,10 @@ pub fn match_bones(
         return;
     }
 
-    let bvh_animation_data = bvh_data.get_bvh_animation_data(1);
+    // let bvh_animation_data = bvh_data.get_bvh_animation_data(0);
+    let Some(bvh_animation_data) = &bvh_data.bvh_animation else {
+        return;
+    };
 
     for event in event_reader.read() {
         *local_time = event.time;
@@ -238,6 +241,7 @@ pub fn draw_movement_arrows(mut gizmos: Gizmos, mut event_reader: EventReader<Hi
 
 pub fn get_pose(local_time: f32, bvh_data: &Bvh) -> (usize, f32) {
     let duration_per_frame = bvh_data.frame_time().as_secs_f32();
+    // println!("BvhData {}", bvh_data);
 
     let total_animation_time = duration_per_frame * bvh_data.frames().len() as f32;
 
