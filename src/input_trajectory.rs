@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use crate::ui::ShowDrawArrow;
+
 pub struct InputTrajectoryPlugin;
 
 impl Plugin for InputTrajectoryPlugin {
@@ -90,16 +92,24 @@ fn update_trajectory(
     }
 }
 
-fn draw_trajectory(q_trajectory: Query<&Trajectory>, mut gizmos: Gizmos) {
-    for trajectory in q_trajectory.iter() {
-        // Draw arrow gizmos of the smoothed out trajectory
-        let mut end = trajectory.current;
+fn draw_trajectory(
+    q_trajectory: Query<&Trajectory>,
+    mut gizmos: Gizmos,
+    show_arrow: Res<ShowDrawArrow>,
+) {
+    if show_arrow.show {
+        for trajectory in q_trajectory.iter() {
+            // Draw arrow gizmos of the smoothed out trajectory
+            let mut end = trajectory.current;
 
-        for history in trajectory.histories.iter() {
-            let start = *history;
+            for history in trajectory.histories.iter() {
+                let start = *history;
 
-            gizmos.arrow_2d(start, end, Color::YELLOW);
-            end = start;
+                let arrow_start = Vec3::new(start.x, 0.0, start.y);
+                let arrow_end = Vec3::new(end.x, 0.0, end.y);
+                gizmos.arrow(arrow_start, arrow_end, Color::YELLOW);
+                end = start;
+            }
         }
     }
 }

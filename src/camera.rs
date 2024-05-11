@@ -5,17 +5,13 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_camera)
+        app.add_systems(Startup, (spawn_camera, spawn_ground))
             .add_plugins(ThirdPersonCameraPlugin)
             .add_systems(Update, camera_lerp);
     }
 }
 
-pub fn spawn_camera(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
+pub fn spawn_camera(mut commands: Commands) {
     commands.spawn((
         ThirdPersonCamera {
             offset_enabled: true,
@@ -31,11 +27,16 @@ pub fn spawn_camera(
     ));
 
     commands.spawn(Camera3dBundle::default());
+}
 
-    // ground plane
+pub fn spawn_ground(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     commands.spawn(PbrBundle {
         mesh: meshes.add(Plane3d::default().mesh().size(50.0, 50.0)),
-        material: materials.add(Color::SILVER),
+        material: materials.add(StandardMaterial::default()),
         ..default()
     });
 }

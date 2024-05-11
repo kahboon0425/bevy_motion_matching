@@ -1,4 +1,4 @@
-use bevy::{asset::Handle, prelude::*};
+use bevy::prelude::*;
 use bvh_anim::{errors::LoadError, Bvh};
 use std::{fs, io::BufReader};
 
@@ -6,71 +6,74 @@ pub struct AnimationLoaderPlugin;
 
 impl Plugin for AnimationLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset::<BvhAsset>()
-            .insert_resource(BvhHandles::default())
-            .add_systems(Startup, store_bvh);
+        app.add_systems(Startup, store_bvh_file)
+            .add_systems(Update, get_animation_data)
+            .insert_resource(BvhData::default())
+            .insert_resource(BvhFile(Vec::new()))
+            .add_event::<AnimationSelectEvent>();
     }
 }
 
-#[derive(Resource, Clone, Default)]
-pub struct BvhHandles {
-    pub handles: Vec<Handle<BvhAsset>>,
+const ANIMATION_FILE_PATH: &str = "./assets/walking-animation-dataset/";
+
+#[derive(Resource, Default)]
+pub struct BvhData {
+    pub bvh_animation: Option<Bvh>,
 }
 
-#[derive(Asset, TypePath, Clone, Default)]
-pub struct BvhAsset {
-    pub asset: Bvh,
-}
+#[derive(Resource)]
+pub struct BvhFile(pub Vec<String>);
 
-pub fn load_bvh() -> Result<Vec<Bvh>, LoadError> {
-    let animation_file_path: &str = "./assets/walking-animation-dataset/";
+#[derive(Event)]
+pub struct AnimationSelectEvent(pub String);
 
-    let mut loaded_bvhs: Vec<Bvh> = Vec::new();
+pub fn load_bvh_file() -> Result<Vec<String>, LoadError> {
+    let mut bvh_file: Vec<String> = Vec::new();
 
-    if let Ok(entries) = fs::read_dir(animation_file_path) {
-        // We only load to entires for now
-        for entry in entries.take(2) {
-            let Ok(entry) = entry else {
-                continue;
-            };
-
-            let filename = entry.file_name();
-            let Some(filename) = filename.to_str() else {
-                continue;
-            };
-
-            let filename: String = animation_file_path.to_owned() + filename;
-
-            let bvh_file = fs::File::open(&filename).unwrap();
-            let bvh_reader = BufReader::new(bvh_file);
-
-            let bvh: Bvh = bvh_anim::from_reader(bvh_reader)?;
-
-            loaded_bvhs.push(bvh);
-        }
-
-        if loaded_bvhs.is_empty() {
-            println!("No BVH files found");
+    if let Ok(entries) = fs::read_dir(ANIMATION_FILE_PATH) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                if let Some(filename) = entry.file_name().to_str() {
+                    bvh_file.push(filename.to_string());
+                }
+            }
         }
     } else {
         println!("Failed to read directory");
     }
 
-    Ok(loaded_bvhs)
+    Ok(bvh_file)
 }
 
-pub fn store_bvh(mut assets: ResMut<Assets<BvhAsset>>, mut bvh_handles: ResMut<BvhHandles>) {
-    match load_bvh() {
-        Ok(bvhs) => {
-            for bvh in bvhs {
-                // Create a new BvhAsset and insert it into the asset server
-                bvh_handles
-                    .handles
-                    .push(assets.add(BvhAsset { asset: bvh.into() }));
-            }
-        }
+pub fn store_bvh_file(mut commands: Commands) {
+    match load_bvh_file() {
+        Ok(bvh_file) => commands.insert_resource(BvhFile(bvh_file)),
         Err(err) => {
+            commands.insert_resource(BvhFile(Vec::new()));
             println!("{:#?}", err);
         }
+    }
+}
+
+pub fn get_animation_data(
+    mut commands: Commands,
+    mut event_reader: EventReader<AnimationSelectEvent>,
+) {
+    for event in event_reader.read() {
+        // println!("Default File: {}", default_file);
+        println!("Event: {}", event.0);
+
+        // default_file = &event.0;
+        let content = ANIMATION_FILE_PATH.to_owned() + &event.0;
+
+        // let content = ANIMATION_FILE_PATH.to_owned() + "walk1_subject1.bvh";
+        let bvh_file: fs::File = fs::File::open(&content).unwrap();
+        let bvh_reader: BufReader<fs::File> = BufReader::new(bvh_file);
+
+        let bvh: Bvh = bvh_anim::from_reader(bvh_reader).unwrap();
+
+        commands.insert_resource(BvhData {
+            bvh_animation: Some(bvh),
+        });
     }
 }
