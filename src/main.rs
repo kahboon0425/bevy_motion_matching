@@ -1,11 +1,10 @@
 use bevy::prelude::*;
+use bvh::*;
 
-mod animation_player;
-mod bvh_asset;
-mod bvh_library;
+mod bvh;
 mod camera;
-mod character_loader;
 mod input_trajectory;
+mod scene_loader;
 mod ui;
 
 fn main() {
@@ -13,8 +12,8 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             bvh_library::BvhLibraryPlugin,
-            character_loader::CharacterLoaderPlugin,
-            animation_player::AnimationPlayerPlugin,
+            scene_loader::SceneLoaderPlugin,
+            bvh_player::BvhPlayerPlugin,
             input_trajectory::InputTrajectoryPlugin,
             camera::CameraPlugin,
             ui::UiPlugin,

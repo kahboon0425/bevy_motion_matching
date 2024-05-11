@@ -1,18 +1,19 @@
 use bevy::prelude::*;
 use bevy_third_person_camera::ThirdPersonCameraTarget;
 
-pub struct CharacterLoaderPlugin;
+/// Load scene from glb file.
+pub struct SceneLoaderPlugin;
 
-impl Plugin for CharacterLoaderPlugin {
+impl Plugin for SceneLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_character);
+        app.add_systems(Startup, spawn_scene);
     }
 }
 
 #[derive(Component)]
 pub struct MainScene;
 
-pub fn spawn_character(mut commands: Commands, asset_server: Res<AssetServer>) {
+pub fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             // shadows_enabled: true,

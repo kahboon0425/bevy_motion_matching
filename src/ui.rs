@@ -4,7 +4,7 @@ use bevy_egui::{
     EguiContexts, EguiPlugin,
 };
 
-use crate::{animation_player::SelectedBvhAsset, bvh_library::BvhLibrary};
+use crate::{bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset};
 
 pub struct UiPlugin;
 
@@ -74,7 +74,7 @@ pub fn multiple_files_selection_menu(
             }
         }
     });
-    println!("Selected Files: {:?}", selected_files);
+    // println!("Selected Files: {:?}", selected_files);
 }
 
 fn ui(

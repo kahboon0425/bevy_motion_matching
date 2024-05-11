@@ -5,11 +5,11 @@ use bevy::{
 };
 use bvh_anim::{Bvh, Channel, Frame};
 
-use crate::{bvh_asset::BvhAsset, character_loader::MainScene};
+use crate::{bvh_asset::BvhAsset, scene_loader::MainScene};
 
-pub struct AnimationPlayerPlugin;
+pub struct BvhPlayerPlugin;
 
-impl Plugin for AnimationPlayerPlugin {
+impl Plugin for BvhPlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SelectedBvhAsset>()
             .add_event::<TargetTimeEvent>()
