@@ -4,7 +4,7 @@ use bevy_egui::{
     EguiContexts, EguiPlugin,
 };
 
-use crate::animation_loader::{AnimationSelectEvent, BvhFile};
+use crate::{bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset};
 
 pub struct UiPlugin;
 
@@ -13,7 +13,7 @@ impl Plugin for UiPlugin {
         app.add_systems(Update, ui)
             .add_plugins(EguiPlugin)
             .insert_resource(ShowDrawArrow { show: true })
-            .insert_resource(SelectedFiles::default());
+            .init_resource::<SelectedFiles>();
     }
 }
 
@@ -29,15 +29,17 @@ pub struct SelectedFiles {
 
 pub fn animation_files_menu(
     ui: &mut egui::Ui,
-    file_name: &ResMut<BvhFile>,
-    mut event_writer: EventWriter<AnimationSelectEvent>,
+    bvh_library: &BvhLibrary,
+    selected_bvh_asset: &mut SelectedBvhAsset,
 ) {
     ui.horizontal(|ui| {
         ui.label("Choose Animation File:");
         egui::ComboBox::from_label("").show_ui(ui, |ui| {
-            for file in file_name.0.iter() {
-                if ui.selectable_label(false, file).clicked() {
-                    event_writer.send(AnimationSelectEvent(file.to_string()));
+            for filename in bvh_library.get_filenames() {
+                if ui.selectable_label(false, filename).clicked() {
+                    if let Some(handle) = bvh_library.get_handle(filename) {
+                        selected_bvh_asset.0 = handle;
+                    }
                 }
             }
         });
@@ -46,50 +48,51 @@ pub fn animation_files_menu(
 
 pub fn build_button(ui: &mut egui::Ui) {
     if ui.button("Build").clicked() {
-        println!("Build Buttonnnnnnnnnnnnnnnnnnnn");
+        info!("build button pressed.");
     }
 }
 
-pub fn arrow_checkbox(ui: &mut egui::Ui, mut show_draw_arrow: ResMut<ShowDrawArrow>) {
+pub fn arrow_checkbox(ui: &mut egui::Ui, show_draw_arrow: &mut ShowDrawArrow) {
     ui.checkbox(&mut show_draw_arrow.show, "Show Arrows");
 }
 
 pub fn multiple_files_selection_menu(
     ui: &mut egui::Ui,
-    file_name: &ResMut<BvhFile>,
-    mut selected_files: ResMut<SelectedFiles>,
+    bvh_library: &BvhLibrary,
+    selected_files: &mut SelectedFiles,
 ) {
     ui.vertical(|ui| {
         ui.label("Select Multiple Animation Files:");
-        for file in file_name.0.iter() {
-            let mut is_selected = selected_files.files.contains(file);
-            if ui.checkbox(&mut is_selected, file).changed() {
+        for filename in bvh_library.get_filenames() {
+            let mut is_selected = selected_files.files.contains(filename);
+            if ui.checkbox(&mut is_selected, filename).changed() {
                 if is_selected {
-                    selected_files.files.insert(file.clone());
+                    selected_files.files.insert(filename.clone());
                 } else {
-                    selected_files.files.remove(file);
+                    selected_files.files.remove(filename);
                 }
             }
         }
     });
-    println!("Selected Files: {:?}", selected_files);
+    // println!("Selected Files: {:?}", selected_files);
 }
 
-pub fn ui(
+fn ui(
     mut contexts: EguiContexts,
-    file_name: ResMut<BvhFile>,
-    animation_file_selection_event: EventWriter<AnimationSelectEvent>,
-    show_draw_arrow: ResMut<ShowDrawArrow>,
-    selected_files: ResMut<SelectedFiles>,
+    bvh_library: Res<BvhLibrary>,
+    mut selected_bvh_asset: ResMut<SelectedBvhAsset>,
+    mut show_draw_arrow: ResMut<ShowDrawArrow>,
+    mut selected_files: ResMut<SelectedFiles>,
 ) {
     let ctx = contexts.ctx_mut();
+
     egui::SidePanel::right("right_panel")
         .resizable(true)
         .show(ctx, |ui| {
             ui.heading("Properties");
-            animation_files_menu(ui, &file_name, animation_file_selection_event);
+            animation_files_menu(ui, &bvh_library, &mut selected_bvh_asset);
             build_button(ui);
-            arrow_checkbox(ui, show_draw_arrow);
-            multiple_files_selection_menu(ui, &file_name, selected_files);
+            arrow_checkbox(ui, &mut show_draw_arrow);
+            multiple_files_selection_menu(ui, &bvh_library, &mut selected_files);
         });
 }

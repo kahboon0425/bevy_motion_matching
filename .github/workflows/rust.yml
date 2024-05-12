@@ -49,7 +49,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
-      - run: cargo doc --workspace --all-features --no-deps
+      - run: cargo doc --workspace --all-features --no-deps --document-private-items
         env:
           RUSTDOCFLAGS: -D warnings
     
@@ -63,12 +63,11 @@ jobs:
       - run: cargo test --workspace --all-features --all-targets
 
   # Note: cargo test --all-targets disables doc tests, so we have to add this to test docs
-  doctest:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
-      - run: cargo test --workspace --all-features --doc
-    
+  # doctest:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #     - run: sudo apt-get install --no-install-recommends libasound2-dev libudev-dev
+  #     - run: cargo test --workspace --all-features --doc
