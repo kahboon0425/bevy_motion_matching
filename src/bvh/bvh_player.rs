@@ -71,7 +71,7 @@ pub fn bvh_player(
     bvh_asset: Res<Assets<BvhAsset>>,
     mut local_time: Local<f32>,
 ) {
-    let Some(BvhAsset(bvh)) = bvh_asset.get(&selected_bvh_asset.0) else {
+    let Some(BvhAsset(bvh)) = bvh_asset.get(selected_bvh_asset.0) else {
         return;
     };
 
@@ -178,7 +178,7 @@ pub type BoneHashMap = HashMap<String, Entity>;
 pub struct BoneMap(pub HashMap<String, Entity>);
 
 #[derive(Resource, Default, Debug)]
-pub struct SelectedBvhAsset(pub Handle<BvhAsset>);
+pub struct SelectedBvhAsset(pub AssetId<BvhAsset>);
 
 #[derive(Event)]
 pub struct TargetTimeEvent {
