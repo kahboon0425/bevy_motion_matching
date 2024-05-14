@@ -11,3 +11,7 @@ bvh_anim = "0.4"
 bevy_gltf = "0.13"
 bevy_third_person_camera = "0.1.10"
 bevy_egui = "0.26"
+
+[lints.clippy]
+redundant_type_annotations = "warn"
+bool_comparison = "allow"

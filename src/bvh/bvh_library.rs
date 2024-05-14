@@ -1,7 +1,4 @@
-use bevy::{
-    prelude::*,
-    utils::{hashbrown::hash_map::Keys, HashMap},
-};
+use bevy::{prelude::*, utils::HashSet};
 
 use crate::bvh_asset::{BvhAsset, BvhAssetPlugin};
 
@@ -28,24 +25,15 @@ fn load_bvh_library(mut bvh_library_manager: BvhLibraryManager, asset_server: Re
             return;
         };
         if let Some(filename) = entry.file_name().to_str() {
-            bvh_library_manager.load(&asset_server, filename)
+            bvh_library_manager.load(&asset_server, filename);
         }
     }
 }
 
+/// Stores the [`Handle::Strong`] of all loaded Bvh assets.
 #[derive(Resource, Default)]
 pub struct BvhLibrary {
-    library: HashMap<String, Handle<BvhAsset>>,
-}
-
-impl BvhLibrary {
-    pub fn get_filenames(&self) -> Keys<'_, String, Handle<BvhAsset>> {
-        self.library.keys()
-    }
-
-    pub fn get_handle(&self, filename: &str) -> Option<Handle<BvhAsset>> {
-        self.library.get(filename).cloned()
-    }
+    library: HashSet<Handle<BvhAsset>>,
 }
 
 #[derive(bevy::ecs::system::SystemParam)]
@@ -56,9 +44,11 @@ pub struct BvhLibraryManager<'w> {
 impl<'w> BvhLibraryManager<'w> {
     /// Loads Bvh data from disk.
     /// Filename provided must be located inside "assets/bvh/".
+    /// If specified asset has been loaded before, a warning will be issued.
     pub fn load(&mut self, asset_server: &AssetServer, filename: &str) {
         let handle = asset_server.load(BVH_FOLDER.to_owned() + filename);
-        // Add or replace handle.
-        self.bvh_library.library.insert(filename.to_owned(), handle);
+        if self.bvh_library.library.insert(handle) == false {
+            warn!("Same asset loaded again: {}", filename);
+        }
     }
 }
