@@ -7,12 +7,12 @@ use bevy::{
 };
 use bevy_third_person_camera::ThirdPersonCameraTarget;
 
-/// Load scene from glb file.
+/// Load glb file and setup the scene.
 pub struct SceneLoaderPlugin;
 
 impl Plugin for SceneLoaderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (spawn_scene, spawn_ground));
+        app.add_systems(Startup, (spawn_scene, spawn_light, spawn_ground));
     }
 }
 
@@ -20,6 +20,16 @@ impl Plugin for SceneLoaderPlugin {
 pub struct MainScene;
 
 pub fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // spawn the first scene in the file
+    let scene: Handle<Scene> = asset_server.load("glb/model_skeleton.glb#Scene0");
+    info!("Loaded scene: {:?}", scene);
+    commands
+        .spawn(SceneBundle { scene, ..default() })
+        .insert(MainScene)
+        .insert(ThirdPersonCameraTarget);
+}
+
+pub fn spawn_light(mut commands: Commands) {
     commands
         .spawn(DirectionalLightBundle {
             directional_light: DirectionalLight {
@@ -34,14 +44,6 @@ pub fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
             f32::to_radians(45.0),
             0.0,
         )));
-
-    // spawn the first scene in the file
-    let scene: Handle<Scene> = asset_server.load("glb/model_skeleton.glb#Scene0");
-    info!("Loaded scene: {:?}", scene);
-    commands
-        .spawn(SceneBundle { scene, ..default() })
-        .insert(MainScene)
-        .insert(ThirdPersonCameraTarget);
 }
 
 pub fn spawn_ground(
