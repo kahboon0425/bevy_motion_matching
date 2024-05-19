@@ -20,13 +20,20 @@ impl Plugin for SceneLoaderPlugin {
 pub struct MainScene;
 
 pub fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            // shadows_enabled: true,
-            ..Default::default()
-        },
-        ..default()
-    });
+    commands
+        .spawn(DirectionalLightBundle {
+            directional_light: DirectionalLight {
+                shadows_enabled: true,
+                ..default()
+            },
+            ..default()
+        })
+        .insert(Transform::from_rotation(Quat::from_euler(
+            EulerRot::XYZ,
+            f32::to_radians(-45.0),
+            f32::to_radians(45.0),
+            0.0,
+        )));
 
     // spawn the first scene in the file
     let scene: Handle<Scene> = asset_server.load("glb/model_skeleton.glb#Scene0");
@@ -43,7 +50,7 @@ pub fn spawn_ground(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-    let size = 50.0;
+    let size = 25.0;
     let mut plane_mesh = Plane3d::default().mesh().size(size, size).build();
     let uvs = plane_mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0).unwrap();
 
@@ -72,6 +79,8 @@ pub fn spawn_ground(
                     }
                 },
             )),
+            reflectance: 0.5,
+            metallic: 0.5,
             ..default()
         }),
         ..default()

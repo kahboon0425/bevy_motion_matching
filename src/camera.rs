@@ -1,12 +1,19 @@
-use bevy::prelude::*;
+use bevy::{
+    core_pipeline::{
+        bloom::BloomSettings,
+        tonemapping::{DebandDither, Tonemapping},
+    },
+    prelude::*,
+};
 use bevy_third_person_camera::{camera::Offset, ThirdPersonCamera, ThirdPersonCameraPlugin};
 
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_camera)
-            .add_plugins(ThirdPersonCameraPlugin)
+        app.add_plugins(ThirdPersonCameraPlugin)
+            .insert_resource(Msaa::default())
+            .add_systems(Startup, spawn_camera)
             .add_systems(Update, camera_lerp);
     }
 }
@@ -26,7 +33,17 @@ pub fn spawn_camera(mut commands: Commands) {
         Transform::default(),
     ));
 
-    commands.spawn(Camera3dBundle::default());
+    commands
+        .spawn(Camera3dBundle {
+            camera: Camera {
+                hdr: true,
+                ..default()
+            },
+            dither: DebandDither::Enabled,
+            tonemapping: Tonemapping::AcesFitted,
+            ..default()
+        })
+        .insert(BloomSettings::default());
 }
 
 fn camera_lerp(
