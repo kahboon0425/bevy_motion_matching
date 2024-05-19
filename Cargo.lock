@@ -767,6 +767,8 @@ dependencies = [
  "bevy_gltf",
  "bevy_third_person_camera",
  "bvh_anim",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
