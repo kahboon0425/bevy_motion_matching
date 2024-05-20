@@ -10,10 +10,10 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, ui)
-            .add_plugins(EguiPlugin)
+        app.add_plugins(EguiPlugin)
             .insert_resource(ShowDrawArrow { show: true })
-            .init_resource::<SelectedFiles>();
+            .init_resource::<BuildConfig>()
+            .add_systems(Update, ui);
     }
 }
 
@@ -23,8 +23,8 @@ pub struct ShowDrawArrow {
 }
 
 #[derive(Resource, Default, Debug)]
-pub struct SelectedFiles {
-    pub files: HashSet<String>,
+pub struct BuildConfig {
+    pub bvh_assets: HashSet<AssetId<BvhAsset>>,
 }
 
 pub fn bvh_selection_menu(
@@ -56,12 +56,6 @@ pub fn bvh_selection_menu(
     });
 }
 
-pub fn build_button(ui: &mut egui::Ui) {
-    if ui.button("Build").clicked() {
-        info!("Build button pressed.");
-    }
-}
-
 pub fn arrow_checkbox(ui: &mut egui::Ui, show_draw_arrow: &mut ShowDrawArrow) {
     ui.checkbox(&mut show_draw_arrow.show, "Show Arrows");
 }
@@ -70,7 +64,7 @@ pub fn bvh_buider_menu(
     ui: &mut egui::Ui,
     asset_server: &AssetServer,
     bvh_assets: &Assets<BvhAsset>,
-    selected_files: &mut SelectedFiles,
+    build_config: &mut BuildConfig,
 ) {
     ui.label("Bvh Builder");
     ui.add_space(10.0);
@@ -88,14 +82,16 @@ pub fn bvh_buider_menu(
                         let Some(bvh_name) = asset_server.get_path(id) else {
                             continue;
                         };
-                        let bvh_name = bvh_name.to_string();
 
-                        let mut is_selected = selected_files.files.contains(&bvh_name);
-                        if ui.checkbox(&mut is_selected, &bvh_name).changed() {
+                        let mut is_selected = build_config.bvh_assets.contains(&id);
+                        if ui
+                            .checkbox(&mut is_selected, bvh_name.to_string())
+                            .changed()
+                        {
                             if is_selected {
-                                selected_files.files.insert(bvh_name);
+                                build_config.bvh_assets.insert(id);
                             } else {
-                                selected_files.files.remove(&bvh_name);
+                                build_config.bvh_assets.remove(&id);
                             }
                         }
                     }
@@ -103,11 +99,17 @@ pub fn bvh_buider_menu(
         });
 }
 
+pub fn build_button(ui: &mut egui::Ui) {
+    if ui.button("Build").clicked() {
+        info!("Build button pressed.");
+    }
+}
+
 fn ui(
     mut contexts: EguiContexts,
     mut selected_bvh_asset: ResMut<SelectedBvhAsset>,
     mut show_draw_arrow: ResMut<ShowDrawArrow>,
-    mut selected_files: ResMut<SelectedFiles>,
+    mut build_configs: ResMut<BuildConfig>,
     asset_server: Res<AssetServer>,
     bvh_assets: Res<Assets<BvhAsset>>,
 ) {
@@ -122,7 +124,7 @@ fn ui(
             ui.add_space(10.0);
             bvh_selection_menu(ui, &asset_server, &bvh_assets, &mut selected_bvh_asset);
             ui.add_space(10.0);
-            bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut selected_files);
+            bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);
             ui.add_space(10.0);
             build_button(ui);
         });
