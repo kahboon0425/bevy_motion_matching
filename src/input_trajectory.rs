@@ -139,6 +139,6 @@ fn update_player_translation(
     direction *= time.delta_seconds() * SPEED;
     for mut transform in q_player.iter_mut() {
         transform.translation.x += direction.x;
-        transform.translation.z += direction.y;
+        transform.translation.z -= direction.y;
     }
 }
