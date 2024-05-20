@@ -9,8 +9,10 @@ mod ui;
 
 fn main() {
     App::new()
+        // Bevy plugins
+        .add_plugins(DefaultPlugins)
+        // Custom plugins
         .add_plugins((
-            DefaultPlugins,
             bvh_library::BvhLibraryPlugin,
             scene_loader::SceneLoaderPlugin,
             bvh_player::BvhPlayerPlugin,
@@ -18,10 +20,5 @@ fn main() {
             camera::CameraPlugin,
             ui::UiPlugin,
         ))
-        .add_systems(Startup, setup)
         .run();
-}
-
-pub fn setup(mut commands: Commands) {
-    commands.spawn(DirectionalLightBundle::default());
 }
