@@ -12,7 +12,7 @@ impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(EguiPlugin)
             .insert_resource(ShowDrawArrow { show: true })
-            .init_resource::<MotionDataBuildConfig>()
+            .init_resource::<BuildConfig>()
             .add_systems(Update, ui);
     }
 }
@@ -23,7 +23,7 @@ pub struct ShowDrawArrow {
 }
 
 #[derive(Resource, Default, Debug)]
-pub struct MotionDataBuildConfig {
+pub struct BuildConfig {
     pub bvh_assets: HashSet<AssetId<BvhAsset>>,
 }
 
@@ -64,7 +64,7 @@ pub fn bvh_buider_menu(
     ui: &mut egui::Ui,
     asset_server: &AssetServer,
     bvh_assets: &Assets<BvhAsset>,
-    selected_files: &mut MotionDataBuildConfig,
+    build_config: &mut BuildConfig,
 ) {
     ui.label("Bvh Builder");
     ui.add_space(10.0);
@@ -83,15 +83,15 @@ pub fn bvh_buider_menu(
                             continue;
                         };
 
-                        let mut is_selected = selected_files.bvh_assets.contains(&id);
+                        let mut is_selected = build_config.bvh_assets.contains(&id);
                         if ui
                             .checkbox(&mut is_selected, bvh_name.to_string())
                             .changed()
                         {
                             if is_selected {
-                                selected_files.bvh_assets.insert(id);
+                                build_config.bvh_assets.insert(id);
                             } else {
-                                selected_files.bvh_assets.remove(&id);
+                                build_config.bvh_assets.remove(&id);
                             }
                         }
                     }
@@ -109,7 +109,7 @@ fn ui(
     mut contexts: EguiContexts,
     mut selected_bvh_asset: ResMut<SelectedBvhAsset>,
     mut show_draw_arrow: ResMut<ShowDrawArrow>,
-    mut selected_files: ResMut<MotionDataBuildConfig>,
+    mut build_configs: ResMut<BuildConfig>,
     asset_server: Res<AssetServer>,
     bvh_assets: Res<Assets<BvhAsset>>,
 ) {
@@ -124,7 +124,7 @@ fn ui(
             ui.add_space(10.0);
             bvh_selection_menu(ui, &asset_server, &bvh_assets, &mut selected_bvh_asset);
             ui.add_space(10.0);
-            bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut selected_files);
+            bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);
             ui.add_space(10.0);
             build_button(ui);
         });
