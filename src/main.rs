@@ -4,6 +4,7 @@ use bvh::*;
 mod bvh;
 mod camera;
 mod input_trajectory;
+mod motion_database;
 mod scene_loader;
 mod ui;
 

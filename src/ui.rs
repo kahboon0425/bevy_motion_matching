@@ -4,7 +4,7 @@ use bevy_egui::{
     EguiContexts, EguiPlugin,
 };
 
-use crate::{bvh_asset::BvhAsset, bvh_player::SelectedBvhAsset};
+use crate::{bvh_asset::BvhAsset, bvh_player::SelectedBvhAsset, motion_database};
 
 pub struct UiPlugin;
 
@@ -99,9 +99,13 @@ pub fn bvh_buider_menu(
         });
 }
 
-pub fn build_button(ui: &mut egui::Ui) {
+pub fn build_button(
+    ui: &mut egui::Ui,
+    bvh_asset: &Assets<BvhAsset>,
+    build_config: &mut BuildConfig,
+) {
     if ui.button("Build").clicked() {
-        info!("Build button pressed.");
+        motion_database::extract_motion_data(bvh_asset, build_config);
     }
 }
 
@@ -126,6 +130,6 @@ fn ui(
             ui.add_space(10.0);
             bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);
             ui.add_space(10.0);
-            build_button(ui);
+            build_button(ui, &bvh_assets, &mut build_configs);
         });
 }

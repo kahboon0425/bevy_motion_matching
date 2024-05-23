@@ -1,11 +1,10 @@
+use crate::{bvh_asset::BvhAsset, scene_loader::MainScene};
 use bevy::{
     asset::{DependencyLoadState, LoadState, RecursiveDependencyLoadState},
     prelude::*,
     utils::hashbrown::HashMap,
 };
 use bvh_anim::{Bvh, Channel, Frame};
-
-use crate::{bvh_asset::BvhAsset, scene_loader::MainScene};
 
 pub struct BvhPlayerPlugin;
 
@@ -152,7 +151,6 @@ pub fn bvh_player(
 
 pub fn get_pose(local_time: f32, bvh_data: &Bvh) -> (usize, f32) {
     let duration_per_frame = bvh_data.frame_time().as_secs_f32();
-    // println!("BvhData {}", bvh_data);
 
     let total_animation_time = duration_per_frame * bvh_data.frames().len() as f32;
 
