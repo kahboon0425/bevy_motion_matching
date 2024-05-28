@@ -38,6 +38,7 @@ pub struct TrajectoryPosition {
 pub struct MotionDataAsset {
     pub trajectories: Vec<TrajectoryPosition>,
     pub trajectory_offsets: Vec<usize>,
+    pub joint_names: Vec<String>,
     pub poses: Vec<Pose>,
     pub pose_offsets: Vec<usize>,
 }
@@ -72,6 +73,7 @@ impl AssetLoader for MotionDataAssetLoader {
                 trajectory_offsets: motion_data.trajectory_offsets,
                 poses: motion_data.poses,
                 pose_offsets: motion_data.pose_offsets,
+                joint_names: motion_data.joint_names,
             };
 
             Ok(motion_data_asset)
@@ -108,7 +110,7 @@ pub fn check_motion_data(
     };
 
     if let Some(motion_data) = motion_data_assets.get(handle) {
-        println!("Data: {:?}", motion_data);
+        // println!("Data: {:?}", motion_data);
         commands.entity(entity).despawn();
         commands.entity(entity).remove::<Handle<MotionDataAsset>>();
     }
@@ -162,14 +164,27 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
             trajectory_index += 1;
         }
 
+        if motion_data.joint_names.is_empty() {
+            motion_data.joint_names = bvh
+                .joints()
+                .map(|joint| joint.data().name().to_string())
+                .collect();
+        }
+
         motion_data.pose_offsets.push(motion_data_len);
         motion_data_len += bvh.num_frames();
 
-        motion_data.poses.push(
-            bvh.frames()
-                .map(|f| f.as_slice().to_owned())
-                .collect::<Vec<_>>(),
-        );
+        for frame in bvh.frames() {
+            let pose = bvh
+                .joints()
+                .map(|joint| {
+                    let channels = joint.data().channels();
+                    channels.iter().map(|channel| frame[channel]).collect()
+                })
+                .collect();
+
+            motion_data.poses.push(pose);
+        }
     }
 
     motion_data.trajectory_offsets.push(trajectory_data_len);
