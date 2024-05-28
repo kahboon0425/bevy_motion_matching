@@ -169,7 +169,7 @@ pub fn check_motion_data(
         return;
     };
 
-    if let Some(motion_data) = motion_data_assets.get(handle) {
+    if let Some(_motion_data) = motion_data_assets.get(handle) {
         // println!("Data: {:?}", motion_data);
         commands.entity(entity).despawn();
         commands.entity(entity).remove::<Handle<MotionDataAsset>>();
@@ -178,12 +178,8 @@ pub fn check_motion_data(
 
 pub fn check_all_motion_data(mut motion_data_event: EventReader<AssetEvent<MotionDataAsset>>) {
     for motion in motion_data_event.read() {
-        match motion {
-            AssetEvent::Added { id } => println!("Loaded: {:?}", id),
-            _ => {} // AssetEvent::Modified { id } => todo!(),
-                    // AssetEvent::Removed { id } => todo!(),
-                    // AssetEvent::Unused { id } => todo!(),
-                    // AssetEvent::LoadedWithDependencies { id } => todo!(),
+        if let AssetEvent::Added { id } = motion {
+            println!("Loaded: {:?}", id)
         }
     }
 }
