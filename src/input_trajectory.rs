@@ -39,9 +39,9 @@ impl TrajectoryConfig {
 /// Translations that defines the trajectory.
 #[derive(Component, Default, Clone)]
 pub struct Trajectory {
-    current: Vec2,
-    histories: Vec<Vec2>,
-    predictions: Vec<Vec2>,
+    pub current: Vec2,
+    pub histories: Vec<Vec2>,
+    pub predictions: Vec<Vec2>,
 }
 
 #[derive(Component)]
