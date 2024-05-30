@@ -63,7 +63,6 @@ impl AssetLoader for MotionDataAssetLoader {
         _load_context: &'a mut LoadContext,
     ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
         Box::pin(async move {
-            println!("kkkskf");
             let mut bytes = Vec::new();
 
             reader.read_to_end(&mut bytes).await?;
@@ -137,11 +136,6 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
 
         if motion_data.joint_names.is_empty() {
             for joint in bvh.joints() {
-                println!(
-                    "Joint Name {} : Joint Name channels len {}",
-                    joint.data().name().to_string(),
-                    joint.data().channels().len()
-                );
                 motion_data
                     .joint_names
                     .push(joint.data().name().to_string());
