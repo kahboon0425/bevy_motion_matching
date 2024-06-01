@@ -18,6 +18,7 @@ fn main() {
             input_trajectory::InputTrajectoryPlugin,
             camera::CameraPlugin,
             ui::UiPlugin,
+            motion_database::MotionDatabasePlugin,
         ))
         .add_systems(Startup, setup)
         .run();
