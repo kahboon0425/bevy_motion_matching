@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bevy::prelude::*;
 
 use crate::ui::ShowDrawArrow;
@@ -6,42 +8,56 @@ pub struct InputTrajectoryPlugin;
 
 impl Plugin for InputTrajectoryPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(TrajectoryConfig::new(20, 0.033))
-            .add_systems(Startup, setup_input_trajectory)
-            .add_systems(
-                Update,
+        app.insert_resource(TrajectoryConfig {
+            time_length: 1.0,
+            count: 3,
+        })
+        .insert_resource(TrajectoryHistoryConfig { interval: 0.033 })
+        .add_systems(Startup, setup_input_trajectory)
+        .add_systems(
+            Update,
+            (
                 (
-                    (
-                        update_trajectory_data_len.run_if(resource_changed::<TrajectoryConfig>),
-                        update_trajectory,
-                        draw_trajectory,
-                    )
-                        .chain(),
-                    update_player_translation,
-                ),
-            );
+                    update_trajectory_data_len.run_if(resource_changed::<TrajectoryConfig>),
+                    update_trajectory,
+                    draw_trajectory,
+                )
+                    .chain(),
+                update_player_translation,
+            ),
+        );
     }
 }
 
 /// Configuration for all trajectories.
 #[derive(Resource)]
 pub struct TrajectoryConfig {
+    time_length: f32,
     count: usize,
-    interval: f32,
 }
 
 impl TrajectoryConfig {
-    pub fn new(count: usize, interval: f32) -> Self {
-        Self { count, interval }
+    pub fn interval(&self) -> f32 {
+        self.time_length / self.count as f32
     }
 }
 
-/// Translations that defines the trajectory.
+#[derive(Resource)]
+pub struct TrajectoryHistoryConfig {
+    interval: f32,
+}
+
+/// Translations that stores the trajectory history.
+#[derive(Component, Default, Clone)]
+pub struct TrajectoryHistory {
+    current: Vec2,
+    histories: VecDeque<Vec2>,
+}
+
+/// Final trajectory following the [`TrajectoryConfig`] used for matching.
 #[derive(Component, Default, Clone)]
 pub struct Trajectory {
-    pub current: Vec2,
-    pub histories: Vec<Vec2>,
-    pub predictions: Vec<Vec2>,
+    pub values: Vec<Vec2>,
 }
 
 #[derive(Component)]
@@ -49,42 +65,52 @@ pub struct PlayerMarker;
 
 fn setup_input_trajectory(mut commands: Commands) {
     commands
-        .spawn((Trajectory::default(), SpatialBundle::default()))
+        .spawn((TrajectoryHistory::default(), SpatialBundle::default()))
         .insert(PlayerMarker);
 }
 
 fn update_trajectory_data_len(
-    mut q_trajectory: Query<&mut Trajectory, With<PlayerMarker>>,
-    trajectory_config: Res<TrajectoryConfig>,
+    mut q_history: Query<&mut TrajectoryHistory, With<PlayerMarker>>,
+    config: Res<TrajectoryConfig>,
+    history_config: Res<TrajectoryHistoryConfig>,
 ) {
-    for mut trajectory in q_trajectory.iter_mut() {
-        if trajectory.histories.len() != trajectory_config.count {
-            trajectory.histories = vec![trajectory.current; trajectory_config.count];
-        }
-        if trajectory.predictions.len() != trajectory_config.count {
-            trajectory.predictions = vec![trajectory.current; trajectory_config.count];
+    let target_len = f32::ceil(config.time_length / history_config.interval) as usize;
+
+    for mut trajectory in q_history.iter_mut() {
+        match trajectory.histories.len().cmp(&target_len) {
+            std::cmp::Ordering::Less => {
+                let push_count = target_len - trajectory.histories.len();
+                let back_trajectory = trajectory.histories.back().copied().unwrap_or_default();
+
+                for _ in 0..push_count {
+                    trajectory.histories.push_back(back_trajectory);
+                }
+            }
+            std::cmp::Ordering::Greater => {
+                let pop_count = trajectory.histories.len() - target_len;
+                for _ in 0..pop_count {
+                    trajectory.histories.pop_back();
+                }
+            }
+            std::cmp::Ordering::Equal => {}
         }
     }
 }
 
 /// Update the trajectory every interval.
 fn update_trajectory(
-    mut q_trajectory: Query<(&mut Trajectory, &Transform), With<PlayerMarker>>,
-    trajectory_config: Res<TrajectoryConfig>,
+    mut q_history: Query<(&mut TrajectoryHistory, &Transform), With<PlayerMarker>>,
+    history_config: Res<TrajectoryHistoryConfig>,
     time: Res<Time>,
     mut time_passed: Local<f32>,
 ) {
     *time_passed += time.delta_seconds();
 
-    if *time_passed >= trajectory_config.interval {
+    if *time_passed >= history_config.interval {
         // Updates the histories and current trajectory
-        for (mut trajectory, transform) in q_trajectory.iter_mut() {
-            let mut translation = transform.translation.xz();
-
-            std::mem::swap(&mut trajectory.current, &mut translation);
-            for history in trajectory.histories.iter_mut() {
-                std::mem::swap(history, &mut translation)
-            }
+        for (mut trajectory, transform) in q_history.iter_mut() {
+            trajectory.histories.pop_back();
+            trajectory.histories.push_front(transform.translation.xz());
         }
 
         // Resets timer
@@ -93,22 +119,27 @@ fn update_trajectory(
 }
 
 fn draw_trajectory(
-    q_trajectory: Query<&Trajectory>,
+    q_history: Query<&TrajectoryHistory>,
     mut gizmos: Gizmos,
     show_arrow: Res<ShowDrawArrow>,
 ) {
     if show_arrow.show {
-        for trajectory in q_trajectory.iter() {
+        for trajectory in q_history.iter() {
             // Draw arrow gizmos of the smoothed out trajectory
-            let mut end = trajectory.current;
+            let mut trajectory_iter = trajectory.histories.iter();
+            let next = trajectory_iter.next();
 
-            for history in trajectory.histories.iter() {
-                let start = *history;
+            if let Some(next) = next {
+                let mut end = *next;
 
-                let arrow_start = Vec3::new(start.x, 0.0, start.y);
-                let arrow_end = Vec3::new(end.x, 0.0, end.y);
-                gizmos.arrow(arrow_start, arrow_end, Color::YELLOW);
-                end = start;
+                for next in trajectory_iter {
+                    let start = *next;
+
+                    let arrow_start = Vec3::new(start.x, 0.0, start.y);
+                    let arrow_end = Vec3::new(end.x, 0.0, end.y);
+                    gizmos.arrow(arrow_start, arrow_end, Color::RED);
+                    end = start;
+                }
             }
         }
     }
@@ -122,16 +153,16 @@ fn update_player_translation(
     const SPEED: f32 = 2.0;
     let mut direction = Vec2::ZERO;
 
-    if key_input.pressed(KeyCode::KeyW) {
+    if key_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]) {
         direction.y += 1.0;
     }
-    if key_input.pressed(KeyCode::KeyS) {
+    if key_input.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]) {
         direction.y -= 1.0;
     }
-    if key_input.pressed(KeyCode::KeyD) {
+    if key_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]) {
         direction.x += 1.0;
     }
-    if key_input.pressed(KeyCode::KeyA) {
+    if key_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]) {
         direction.x -= 1.0;
     }
 
@@ -139,6 +170,6 @@ fn update_player_translation(
     direction *= time.delta_seconds() * SPEED;
     for mut transform in q_player.iter_mut() {
         transform.translation.x += direction.x;
-        transform.translation.z += direction.y;
+        transform.translation.z -= direction.y;
     }
 }
