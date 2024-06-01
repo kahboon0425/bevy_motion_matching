@@ -8,7 +8,7 @@ use bevy::{
 };
 use bvh_anim::{Frame, Joint};
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Write};
+use std::{fs::{self, File}, io::{BufReader, Write}};
 
 use crate::{
     bvh::{bvh_asset::BvhAsset, bvh_player::get_pose},
@@ -173,6 +173,14 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
     motion_library
         .write_all(convert_to_json.as_bytes())
         .unwrap();
+}
+
+pub fn load_motion_data_onto() -> MotionDataAsset {
+    let file_path = "assets/motion_data/motion_data.json";
+        let file = File::open(file_path).expect("file should open read only");
+        let reader = BufReader::new(file);
+        let motion_data: MotionDataAsset = serde_json::from_reader(reader).expect("file should be proper JSON");
+        return motion_data;   
 }
 
 pub fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {

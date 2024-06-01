@@ -7,6 +7,7 @@ mod input_trajectory;
 mod motion_database;
 mod scene_loader;
 mod ui;
+mod pose_matching;
 
 fn main() {
     App::new()
@@ -19,6 +20,7 @@ fn main() {
             camera::CameraPlugin,
             ui::UiPlugin,
             motion_database::MotionDatabasePlugin,
+            pose_matching::PoseMatchingPlugin
         ))
         .add_systems(Startup, setup)
         .run();
