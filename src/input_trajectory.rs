@@ -18,8 +18,8 @@ impl Plugin for InputTrajectoryPlugin {
             Update,
             (
                 (
-                    update_trajectory_data_len.run_if(resource_changed::<TrajectoryConfig>),
-                    update_trajectory,
+                    change_trajectory_history_len.run_if(resource_changed::<TrajectoryConfig>),
+                    store_trajectory_history,
                     draw_trajectory,
                 )
                     .chain(),
@@ -69,7 +69,7 @@ fn setup_input_trajectory(mut commands: Commands) {
         .insert(PlayerMarker);
 }
 
-fn update_trajectory_data_len(
+fn change_trajectory_history_len(
     mut q_history: Query<&mut TrajectoryHistory, With<PlayerMarker>>,
     config: Res<TrajectoryConfig>,
     history_config: Res<TrajectoryHistoryConfig>,
@@ -98,7 +98,7 @@ fn update_trajectory_data_len(
 }
 
 /// Update the trajectory every interval.
-fn update_trajectory(
+fn store_trajectory_history(
     mut q_history: Query<(&mut TrajectoryHistory, &Transform), With<PlayerMarker>>,
     history_config: Res<TrajectoryHistoryConfig>,
     time: Res<Time>,
