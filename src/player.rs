@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::input_trajectory::TrajectoryBundle;
+use crate::trajectory::TrajectoryBundle;
 
 pub struct PlayerPlugin;
 

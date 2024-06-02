@@ -3,10 +3,10 @@ use bvh::*;
 
 mod bvh;
 mod camera;
-mod input_trajectory;
 mod motion_database;
 mod player;
 mod scene_loader;
+mod trajectory;
 mod ui;
 
 fn main() {
@@ -16,7 +16,7 @@ fn main() {
             bvh_library::BvhLibraryPlugin,
             scene_loader::SceneLoaderPlugin,
             bvh_player::BvhPlayerPlugin,
-            input_trajectory::InputTrajectory,
+            trajectory::InputTrajectory,
             camera::CameraPlugin,
             ui::UiPlugin,
             motion_database::MotionDatabasePlugin,
