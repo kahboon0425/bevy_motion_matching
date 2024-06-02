@@ -2,31 +2,37 @@ use std::collections::VecDeque;
 
 use bevy::prelude::*;
 
-use crate::ui::ShowDrawArrow;
+use crate::{
+    player::{MovementDirection, PlayerMarker, Speed},
+    ui::ShowDrawArrow,
+};
 
-pub struct InputTrajectoryPlugin;
+pub struct InputTrajectory;
 
-impl Plugin for InputTrajectoryPlugin {
+impl Plugin for InputTrajectory {
     fn build(&self, app: &mut App) {
         app.insert_resource(TrajectoryConfig {
             time_length: 1.0,
             count: 3,
         })
         .insert_resource(TrajectoryHistoryConfig { interval: 0.033 })
-        .add_systems(Startup, setup_input_trajectory)
         .add_systems(
             Update,
-            (
-                (
-                    change_trajectory_history_len.run_if(resource_changed::<TrajectoryConfig>),
-                    store_trajectory_history,
-                    draw_trajectory,
-                )
-                    .chain(),
-                update_player_translation,
-            ),
+            ((
+                change_trajectory_history_len.run_if(resource_changed::<TrajectoryConfig>),
+                store_trajectory_history,
+                compute_trajectory,
+                draw_trajectory,
+            )
+                .chain(),),
         );
     }
+}
+
+#[derive(Bundle, Default)]
+pub struct TrajectoryBundle {
+    pub trajectory: Trajectory,
+    pub history: TrajectoryHistory,
 }
 
 /// Configuration for all trajectories.
@@ -50,7 +56,6 @@ pub struct TrajectoryHistoryConfig {
 /// Translations that stores the trajectory history.
 #[derive(Component, Default, Clone)]
 pub struct TrajectoryHistory {
-    current: Vec2,
     histories: VecDeque<Vec2>,
 }
 
@@ -58,15 +63,6 @@ pub struct TrajectoryHistory {
 #[derive(Component, Default, Clone)]
 pub struct Trajectory {
     pub values: Vec<Vec2>,
-}
-
-#[derive(Component)]
-pub struct PlayerMarker;
-
-fn setup_input_trajectory(mut commands: Commands) {
-    commands
-        .spawn((TrajectoryHistory::default(), SpatialBundle::default()))
-        .insert(PlayerMarker);
 }
 
 fn change_trajectory_history_len(
@@ -118,58 +114,75 @@ fn store_trajectory_history(
     }
 }
 
-fn draw_trajectory(
-    q_history: Query<&TrajectoryHistory>,
-    mut gizmos: Gizmos,
-    show_arrow: Res<ShowDrawArrow>,
+fn compute_trajectory(
+    mut q_trajectory: Query<
+        (
+            &mut Trajectory,
+            &TrajectoryHistory,
+            &MovementDirection,
+            &Speed,
+        ),
+        With<PlayerMarker>,
+    >,
+    config: Res<TrajectoryConfig>,
+    history_config: Res<TrajectoryHistoryConfig>,
 ) {
-    if show_arrow.show {
-        for trajectory in q_history.iter() {
-            // Draw arrow gizmos of the smoothed out trajectory
-            let mut trajectory_iter = trajectory.histories.iter();
-            let next = trajectory_iter.next();
+    for (mut trajectory, trajectory_history, direction, speed) in q_trajectory.iter_mut() {
+        if trajectory.values.len() != config.count {
+            trajectory.values = vec![default(); config.count * 2 + 1];
+        }
 
-            if let Some(next) = next {
-                let mut end = *next;
+        // Populate current & history
+        for c in 0..=config.count {
+            // Percentage factor to the history
+            let offset_factor = c as f32 / config.count as f32;
+            // Time offset into the history
+            let time_offset = offset_factor * config.time_length;
+            // Starting index offset
+            let index_offset_f = time_offset / history_config.interval;
+            let start_index_offset = index_offset_f as usize;
+            // Subtract 1 because we are going backwards (at least be 0)
+            let end_index_offset = usize::max(start_index_offset, 1) - 1;
+            let factor = index_offset_f - start_index_offset as f32;
 
-                for next in trajectory_iter {
-                    let start = *next;
+            let start_translation = trajectory_history.histories[start_index_offset];
+            let end_translation = trajectory_history.histories[end_index_offset];
+            let translation = Vec2::lerp(start_translation, end_translation, factor);
 
-                    let arrow_start = Vec3::new(start.x, 0.0, start.y);
-                    let arrow_end = Vec3::new(end.x, 0.0, end.y);
-                    gizmos.arrow(arrow_start, arrow_end, Color::RED);
-                    end = start;
-                }
-            }
+            trajectory.values[config.count - c] = translation;
+        }
+
+        let current_translation = trajectory.values[config.count];
+        for c in 0..config.count {
+            let prediction = direction.get() * speed.get() * c as f32 * config.interval();
+            trajectory.values[c + config.count + 1] = current_translation + prediction;
         }
     }
 }
 
-fn update_player_translation(
-    mut q_player: Query<&mut Transform, With<PlayerMarker>>,
-    key_input: Res<ButtonInput<KeyCode>>,
-    time: Res<Time>,
+fn draw_trajectory(
+    q_trajectory: Query<&Trajectory>,
+    mut gizmos: Gizmos,
+    show_arrow: Res<ShowDrawArrow>,
 ) {
-    const SPEED: f32 = 2.0;
-    let mut direction = Vec2::ZERO;
+    if show_arrow.show {
+        for trajectory in q_trajectory.iter() {
+            // Draw arrow gizmos of the smoothed out trajectory
+            let mut trajectory_iter = trajectory.values.iter();
+            let next = trajectory_iter.next();
 
-    if key_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]) {
-        direction.y += 1.0;
-    }
-    if key_input.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]) {
-        direction.y -= 1.0;
-    }
-    if key_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]) {
-        direction.x += 1.0;
-    }
-    if key_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]) {
-        direction.x -= 1.0;
-    }
+            if let Some(next) = next {
+                let mut start = *next;
 
-    direction = Vec2::normalize_or_zero(direction);
-    direction *= time.delta_seconds() * SPEED;
-    for mut transform in q_player.iter_mut() {
-        transform.translation.x += direction.x;
-        transform.translation.z -= direction.y;
+                for next in trajectory_iter {
+                    let end = *next;
+
+                    let arrow_start = Vec3::new(start.x, 0.0, start.y);
+                    let arrow_end = Vec3::new(end.x, 0.0, end.y);
+                    gizmos.arrow(arrow_start, arrow_end, Color::RED);
+                    start = end;
+                }
+            }
+        }
     }
 }
