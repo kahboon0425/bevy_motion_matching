@@ -12,6 +12,7 @@ use std::{fs, io::Write};
 
 use crate::{
     bvh::{bvh_asset::BvhAsset, bvh_player::get_pose},
+    input_trajectory::Trajectory,
     ui::BuildConfig,
 };
 
@@ -20,7 +21,8 @@ pub struct MotionDatabasePlugin;
 impl Plugin for MotionDatabasePlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<MotionDataAsset>()
-            .init_asset_loader::<MotionDataAssetLoader>();
+            .init_asset_loader::<MotionDataAssetLoader>()
+            .add_systems(Update, match_trajectory);
     }
 }
 
@@ -47,6 +49,90 @@ pub struct MotionDataAsset {
 
 // joint_name_offsets output will be like this
 // joint_name_offsets:[0,6,9,12,15,18,21,24,27,30,33,36,39,42,45,48,51,54,57,60,63,66,69]
+
+impl MotionDataAsset {
+    pub fn find_closest_trajectory(&self, user_future_trajectory: &Trajectory) -> Option<usize> {
+        let mut best_match = None;
+        let mut min_distance = f32::MAX;
+        for (i, trajectory_position) in self.trajectories.iter().enumerate() {
+            let mut trajectory = Vec::new();
+            let mut local_transform = Vec::new();
+            let mut center_point = Vec3::new(0.0, 0.0, 0.0);
+            for x in 0..7 {
+                trajectory.push(trajectory_position.transform_matrix);
+                if x == 2 {
+                    center_point = trajectory_position
+                        .transform_matrix
+                        .inverse()
+                        .to_scale_rotation_translation()
+                        .2
+                }
+            }
+
+            println!("Global transform: {}", center_point);
+
+            for _ in 0..7 {
+                local_transform.push(
+                    trajectory_position
+                        .transform_matrix
+                        .inverse()
+                        .transform_point3(center_point)
+                        .xz(),
+                );
+            }
+
+            if trajectory.len() == 7 {
+                let distance =
+                    calculate_trajectory_distance(user_future_trajectory, &local_transform);
+                println!("Distance: {} Index:{}", distance, i);
+
+                if distance < min_distance {
+                    min_distance = distance;
+                    best_match = Some(i);
+                }
+                trajectory.clear();
+            }
+        }
+
+        best_match
+    }
+
+    // pub fn get_pose_for_trajectory(&self, trajectory_index: usize) -> Option<&Pose> {
+    //     let match_trajectory = self.trajectories[trajectory_index];
+    // }
+}
+
+pub fn calculate_trajectory_distance(t1: &Trajectory, t2: &Vec<Vec2>) -> f32 {
+    // distance = sqrt((p1-q1)^2 + (p2-q2)^2)
+    t1.values
+        .iter()
+        .zip(t2.iter())
+        .map(|(p, traj)| (*p - *traj).length_squared())
+        .sum::<f32>()
+}
+
+pub fn match_trajectory(
+    motion_data_assets: Res<Assets<MotionDataAsset>>,
+    query_motion_data: Query<&Handle<MotionDataAsset>>,
+    user_input_trajectory: Query<&Trajectory>,
+) {
+    for handle in query_motion_data.iter() {
+        if let Some(motion_data) = motion_data_assets.get(handle) {
+            for trajectory in user_input_trajectory.iter() {
+                if let Some(trajectory_index) = motion_data.find_closest_trajectory(trajectory) {
+                    println!("Best match index: {}", trajectory_index);
+
+                    // if let Some(pose) = motion_data.get_pose_for_trajectory(trajectory_index) {
+                    // } else {
+                    //     println!("Pose not found for trajectory index: {}", trajectory_index);
+                    // }
+                } else {
+                    println!("No matching trajectory found.");
+                }
+            }
+        }
+    }
+}
 
 #[derive(Default)]
 struct MotionDataAssetLoader;
@@ -188,9 +274,9 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
 pub fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
     let channels = joint.data().channels();
     let x = frame[&channels[0]];
-    let y = frame[&channels[1]];
+    // let y = frame[&channels[1]];
     let z = frame[&channels[2]];
-    Vec3::new(x, y, z)
+    Vec3::new(x, 0.0, z)
 }
 
 pub fn get_joint_euler_angle(joint: &Joint, frame: &Frame) -> Vec3 {
