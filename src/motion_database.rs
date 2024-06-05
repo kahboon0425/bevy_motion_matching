@@ -12,7 +12,7 @@ use std::{fs, io::Write};
 
 use crate::{
     bvh::{bvh_asset::BvhAsset, bvh_player::get_pose},
-    input_trajectory::Trajectory,
+    trajectory::Trajectory,
     ui::BuildConfig,
 };
 
@@ -22,7 +22,8 @@ impl Plugin for MotionDatabasePlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<MotionDataAsset>()
             .init_asset_loader::<MotionDataAssetLoader>()
-            .add_systems(Update, match_trajectory);
+            .add_systems(Update, match_trajectory)
+            .add_systems(Startup, load_motion_data);
     }
 }
 
@@ -51,16 +52,20 @@ pub struct MotionDataAsset {
 // joint_name_offsets:[0,6,9,12,15,18,21,24,27,30,33,36,39,42,45,48,51,54,57,60,63,66,69]
 
 impl MotionDataAsset {
-    pub fn find_closest_trajectory(&self, user_future_trajectory: &Trajectory) -> Option<usize> {
-        let mut best_match = None;
-        let mut min_distance = f32::MAX;
+    pub fn find_closest_trajectory(
+        &self,
+        user_future_trajectory: &Trajectory,
+    ) -> Vec<(f32, usize)> {
+        let mut nearest_trajectories = Vec::new();
+        // println!("xxxx");
         for (i, trajectory_position) in self.trajectories.iter().enumerate() {
             let mut trajectory = Vec::new();
             let mut local_transform = Vec::new();
             let mut center_point = Vec3::new(0.0, 0.0, 0.0);
+
             for x in 0..7 {
                 trajectory.push(trajectory_position.transform_matrix);
-                if x == 2 {
+                if x == 3 {
                     center_point = trajectory_position
                         .transform_matrix
                         .inverse()
@@ -68,8 +73,6 @@ impl MotionDataAsset {
                         .2
                 }
             }
-
-            println!("Global transform: {}", center_point);
 
             for _ in 0..7 {
                 local_transform.push(
@@ -84,22 +87,23 @@ impl MotionDataAsset {
             if trajectory.len() == 7 {
                 let distance =
                     calculate_trajectory_distance(user_future_trajectory, &local_transform);
-                println!("Distance: {} Index:{}", distance, i);
+                // println!("Distance: {} Index:{}", distance, i);
 
-                if distance < min_distance {
-                    min_distance = distance;
-                    best_match = Some(i);
-                }
+                nearest_trajectories.push((distance, i));
+
                 trajectory.clear();
             }
         }
+        println!("List before sort: {:?}", nearest_trajectories);
+        nearest_trajectories.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        println!("List after sort: {:?}", nearest_trajectories);
 
-        best_match
+        if nearest_trajectories.len() > 10 {
+            nearest_trajectories.truncate(10)
+        }
+
+        nearest_trajectories
     }
-
-    // pub fn get_pose_for_trajectory(&self, trajectory_index: usize) -> Option<&Pose> {
-    //     let match_trajectory = self.trajectories[trajectory_index];
-    // }
 }
 
 pub fn calculate_trajectory_distance(t1: &Trajectory, t2: &Vec<Vec2>) -> f32 {
@@ -119,19 +123,16 @@ pub fn match_trajectory(
     for handle in query_motion_data.iter() {
         if let Some(motion_data) = motion_data_assets.get(handle) {
             for trajectory in user_input_trajectory.iter() {
-                if let Some(trajectory_index) = motion_data.find_closest_trajectory(trajectory) {
-                    println!("Best match index: {}", trajectory_index);
-
-                    // if let Some(pose) = motion_data.get_pose_for_trajectory(trajectory_index) {
-                    // } else {
-                    //     println!("Pose not found for trajectory index: {}", trajectory_index);
-                    // }
-                } else {
-                    println!("No matching trajectory found.");
-                }
+                let nearest_trajectory = motion_data.find_closest_trajectory(trajectory);
+                println!("10 nearest trajectory: {:?}", nearest_trajectory);
             }
         }
     }
+}
+
+fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let handle = asset_server.load::<MotionDataAsset>("motion_data/motion_data.json");
+    commands.spawn(handle);
 }
 
 #[derive(Default)]
@@ -210,7 +211,7 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
 
             if let Some(future_frame) = bvh.frames().nth(frame_index) {
                 if let Some(hip_joint) = bvh.joints().find(|j| j.data().name() == "Hips") {
-                    let translation = get_joint_position(&hip_joint, future_frame);
+                    let translation = get_joint_position(&hip_joint, future_frame) * 0.01;
                     let euler_angle = get_joint_euler_angle(&hip_joint, future_frame);
                     let rotation = Quat::from_euler(
                         EulerRot::XYZ,
