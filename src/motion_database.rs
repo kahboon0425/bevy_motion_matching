@@ -106,7 +106,7 @@ impl MotionDataAsset {
     }
 }
 
-pub fn calculate_trajectory_distance(t1: &Trajectory, t2: &Vec<Vec2>) -> f32 {
+pub fn calculate_trajectory_distance(t1: &Trajectory, t2: &[Vec2]) -> f32 {
     // distance = sqrt((p1-q1)^2 + (p2-q2)^2)
     t1.values
         .iter()
