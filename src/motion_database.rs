@@ -12,6 +12,7 @@ use std::{fs, io::Write};
 
 use crate::{
     bvh::{bvh_asset::BvhAsset, bvh_player::get_pose},
+    player::PlayerMarker,
     trajectory::Trajectory,
     ui::BuildConfig,
 };
@@ -54,46 +55,53 @@ pub struct MotionDataAsset {
 impl MotionDataAsset {
     pub fn find_closest_trajectory(
         &self,
-        user_future_trajectory: &Trajectory,
-    ) -> Vec<(f32, usize)> {
+        user_trajectory: &Trajectory,
+        transform: &Transform,
+    ) -> Vec<f32> {
         let mut nearest_trajectories = Vec::new();
-        // println!("xxxx");
-        for (i, trajectory_position) in self.trajectories.iter().enumerate() {
-            let mut trajectory = Vec::new();
-            let mut local_transform = Vec::new();
-            let mut center_point = Vec3::new(0.0, 0.0, 0.0);
 
-            for x in 0..7 {
-                trajectory.push(trajectory_position.transform_matrix);
-                if x == 3 {
-                    center_point = trajectory_position
+        let user_inverse_matrix = transform.compute_matrix().inverse();
+
+        let trajectories = self.trajectories.iter().take(7).collect::<Vec<_>>();
+        // Center point of trajectory
+        let inv_matrix = trajectories[3].transform_matrix.inverse();
+
+        let user_local_translations = user_trajectory
+            .values
+            .iter()
+            .map(|user_trajectory| {
+                user_inverse_matrix.transform_point3(Vec3::new(
+                    user_trajectory.x,
+                    0.0,
+                    user_trajectory.y,
+                ))
+            })
+            .collect::<Vec<_>>();
+
+        let local_translations = trajectories
+            .iter()
+            .map(|trajectory| {
+                inv_matrix.transform_point3(
+                    trajectory
                         .transform_matrix
-                        .inverse()
                         .to_scale_rotation_translation()
-                        .2
-                }
-            }
+                        .2,
+                )
+            })
+            .collect::<Vec<_>>();
 
-            for _ in 0..7 {
-                local_transform.push(
-                    trajectory_position
-                        .transform_matrix
-                        .inverse()
-                        .transform_point3(center_point)
-                        .xz(),
+        for local_translation in local_translations.iter() {
+            for user_local_translation in user_local_translations.iter() {
+                let distance = calculate_trajectory_distance(
+                    &[user_local_translation.xz()],
+                    &[local_translation.xz()],
                 );
-            }
 
-            if trajectory.len() == 7 {
-                let distance =
-                    calculate_trajectory_distance(user_future_trajectory, &local_transform);
-                // println!("Distance: {} Index:{}", distance, i);
-
-                nearest_trajectories.push((distance, i));
-
-                trajectory.clear();
+                nearest_trajectories.push(distance);
             }
         }
+        // println!("Distance: {} Index:{}", distance, i);
+
         println!("List before sort: {:?}", nearest_trajectories);
         nearest_trajectories.sort_by(|a, b| a.partial_cmp(b).unwrap());
         println!("List after sort: {:?}", nearest_trajectories);
@@ -106,10 +114,9 @@ impl MotionDataAsset {
     }
 }
 
-pub fn calculate_trajectory_distance(t1: &Trajectory, t2: &[Vec2]) -> f32 {
+pub fn calculate_trajectory_distance(t1: &[Vec2], t2: &[Vec2]) -> f32 {
     // distance = sqrt((p1-q1)^2 + (p2-q2)^2)
-    t1.values
-        .iter()
+    t1.iter()
         .zip(t2.iter())
         .map(|(p, traj)| (*p - *traj).length_squared())
         .sum::<f32>()
@@ -118,12 +125,12 @@ pub fn calculate_trajectory_distance(t1: &Trajectory, t2: &[Vec2]) -> f32 {
 pub fn match_trajectory(
     motion_data_assets: Res<Assets<MotionDataAsset>>,
     query_motion_data: Query<&Handle<MotionDataAsset>>,
-    user_input_trajectory: Query<&Trajectory>,
+    user_input_trajectory: Query<(&Trajectory, &Transform), With<PlayerMarker>>,
 ) {
     for handle in query_motion_data.iter() {
         if let Some(motion_data) = motion_data_assets.get(handle) {
-            for trajectory in user_input_trajectory.iter() {
-                let nearest_trajectory = motion_data.find_closest_trajectory(trajectory);
+            for (trajectory, transform) in user_input_trajectory.iter() {
+                let nearest_trajectory = motion_data.find_closest_trajectory(trajectory, transform);
                 println!("10 nearest trajectory: {:?}", nearest_trajectory);
             }
         }
