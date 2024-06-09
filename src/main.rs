@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bvh::*;
+use motion_database::load_motion_data_onto;
 
 mod bvh;
 mod camera;
@@ -23,6 +24,7 @@ fn main() {
             pose_matching::PoseMatchingPlugin
         ))
         .add_systems(Startup, setup)
+        .add_systems(Startup, load_motion_data_onto)
         .run();
 }
 

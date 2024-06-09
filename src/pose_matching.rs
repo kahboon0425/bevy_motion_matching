@@ -1,30 +1,35 @@
 use std::cmp::min;
 
-use crate::motion_database::{load_motion_data_onto, Pose};
+use crate::motion_database::{MotionDataAsset, Pose};
 use bevy::prelude::*;
 
 pub struct PoseMatchingPlugin;
 
 impl Plugin for PoseMatchingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, pose_motion_matching);
+        app.add_systems(Update, pose_motion_matching);
     }
 }
 
-pub fn pose_motion_matching() {
+pub fn pose_motion_matching(
+    _asset_server: Res<AssetServer>,
+    motion_assets: Res<Assets<MotionDataAsset>>,
+    query: Query<&Handle<MotionDataAsset>>,
+) {
     // TODO: match current tracjectory to get current pose (in runtime)
-    test_pose_motion_matching(); // temporary for testing purposes
-}
+    for handle in query.iter() {
+        if let Some(motion_data) = motion_assets.get(handle) {
+            // Access the data in motion_data
+            // println!("{:?}", motion_data);
+            let poses = &motion_data.poses;
+            let first_pose = poses.first().unwrap();
 
-fn test_pose_motion_matching() {
-    let motion_data = load_motion_data_onto();
-    let poses = motion_data.poses;
-    let first_pose = poses.first().unwrap();
-
-    for index in 1..poses.len() {
-        let current_pose = poses.get(index).unwrap();
-        let pose_distance = calculate_distance_summation(first_pose, current_pose);
-        println!("Pose Distance Differences: {:?}", pose_distance);
+            for index in 1..poses.len() {
+                let current_pose = poses.get(index).unwrap();
+                let pose_distance = calculate_distance_summation(first_pose, current_pose);
+                println!("Pose Distance Differences: {:?}", pose_distance);
+            }
+        }
     }
 }
 

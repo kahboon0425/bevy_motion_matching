@@ -8,7 +8,10 @@ use bevy::{
 };
 use bvh_anim::{Frame, Joint};
 use serde::{Deserialize, Serialize};
-use std::{fs::{self, File}, io::{BufReader, Write}};
+use std::{
+    fs::{self},
+    io::Write,
+};
 
 use crate::{
     bvh::{bvh_asset::BvhAsset, bvh_player::get_pose},
@@ -98,7 +101,6 @@ pub enum MotionDataLoaderError {
 
 pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut BuildConfig) {
     let mut motion_data = MotionDataAsset::default();
-
     let mut trajectory_data_len = 0;
     let mut motion_data_len = 0;
     let mut joint_name_offsets = Vec::new();
@@ -166,7 +168,7 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
         .write(true)
         .create(true)
         .truncate(true)
-        // TODO: specify a file name and possibly a  location
+        // TODO: specify a file name and possibly a location
         .open("assets/motion_data/motion_data.json")
         .unwrap();
 
@@ -175,12 +177,10 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
         .unwrap();
 }
 
-pub fn load_motion_data_onto() -> MotionDataAsset {
-    let file_path = "assets/motion_data/motion_data.json";
-        let file = File::open(file_path).expect("file should open read only");
-        let reader = BufReader::new(file);
-        let motion_data: MotionDataAsset = serde_json::from_reader(reader).expect("file should be proper JSON");
-        return motion_data;   
+pub fn load_motion_data_onto(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let file_path = "motion_data/motion_data.json";
+    let motion_data_handle = asset_server.load::<MotionDataAsset>(file_path);
+    commands.spawn(motion_data_handle);
 }
 
 pub fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
