@@ -19,7 +19,7 @@ impl Plugin for InputTrajectory {
         .add_systems(
             Update,
             ((
-                change_trajectory_history_len.run_if(resource_changed::<TrajectoryConfig>),
+                change_trajectory_history_len.run_if(resource_changed::<TrajectoryHistoryConfig>),
                 store_trajectory_history,
                 compute_trajectory,
                 draw_trajectory,
@@ -153,9 +153,9 @@ fn compute_trajectory(
         }
 
         let current_translation = trajectory.values[config.count];
-        for c in 0..config.count {
+        for c in 1..=config.count {
             let prediction = direction.get() * speed.get() * c as f32 * config.interval();
-            trajectory.values[c + config.count + 1] = current_translation + prediction;
+            trajectory.values[c + config.count] = current_translation + prediction;
         }
     }
 }
