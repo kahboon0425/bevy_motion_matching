@@ -62,45 +62,52 @@ impl MotionDataAsset {
 
         let user_inverse_matrix = transform.compute_matrix().inverse();
 
-        let trajectories = self.trajectories.iter().take(7).collect::<Vec<_>>();
-        // Center point of trajectory
-        let inv_matrix = trajectories[3].transform_matrix.inverse();
+        // let trajectories = self.trajectories.iter().take(7).collect::<Vec<_>>();
 
-        let user_local_translations = user_trajectory
-            .values
-            .iter()
-            .map(|user_trajectory| {
-                user_inverse_matrix.transform_point3(Vec3::new(
-                    user_trajectory.x,
-                    0.0,
-                    user_trajectory.y,
-                ))
-            })
-            .collect::<Vec<_>>();
-
-        let local_translations = trajectories
-            .iter()
-            .map(|trajectory| {
-                inv_matrix.transform_point3(
-                    trajectory
-                        .transform_matrix
-                        .to_scale_rotation_translation()
-                        .2,
-                )
-            })
-            .collect::<Vec<_>>();
-
-        for local_translation in local_translations.iter() {
-            for user_local_translation in user_local_translations.iter() {
-                let distance = calculate_trajectory_distance(
-                    &[user_local_translation.xz()],
-                    &[local_translation.xz()],
-                );
-
-                nearest_trajectories.push(distance);
+        for start in 0..self.trajectories.len() {
+            if start + 7 > self.trajectories.len() {
+                break;
             }
+
+            let trajectories = &self.trajectories[start..start + 7];
+            // println!("7 Trajectories: {:?}", trajectories);
+
+            // Center point of trajectory
+            let inv_matrix = trajectories[3].transform_matrix.inverse();
+
+            let user_local_translations = user_trajectory
+                .values
+                .iter()
+                .map(|user_trajectory| {
+                    user_inverse_matrix.transform_point3(Vec3::new(
+                        user_trajectory.x,
+                        0.0,
+                        user_trajectory.y,
+                    ))
+                })
+                .map(|v| v.xz())
+                .collect::<Vec<_>>();
+
+            let local_translations = trajectories
+                .iter()
+                .map(|trajectory| {
+                    inv_matrix.transform_point3(
+                        trajectory
+                            .transform_matrix
+                            .to_scale_rotation_translation()
+                            .2,
+                    )
+                })
+                .map(|v| v.xz())
+                .collect::<Vec<_>>();
+
+            let distance =
+                calculate_trajectory_distance(&user_local_translations, &local_translations);
+
+            nearest_trajectories.push(distance);
+
+            // println!("Distance: {} Index:{}", distance, i);
         }
-        // println!("Distance: {} Index:{}", distance, i);
 
         println!("List before sort: {:?}", nearest_trajectories);
         nearest_trajectories.sort_by(|a, b| a.partial_cmp(b).unwrap());
