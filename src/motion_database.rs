@@ -28,7 +28,7 @@ impl Plugin for MotionDatabasePlugin {
     }
 }
 
-pub type Pose = Vec<Vec<f32>>;
+pub type Pose = Vec<f32>;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TrajectoryTransform {
@@ -57,67 +57,90 @@ impl MotionDataAsset {
         &self,
         user_trajectory: &Trajectory,
         transform: &Transform,
-    ) -> Vec<f32> {
+    ) -> Vec<(f32, f32, usize)> {
         let mut nearest_trajectories = Vec::new();
 
         let user_inverse_matrix = transform.compute_matrix().inverse();
 
         // let trajectories = self.trajectories.iter().take(7).collect::<Vec<_>>();
 
-        for start in 0..self.trajectories.len() {
-            if start + 7 > self.trajectories.len() {
-                break;
+        for (i, &end_offset) in self.trajectory_offsets.iter().enumerate().skip(1) {
+            let file_index = i - 1;
+            let start_offset = self.trajectory_offsets[file_index];
+
+            for traj_index in start_offset..(end_offset - 7) {
+                let trajectories = &self.trajectories[traj_index..traj_index + 7];
+
+                // Center point of trajectory
+                let inv_matrix = trajectories[3].transform_matrix.inverse();
+
+                let user_local_translations = user_trajectory
+                    .values
+                    .iter()
+                    .map(|user_trajectory| {
+                        user_inverse_matrix.transform_point3(Vec3::new(
+                            user_trajectory.x,
+                            0.0,
+                            user_trajectory.y,
+                        ))
+                    })
+                    .map(|v| v.xz())
+                    .collect::<Vec<_>>();
+
+                let local_translations = trajectories
+                    .iter()
+                    .map(|trajectory| {
+                        inv_matrix.transform_point3(
+                            trajectory
+                                .transform_matrix
+                                .to_scale_rotation_translation()
+                                .2,
+                        )
+                    })
+                    .map(|v| v.xz())
+                    .collect::<Vec<_>>();
+
+                let distance =
+                    calculate_trajectory_distance(&user_local_translations, &local_translations);
+
+                nearest_trajectories.push((
+                    distance,
+                    self.trajectories[traj_index].time,
+                    file_index,
+                ));
             }
-
-            let trajectories = &self.trajectories[start..start + 7];
-            // println!("7 Trajectories: {:?}", trajectories);
-
-            // Center point of trajectory
-            let inv_matrix = trajectories[3].transform_matrix.inverse();
-
-            let user_local_translations = user_trajectory
-                .values
-                .iter()
-                .map(|user_trajectory| {
-                    user_inverse_matrix.transform_point3(Vec3::new(
-                        user_trajectory.x,
-                        0.0,
-                        user_trajectory.y,
-                    ))
-                })
-                .map(|v| v.xz())
-                .collect::<Vec<_>>();
-
-            let local_translations = trajectories
-                .iter()
-                .map(|trajectory| {
-                    inv_matrix.transform_point3(
-                        trajectory
-                            .transform_matrix
-                            .to_scale_rotation_translation()
-                            .2,
-                    )
-                })
-                .map(|v| v.xz())
-                .collect::<Vec<_>>();
-
-            let distance =
-                calculate_trajectory_distance(&user_local_translations, &local_translations);
-
-            nearest_trajectories.push(distance);
-
-            // println!("Distance: {} Index:{}", distance, i);
         }
 
-        println!("List before sort: {:?}", nearest_trajectories);
-        nearest_trajectories.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        println!("List after sort: {:?}", nearest_trajectories);
+        // println!("list before sort: {:?}", nearest_trajectories);
+        nearest_trajectories.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // println!("List after sort: {:?}", nearest_trajectories);
 
         if nearest_trajectories.len() > 10 {
             nearest_trajectories.truncate(10)
         }
 
         nearest_trajectories
+    }
+
+    pub fn get_nearest_trajectories_pose(
+        &self,
+        nearest_trajectory: Vec<(f32, f32, usize)>,
+    ) -> Vec<&Pose> {
+        let mut poses = Vec::new();
+
+        for (_distance, time, file_index) in nearest_trajectory.iter() {
+            let pose_start_index = self.pose_offsets[*file_index];
+            let pose_index = ((pose_start_index as f32) + time / 0.0333) as usize;
+            println!("{pose_index}");
+
+            if let Some(pose) = self.poses.get(pose_index) {
+                poses.push(pose);
+            }
+        }
+
+        println!("Pose count: {:?}", poses.len());
+        println!("Pose count: {:?}", poses);
+        poses
     }
 }
 
@@ -139,6 +162,7 @@ pub fn match_trajectory(
             for (trajectory, transform) in user_input_trajectory.iter() {
                 let nearest_trajectory = motion_data.find_closest_trajectory(trajectory, transform);
                 println!("10 nearest trajectory: {:?}", nearest_trajectory);
+                let poses = motion_data.get_nearest_trajectories_pose(nearest_trajectory);
             }
         }
     }
@@ -259,11 +283,9 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
         motion_data.pose_offsets.push(motion_data_len);
         motion_data_len += bvh.num_frames();
 
-        motion_data.poses.push(
-            bvh.frames()
-                .map(|f| f.as_slice().to_owned())
-                .collect::<Vec<_>>(),
-        );
+        motion_data
+            .poses
+            .extend(bvh.frames().map(|f| f.as_slice().to_owned()));
     }
 
     motion_data.trajectory_offsets.push(trajectory_data_len);
