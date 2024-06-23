@@ -10,20 +10,20 @@ mod trajectory;
 mod ui;
 
 fn main() {
-    App::new()
-        .add_plugins((
-            DefaultPlugins,
-            bvh_library::BvhLibraryPlugin,
-            scene_loader::SceneLoaderPlugin,
-            bvh_player::BvhPlayerPlugin,
-            trajectory::InputTrajectory,
-            camera::CameraPlugin,
-            ui::UiPlugin,
-            motion_database::MotionDatabasePlugin,
-            player::PlayerPlugin,
-        ))
-        .add_systems(Startup, setup)
-        .run();
+    let mut app = App::new();
+    app.add_plugins((
+        DefaultPlugins,
+        bvh_library::BvhLibraryPlugin,
+        scene_loader::SceneLoaderPlugin,
+        bvh_player::BvhPlayerPlugin,
+        trajectory::InputTrajectory,
+        camera::CameraPlugin,
+        ui::UiPlugin,
+        motion_database::MotionDatabasePlugin,
+        player::PlayerPlugin,
+    ))
+    .add_systems(Startup, setup)
+    .run();
 }
 
 pub fn setup(mut commands: Commands) {

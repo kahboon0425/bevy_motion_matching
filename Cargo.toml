@@ -10,10 +10,17 @@ bevy = "0.13"
 bvh_anim = "0.4"
 bevy_gltf = "0.13"
 bevy_third_person_camera = "0.1.10"
-bevy_egui = "0.26"
+bevy_egui = "0.27"
 serde_json = "1.0"
 serde = "1.0"
+
+# debug editor (run with debug feature to enable it)
+bevy-inspector-egui = { version = "0.24", optional = true }
 
 [lints.clippy]
 redundant_type_annotations = "warn"
 bool_comparison = "allow"
+
+[features]
+default = ["debug"]
+debug = ["dep:bevy-inspector-egui"]

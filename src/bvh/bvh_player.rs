@@ -13,16 +13,28 @@ impl Plugin for BvhPlayerPlugin {
         app.init_resource::<SelectedBvhAsset>()
             .add_event::<TargetTimeEvent>()
             .add_systems(Update, generate_bone_map)
-            .add_systems(Update, bvh_player);
+            .add_systems(Update, draw_armature)
+            .add_systems(Update, bvh_player)
+            .register_type::<OriginTransform>();
     }
 }
+
+#[derive(Component, Clone, Copy, Reflect)]
+pub struct OriginTransform(Transform);
+
+// impl OriginTransform {
+//     pub fn get(&self) -> Transform {
+//         self.0
+//     }
+// }
 
 #[allow(clippy::type_complexity)]
 pub fn generate_bone_map(
     mut commands: Commands,
     q_character: Query<(Entity, &Handle<Scene>), (With<MainScene>, Without<BoneMap>)>,
     q_names: Query<&Name>,
-    children: Query<&Children>,
+    q_children: Query<&Children>,
+    q_transforms: Query<&Transform>,
     server: Res<AssetServer>,
     mut asset_loaded: Local<bool>,
 ) {
@@ -37,12 +49,44 @@ pub fn generate_bone_map(
     if *asset_loaded {
         let mut bone_map = BoneHashMap::default();
 
-        for bone_entity in children.iter_descendants(entity) {
+        for bone_entity in q_children.iter_descendants(entity) {
+            if let Ok(transform) = q_transforms.get(bone_entity) {
+                commands
+                    .entity(bone_entity)
+                    .insert(OriginTransform(*transform));
+            }
+
             if let Ok(name) = q_names.get(bone_entity) {
-                let bone_name = name[6..].to_string();
+                let bone_name = name.to_string();
                 bone_map.insert(bone_name, bone_entity);
             }
         }
+        fn recursive_print(
+            indent: usize,
+            parent: Entity,
+            q_children: &Query<&Children>,
+            q_names: &Query<&Name>,
+            q_transforms: &Query<&Transform>,
+        ) {
+            if let Ok(children) = q_children.get(parent) {
+                for &child in children.iter() {
+                    for _ in 0..indent {
+                        print!("| ");
+                    }
+                    if let (Ok(name), Ok(transform)) = (q_names.get(child), q_transforms.get(child))
+                    {
+                        println!(
+                            "{:?}: {:?}",
+                            &name,
+                            transform.rotation.to_euler(EulerRot::XYZ)
+                        );
+                    }
+                    recursive_print(indent + 1, child, q_children, q_names, q_transforms);
+                }
+            }
+        }
+
+        recursive_print(0, entity, &q_children, &q_names, &q_transforms);
 
         commands.entity(entity).insert(BoneMap(bone_map));
     }
@@ -62,7 +106,7 @@ pub fn generate_bone_map(
 }
 
 pub fn bvh_player(
-    mut q_transforms: Query<&mut Transform, Without<MainScene>>,
+    mut q_transforms: Query<(&mut Transform), Without<MainScene>>,
     mut q_scene: Query<(&mut Transform, &BoneMap), With<MainScene>>,
     mut event_reader: EventReader<TargetTimeEvent>,
     time: Res<Time>,
@@ -93,7 +137,8 @@ pub fn bvh_player(
 
     for (mut scene_transform, bone_map) in q_scene.iter_mut() {
         for joint in bvh.joints() {
-            let bone_name = joint.data().name().to_str().unwrap();
+            let joint_data = joint.data();
+            let bone_name = joint_data.name().to_str().unwrap();
             // Get bone transform
             let Some(&bone_entity) = bone_map.0.get(bone_name) else {
                 continue;
@@ -102,13 +147,21 @@ pub fn bvh_player(
                 continue;
             };
 
-            let offset = joint.data().offset();
+            let mut offset = Vec3::default();
+
+            if joint_data.is_child() {
+                let o = joint_data.offset();
+                offset = Vec3::new(o.x, o.y, o.z);
+            }
+
+            // let origin_translation = origin_transform.get().translation;
+            // let origin_rotation = origin_transform.get().rotation.to_euler(EulerRot::XYZ);
 
             // Get data from 2 frames surrounding the target time
             let mut current_translation = Vec3::new(offset.x, offset.y, offset.z);
             let mut next_translation = Vec3::new(offset.x, offset.y, offset.z);
 
-            let channels = joint.data().channels();
+            let channels = joint_data.channels();
 
             let current_rotation;
             let next_rotation;
@@ -131,18 +184,24 @@ pub fn bvh_player(
             let interpolated_translation =
                 Vec3::lerp(current_translation, next_translation, interpolation_factor);
 
-            let interpolated_rotation =
-                Quat::slerp(current_rotation, next_rotation, interpolation_factor);
+            let interpolated_rotation = Quat::slerp(
+                Quat::from_euler(
+                    EulerRot::XYZ,
+                    current_rotation.x.to_radians(),
+                    current_rotation.y.to_radians(),
+                    current_rotation.z.to_radians(),
+                ),
+                Quat::from_euler(
+                    EulerRot::XYZ,
+                    next_rotation.x.to_radians(),
+                    next_rotation.y.to_radians(),
+                    next_rotation.z.to_radians(),
+                ),
+                interpolation_factor,
+            );
 
+            bone_transform.translation = interpolated_translation;
             bone_transform.rotation = interpolated_rotation;
-
-            if bone_name == "Hips" {
-                // Mutate the scene transform rather than the hips bone
-                scene_transform.translation = interpolated_translation * 0.01;
-                scene_transform.translation.y = 0.0;
-            } else {
-                bone_transform.translation = interpolated_translation;
-            }
         }
     }
 
@@ -187,28 +246,62 @@ pub struct TargetTimeEvent {
 pub struct FrameData<'a>(pub &'a Frame);
 
 impl<'a> FrameData<'a> {
-    pub fn get_rotation(&self, channels: &[Channel]) -> Quat {
-        Quat::from_euler(
-            EulerRot::ZYX,
-            self.0[&channels[0]].to_radians(),
-            self.0[&channels[1]].to_radians(),
-            self.0[&channels[2]].to_radians(),
+    pub fn get_rotation(&self, channels: &[Channel]) -> Vec3 {
+        Vec3::new(
+            self.0[&channels[0]],
+            self.0[&channels[1]],
+            self.0[&channels[2]],
         )
     }
 
-    pub fn get_translation_rotation(&self, channels: &[Channel]) -> (Vec3, Quat) {
+    pub fn get_translation_rotation(&self, channels: &[Channel]) -> (Vec3, Vec3) {
         (
             Vec3::new(
                 self.0[&channels[0]],
                 self.0[&channels[1]],
                 self.0[&channels[2]],
             ),
-            Quat::from_euler(
-                EulerRot::ZYX,
-                self.0[&channels[3]].to_radians(),
-                self.0[&channels[4]].to_radians(),
-                self.0[&channels[5]].to_radians(),
+            Vec3::new(
+                self.0[&channels[3]],
+                self.0[&channels[4]],
+                self.0[&channels[5]],
             ),
         )
+    }
+}
+
+fn draw_armature(
+    q_character: Query<(Entity, &GlobalTransform), With<MainScene>>,
+    q_children: Query<&Children>,
+    q_transforms: Query<&GlobalTransform>,
+    mut gizmos: Gizmos,
+) {
+    fn recursive_draw(
+        parent: Entity,
+        translation: Vec3,
+        q_children: &Query<&Children>,
+        q_transforms: &Query<&GlobalTransform>,
+        gizmos: &mut Gizmos,
+    ) {
+        gizmos.sphere(translation, Quat::IDENTITY, 0.04, Color::RED);
+        if let Ok(children) = q_children.get(parent) {
+            for &child in children.iter() {
+                if let Ok(transform) = q_transforms.get(child) {
+                    let child_translation = transform.translation();
+                    gizmos.line(translation, child_translation, Color::CYAN);
+                    recursive_draw(child, child_translation, q_children, q_transforms, gizmos);
+                }
+            }
+        }
+    }
+
+    if let Ok((entity, transform)) = q_character.get_single() {
+        recursive_draw(
+            entity,
+            transform.translation(),
+            &q_children,
+            &q_transforms,
+            &mut gizmos,
+        );
     }
 }

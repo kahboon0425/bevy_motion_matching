@@ -1,8 +1,14 @@
 use bevy::{prelude::*, utils::HashSet};
 use bevy_egui::{
     egui::{self, Color32},
-    EguiContexts, EguiPlugin,
+    EguiContexts,
 };
+
+#[cfg(not(feature = "debug"))]
+use bevy_egui::EguiPlugin;
+
+#[cfg(feature = "debug")]
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 use crate::{bvh_asset::BvhAsset, bvh_player::SelectedBvhAsset, motion_database};
 
@@ -10,8 +16,12 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(EguiPlugin)
-            .insert_resource(ShowDrawArrow { show: true })
+        #[cfg(feature = "debug")]
+        app.add_plugins(WorldInspectorPlugin::new());
+        #[cfg(not(feature = "debug"))]
+        app.add_plugins(EguiPlugin);
+
+        app.insert_resource(ShowDrawArrow { show: true })
             .init_resource::<BuildConfig>()
             .add_systems(Update, ui);
     }

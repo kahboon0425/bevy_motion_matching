@@ -21,12 +21,24 @@ pub struct MainScene;
 
 pub fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     // spawn the first scene in the file
-    let scene: Handle<Scene> = asset_server.load("glb/model_skeleton.glb#Scene0");
+    let scene: Handle<Scene> = asset_server.load("glb/model_skeleton_mixamo.glb#Scene0");
     info!("Loaded scene: {:?}", scene);
     commands
-        .spawn(SceneBundle { scene, ..default() })
-        .insert(MainScene)
-        .insert(ThirdPersonCameraTarget);
+        .spawn(SpatialBundle::default())
+        .insert(Transform::from_rotation(Quat::from_euler(
+            EulerRot::XYZ,
+            // -90.0_f32.to_radians(),
+            0.0,
+            0.0,
+            0.0,
+        )))
+        .with_children(|c| {
+            c.spawn(SceneBundle { scene, ..default() })
+                // TODO: Fix bvh transform issue
+                .insert(Visibility::Hidden)
+                .insert(MainScene)
+                .insert(ThirdPersonCameraTarget);
+        });
 }
 
 pub fn spawn_light(mut commands: Commands) {
