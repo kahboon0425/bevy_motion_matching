@@ -10,7 +10,9 @@ use bevy_egui::EguiPlugin;
 #[cfg(feature = "debug")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-use crate::{bvh_asset::BvhAsset, bvh_player::SelectedBvhAsset, motion_database};
+use crate::{
+    bvh_asset::BvhAsset, bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset, motion_database,
+};
 
 pub struct UiPlugin;
 
@@ -23,7 +25,7 @@ impl Plugin for UiPlugin {
 
         app.insert_resource(ShowDrawArrow { show: true })
             .init_resource::<BuildConfig>()
-            .add_systems(Update, ui);
+            .add_systems(Update, right_panel);
     }
 }
 
@@ -37,7 +39,7 @@ pub struct BuildConfig {
     pub bvh_assets: HashSet<AssetId<BvhAsset>>,
 }
 
-pub fn bvh_selection_menu(
+fn bvh_selection_menu(
     ui: &mut egui::Ui,
     asset_server: &AssetServer,
     bvh_assets: &Assets<BvhAsset>,
@@ -66,11 +68,20 @@ pub fn bvh_selection_menu(
     });
 }
 
-pub fn arrow_checkbox(ui: &mut egui::Ui, show_draw_arrow: &mut ShowDrawArrow) {
+fn arrow_checkbox(ui: &mut egui::Ui, show_draw_arrow: &mut ShowDrawArrow) {
     ui.checkbox(&mut show_draw_arrow.show, "Show Arrows");
 }
 
-pub fn bvh_buider_menu(
+fn bvh_map_label(ui: &mut egui::Ui, bvh_library: &Res<BvhLibrary>) {
+    ui.horizontal(|ui| {
+        ui.label("Bvh Map: ");
+        if let Some(map_path) = bvh_library.get_map().and_then(|m| m.path()) {
+            ui.label(map_path.to_string());
+        }
+    });
+}
+
+fn bvh_buider_menu(
     ui: &mut egui::Ui,
     asset_server: &AssetServer,
     bvh_assets: &Assets<BvhAsset>,
@@ -109,23 +120,20 @@ pub fn bvh_buider_menu(
         });
 }
 
-pub fn build_button(
-    ui: &mut egui::Ui,
-    bvh_asset: &Assets<BvhAsset>,
-    build_config: &mut BuildConfig,
-) {
+fn build_button(ui: &mut egui::Ui, bvh_asset: &Assets<BvhAsset>, build_config: &mut BuildConfig) {
     if ui.button("Build").clicked() {
         motion_database::extract_motion_data(bvh_asset, build_config);
     }
 }
 
-fn ui(
+fn right_panel(
     mut contexts: EguiContexts,
     mut selected_bvh_asset: ResMut<SelectedBvhAsset>,
     mut show_draw_arrow: ResMut<ShowDrawArrow>,
     mut build_configs: ResMut<BuildConfig>,
     asset_server: Res<AssetServer>,
     bvh_assets: Res<Assets<BvhAsset>>,
+    bvh_library: Res<BvhLibrary>,
 ) {
     let ctx = contexts.ctx_mut();
 
@@ -136,6 +144,7 @@ fn ui(
             ui.add_space(10.0);
             arrow_checkbox(ui, &mut show_draw_arrow);
             ui.add_space(10.0);
+            bvh_map_label(ui, &bvh_library);
             bvh_selection_menu(ui, &asset_server, &bvh_assets, &mut selected_bvh_asset);
             ui.add_space(10.0);
             bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);

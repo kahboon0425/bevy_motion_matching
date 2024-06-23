@@ -29,7 +29,7 @@ pub struct OriginTransform(Transform);
 // }
 
 #[allow(clippy::type_complexity)]
-pub fn generate_bone_map(
+fn generate_bone_map(
     mut commands: Commands,
     q_character: Query<(Entity, &Handle<Scene>), (With<MainScene>, Without<BoneMap>)>,
     q_names: Query<&Name>,
@@ -61,6 +61,10 @@ pub fn generate_bone_map(
                 bone_map.insert(bone_name, bone_entity);
             }
         }
+
+        commands.entity(entity).insert(BoneMap(bone_map));
+
+        /// Recurisvely print the bone hierarchy.
         fn recursive_print(
             indent: usize,
             parent: Entity,
@@ -87,8 +91,6 @@ pub fn generate_bone_map(
         }
 
         recursive_print(0, entity, &q_children, &q_names, &q_transforms);
-
-        commands.entity(entity).insert(BoneMap(bone_map));
     }
 
     if matches!(
@@ -105,8 +107,8 @@ pub fn generate_bone_map(
     }
 }
 
-pub fn bvh_player(
-    mut q_transforms: Query<(&mut Transform), Without<MainScene>>,
+fn bvh_player(
+    mut q_transforms: Query<&mut Transform, Without<MainScene>>,
     mut q_scene: Query<(&mut Transform, &BoneMap), With<MainScene>>,
     mut event_reader: EventReader<TargetTimeEvent>,
     time: Res<Time>,
@@ -135,7 +137,7 @@ pub fn bvh_player(
     let current_frame = FrameData(current_frame);
     let next_frame = FrameData(next_frame);
 
-    for (mut scene_transform, bone_map) in q_scene.iter_mut() {
+    for (mut _scene_transform, bone_map) in q_scene.iter_mut() {
         for joint in bvh.joints() {
             let joint_data = joint.data();
             let bone_name = joint_data.name().to_str().unwrap();

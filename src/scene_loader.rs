@@ -19,7 +19,7 @@ impl Plugin for SceneLoaderPlugin {
 #[derive(Component)]
 pub struct MainScene;
 
-pub fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     // spawn the first scene in the file
     let scene: Handle<Scene> = asset_server.load("glb/model_skeleton_mixamo.glb#Scene0");
     info!("Loaded scene: {:?}", scene);
@@ -41,7 +41,7 @@ pub fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
         });
 }
 
-pub fn spawn_light(mut commands: Commands) {
+fn spawn_light(mut commands: Commands) {
     commands
         .spawn(DirectionalLightBundle {
             directional_light: DirectionalLight {
@@ -58,7 +58,7 @@ pub fn spawn_light(mut commands: Commands) {
         )));
 }
 
-pub fn spawn_ground(
+fn spawn_ground(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,

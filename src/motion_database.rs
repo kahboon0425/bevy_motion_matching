@@ -185,7 +185,7 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
         .unwrap();
 }
 
-pub fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
+fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
     let channels = joint.data().channels();
     let x = frame[&channels[0]];
     let y = frame[&channels[1]];
@@ -193,7 +193,7 @@ pub fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
     Vec3::new(x, y, z)
 }
 
-pub fn get_joint_euler_angle(joint: &Joint, frame: &Frame) -> Vec3 {
+fn get_joint_euler_angle(joint: &Joint, frame: &Frame) -> Vec3 {
     let channels = joint.data().channels();
     let z = frame[&channels[3]];
     let y = frame[&channels[4]];
