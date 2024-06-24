@@ -17,6 +17,47 @@ impl Plugin for BvhLibraryPlugin {
     }
 }
 
+/// Stores the [`Handle::Strong`] of all loaded Bvh assets.
+#[derive(Resource, Default)]
+pub struct BvhLibrary {
+    map: Option<Handle<BvhAsset>>,
+    library: HashSet<Handle<BvhAsset>>,
+}
+
+impl BvhLibrary {
+    pub fn get_map(&self) -> Option<&Handle<BvhAsset>> {
+        self.map.as_ref()
+    }
+}
+
+#[derive(bevy::ecs::system::SystemParam)]
+pub struct BvhLibraryManager<'w> {
+    bvh_library: ResMut<'w, BvhLibrary>,
+}
+
+impl<'w> BvhLibraryManager<'w> {
+    /// Loads Bvh data from disk.
+    /// # Warning
+    /// A warning will be issued if specified asset has been loaded before.
+    pub fn load(&mut self, asset_server: &AssetServer, file_path: PathBuf) {
+        let handle = asset_server.load(file_path.clone());
+        if self.bvh_library.library.insert(handle) == false {
+            warn!("Same Bvh asset loaded again: {:?}", file_path);
+        }
+    }
+
+    /// Loads Bvh map data from disk.
+    /// # Warning
+    /// A warning will be issued if specified asset has been loaded before.
+    pub fn load_map(&mut self, asset_server: &AssetServer, file_path: PathBuf) {
+        if self.bvh_library.map.is_some() {
+            warn!("Same Bvh map asset loaded again: {:?}", file_path);
+        }
+        let handle = asset_server.load(file_path);
+        self.bvh_library.map = Some(handle);
+    }
+}
+
 /// Load all bvh data from [bvh folder](BVH_FOLDER) and bvh map from [bvh map folder](BVH_MAP_FOLDER).
 fn load_bvh_library(mut bvh_library_manager: BvhLibraryManager, asset_server: Res<AssetServer>) {
     /// Recursively load bvh data from [bvh folder](BVH_FOLDER).
@@ -75,49 +116,11 @@ fn load_bvh_library(mut bvh_library_manager: BvhLibraryManager, asset_server: Re
             subpath.push(entry.file_name());
             bvh_library_manager.load_map(&asset_server, subpath);
         } else {
-            warn!("Nested folders are not supported in the `{BVH_MAP_FOLDER}` folder.")
+            warn!("Only files are supported in the `{BVH_MAP_FOLDER}` folder.")
         }
     }
 
     if entries.next().is_some() {
         warn!("More than 1 entries detected in `{BVH_MAP_FOLDER}` folder, only the first one is loaded.");
-    }
-}
-
-/// Stores the [`Handle::Strong`] of all loaded Bvh assets.
-#[derive(Resource, Default)]
-pub struct BvhLibrary {
-    map: Option<Handle<BvhAsset>>,
-    library: HashSet<Handle<BvhAsset>>,
-}
-
-impl BvhLibrary {
-    pub fn get_map(&self) -> Option<&Handle<BvhAsset>> {
-        self.map.as_ref()
-    }
-}
-
-#[derive(bevy::ecs::system::SystemParam)]
-pub struct BvhLibraryManager<'w> {
-    bvh_library: ResMut<'w, BvhLibrary>,
-}
-
-impl<'w> BvhLibraryManager<'w> {
-    /// Loads Bvh data from disk.
-    /// Filename provided must be located inside "assets/bvh/".
-    /// If specified asset has been loaded before, a warning will be issued.
-    pub fn load(&mut self, asset_server: &AssetServer, file_path: PathBuf) {
-        let handle = asset_server.load(file_path.clone());
-        if self.bvh_library.library.insert(handle) == false {
-            warn!("Same Bvh asset loaded again: {:?}", file_path);
-        }
-    }
-
-    pub fn load_map(&mut self, asset_server: &AssetServer, file_path: PathBuf) {
-        if self.bvh_library.map.is_some() {
-            warn!("Same Bvh map asset loaded again: {:?}", file_path);
-        }
-        let handle = asset_server.load(file_path);
-        self.bvh_library.map = Some(handle);
     }
 }
