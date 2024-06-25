@@ -9,11 +9,14 @@ use bevy::{
     prelude::*,
 };
 
+use crate::scene_loader::MainScene;
+
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Msaa::default())
+        app.init_resource::<Msaa>()
+            .init_resource::<CameraFocus>()
             .add_systems(Startup, spawn_camera)
             .add_systems(
                 Update,
@@ -22,7 +25,7 @@ impl Plugin for CameraPlugin {
     }
 }
 
-/// Bundle to spawn our custom camera easily
+/// Bundle to spawn our custom camera easily.
 #[derive(Bundle, Default)]
 pub struct PanOrbitCameraBundle {
     pub camera: Camera3dBundle,
@@ -30,46 +33,53 @@ pub struct PanOrbitCameraBundle {
     pub settings: PanOrbitSettings,
 }
 
-/// The internal state of the pan-orbit controller
+/// The internal state of the pan-orbit controller.
 #[derive(Component)]
 pub struct PanOrbitState {
     pub center: Vec3,
+    /// Offset from [`PanOrbitState::center`].
+    pub offset: Vec3,
     pub radius: f32,
     pub upside_down: bool,
     pub pitch: f32,
     pub yaw: f32,
+    pub focus_mode: bool,
 }
 
 impl Default for PanOrbitState {
     fn default() -> Self {
         PanOrbitState {
             center: Vec3::ZERO,
+            offset: Vec3::Y,
             radius: 1.0,
             upside_down: false,
             pitch: 0.0,
             yaw: 0.0,
+            focus_mode: false,
         }
     }
 }
 
-/// The configuration of the pan-orbit controller
+/// The configuration of the pan-orbit controller.
 #[derive(Component)]
 pub struct PanOrbitSettings {
-    /// World units per pixel of mouse motion
+    /// World units per pixel of mouse motion.
     pub pan_sensitivity: f32,
-    /// Radians per pixel of mouse motion
+    /// Radians per pixel of mouse motion.
     pub orbit_sensitivity: f32,
-    /// Exponent per pixel of mouse motion
+    /// Exponent per pixel of mouse motion.
     pub zoom_sensitivity: f32,
-    /// Key to hold for panning
+    /// Key to hold for panning.
     pub pan_key: Option<MouseButton>,
-    /// Key to hold for orbiting
+    /// Key to hold for orbiting.
     pub orbit_key: Option<KeyCode>,
-    /// Key to hold for zooming
+    /// Key to hold for zooming.
     pub zoom_key: Option<KeyCode>,
-    /// For devices with a notched scroll wheel, like desktop mice
+    /// Key to press for focusing.
+    pub focus_key: Option<KeyCode>,
+    /// For devices with a notched scroll wheel, like desktop mice.
     pub scroll_line_sensitivity: f32,
-    /// For devices with smooth scrolling, like touchpads
+    /// For devices with smooth scrolling, like touchpads.
     pub scroll_pixel_sensitivity: f32,
 }
 
@@ -84,6 +94,7 @@ impl Default for PanOrbitSettings {
             pan_key: Some(MouseButton::Middle),
             orbit_key: Some(KeyCode::AltLeft),
             zoom_key: Some(KeyCode::ShiftLeft),
+            focus_key: Some(KeyCode::KeyF),
             // 1 "line" == 16 "pixels of motion"
             scroll_line_sensitivity: 16.0,
             scroll_pixel_sensitivity: 1.0,
@@ -91,12 +102,28 @@ impl Default for PanOrbitSettings {
     }
 }
 
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct CameraFocus(Option<Entity>);
+
+impl CameraFocus {
+    pub fn get(&self) -> Option<Entity> {
+        self.0
+    }
+
+    pub fn set(&mut self, entity: Entity) {
+        self.0 = Some(entity);
+    }
+
+    pub fn clear(&mut self) {
+        self.0 = None;
+    }
+}
+
 fn spawn_camera(mut commands: Commands) {
     let mut camera = PanOrbitCameraBundle::default();
     // Position our camera using our component,
     // not Transform (it would get overwritten)
-    camera.state.center = Vec3::new(0.0, 2.0, 0.0);
-    camera.state.radius = 10.0;
+    camera.state.radius = 5.0;
     camera.state.pitch = -15.0f32.to_radians();
     camera.state.yaw = 30.0f32.to_radians();
     camera.camera = Camera3dBundle {
@@ -111,12 +138,16 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn(camera).insert(BloomSettings::default());
 }
 
+#[allow(clippy::too_many_arguments)]
 fn pan_orbit_camera(
-    kbd: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<MouseButton>>,
+    mut q_camera: Query<(&PanOrbitSettings, &mut PanOrbitState, &mut Transform)>,
+    q_global_transforms: Query<&GlobalTransform>,
+    q_main_scene: Query<Entity, With<MainScene>>,
     mut evr_motion: EventReader<MouseMotion>,
     mut evr_scroll: EventReader<MouseWheel>,
-    mut q_camera: Query<(&PanOrbitSettings, &mut PanOrbitState, &mut Transform)>,
+    kbd: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut camera_focus: ResMut<CameraFocus>,
 ) {
     // First, accumulate the total amount of
     // mouse motion and scroll, from all pending events:
@@ -144,6 +175,19 @@ fn pan_orbit_camera(
     let left_clicked = mouse.pressed(MouseButton::Left);
 
     for (settings, mut state, mut transform) in &mut q_camera {
+        // Camera focus
+        if settings
+            .focus_key
+            .map(|key| kbd.just_pressed(key))
+            .unwrap_or(false)
+        {
+            if camera_focus.get().is_some() {
+                camera_focus.clear();
+            } else if let Ok(entity) = q_main_scene.get_single() {
+                camera_focus.set(entity);
+            }
+        }
+
         // Check how much of each thing we need to apply.
         // Accumulate values from motion and scroll,
         // based on our configuration settings.
@@ -239,11 +283,25 @@ fn pan_orbit_camera(
         // vectors from the camera's transform, and use
         // them to move the center point. Multiply by the
         // radius to make the pan adapt to the current zoom.
+        let mut pan_offset = Vec3::ZERO;
         if total_pan != Vec2::ZERO {
             any = true;
             let radius = state.radius;
-            state.center += transform.right() * total_pan.x * radius;
-            state.center += transform.up() * total_pan.y * radius;
+            pan_offset += transform.right() * total_pan.x * radius;
+            pan_offset += transform.up() * total_pan.y * radius;
+        }
+
+        match camera_focus.get() {
+            Some(entity) => {
+                any = true;
+                if let Ok(transform) = q_global_transforms.get(entity) {
+                    state.offset += pan_offset;
+                    state.center = transform.translation();
+                }
+            }
+            None => {
+                state.center += pan_offset;
+            }
         }
 
         // Finally, compute the new camera transform.
@@ -255,7 +313,7 @@ fn pan_orbit_camera(
             transform.rotation = Quat::from_euler(EulerRot::YXZ, state.yaw, state.pitch, 0.0);
             // To position the camera, get the backward direction vector
             // and place the camera at the desired radius from the center.
-            transform.translation = state.center + transform.back() * state.radius;
+            transform.translation = state.center + state.offset + transform.back() * state.radius;
         }
     }
 }
