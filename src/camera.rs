@@ -62,13 +62,11 @@ pub struct PanOrbitSettings {
     /// Exponent per pixel of mouse motion
     pub zoom_sensitivity: f32,
     /// Key to hold for panning
-    pub pan_key: Option<KeyCode>,
+    pub pan_key: Option<MouseButton>,
     /// Key to hold for orbiting
     pub orbit_key: Option<KeyCode>,
     /// Key to hold for zooming
     pub zoom_key: Option<KeyCode>,
-    /// What action is bound to the scroll wheel?
-    pub scroll_action: Option<PanOrbitAction>,
     /// For devices with a notched scroll wheel, like desktop mice
     pub scroll_line_sensitivity: f32,
     /// For devices with smooth scrolling, like touchpads
@@ -78,23 +76,19 @@ pub struct PanOrbitSettings {
 impl Default for PanOrbitSettings {
     fn default() -> Self {
         PanOrbitSettings {
-            pan_sensitivity: 0.001,                 // 1000 pixels per world unit
-            orbit_sensitivity: 0.1f32.to_radians(), // 0.1 degree per pixel
+            // 1000 pixels per world unit
+            pan_sensitivity: 0.001,
+            // 0.2 degree per pixel
+            orbit_sensitivity: 0.2f32.to_radians(),
             zoom_sensitivity: 0.01,
-            pan_key: Some(KeyCode::ControlLeft),
+            pan_key: Some(MouseButton::Middle),
             orbit_key: Some(KeyCode::AltLeft),
             zoom_key: Some(KeyCode::ShiftLeft),
-            scroll_action: Some(PanOrbitAction::Zoom),
-            scroll_line_sensitivity: 16.0, // 1 "line" == 16 "pixels of motion"
+            // 1 "line" == 16 "pixels of motion"
+            scroll_line_sensitivity: 16.0,
             scroll_pixel_sensitivity: 1.0,
         }
     }
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PanOrbitAction {
-    Pan,
-    Orbit,
-    Zoom,
 }
 
 fn spawn_camera(mut commands: Commands) {
@@ -119,6 +113,7 @@ fn spawn_camera(mut commands: Commands) {
 
 fn pan_orbit_camera(
     kbd: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     mut evr_motion: EventReader<MouseMotion>,
     mut evr_scroll: EventReader<MouseWheel>,
     mut q_camera: Query<(&PanOrbitSettings, &mut PanOrbitState, &mut Transform)>,
@@ -146,6 +141,8 @@ fn pan_orbit_camera(
         }
     }
 
+    let left_clicked = mouse.pressed(MouseButton::Left);
+
     for (settings, mut state, mut transform) in &mut q_camera {
         // Check how much of each thing we need to apply.
         // Accumulate values from motion and scroll,
@@ -154,16 +151,10 @@ fn pan_orbit_camera(
         let mut total_pan = Vec2::ZERO;
         if settings
             .pan_key
-            .map(|key| kbd.pressed(key))
+            .map(|key| mouse.pressed(key))
             .unwrap_or(false)
         {
             total_pan -= total_motion * settings.pan_sensitivity;
-        }
-        if settings.scroll_action == Some(PanOrbitAction::Pan) {
-            total_pan -=
-                total_scroll_lines * settings.scroll_line_sensitivity * settings.pan_sensitivity;
-            total_pan -=
-                total_scroll_pixels * settings.scroll_pixel_sensitivity * settings.pan_sensitivity;
         }
 
         let mut total_orbit = Vec2::ZERO;
@@ -171,15 +162,9 @@ fn pan_orbit_camera(
             .orbit_key
             .map(|key| kbd.pressed(key))
             .unwrap_or(false)
+            && left_clicked
         {
             total_orbit -= total_motion * settings.orbit_sensitivity;
-        }
-        if settings.scroll_action == Some(PanOrbitAction::Orbit) {
-            total_orbit -=
-                total_scroll_lines * settings.scroll_line_sensitivity * settings.orbit_sensitivity;
-            total_orbit -= total_scroll_pixels
-                * settings.scroll_pixel_sensitivity
-                * settings.orbit_sensitivity;
         }
 
         let mut total_zoom = Vec2::ZERO;
@@ -187,15 +172,14 @@ fn pan_orbit_camera(
             .zoom_key
             .map(|key| kbd.pressed(key))
             .unwrap_or(false)
+            && left_clicked
         {
             total_zoom -= total_motion * settings.zoom_sensitivity;
         }
-        if settings.scroll_action == Some(PanOrbitAction::Zoom) {
-            total_zoom -=
-                total_scroll_lines * settings.scroll_line_sensitivity * settings.zoom_sensitivity;
-            total_zoom -=
-                total_scroll_pixels * settings.scroll_pixel_sensitivity * settings.zoom_sensitivity;
-        }
+        total_zoom -=
+            total_scroll_lines * settings.scroll_line_sensitivity * settings.zoom_sensitivity;
+        total_zoom -=
+            total_scroll_pixels * settings.scroll_pixel_sensitivity * settings.zoom_sensitivity;
 
         // Upon starting a new orbit maneuver (key is just pressed),
         // check if we are starting it upside-down
@@ -203,6 +187,7 @@ fn pan_orbit_camera(
             .orbit_key
             .map(|key| kbd.just_pressed(key))
             .unwrap_or(false)
+            && left_clicked
         {
             state.upside_down = state.pitch < -FRAC_PI_2 || state.pitch > FRAC_PI_2;
         }
@@ -234,7 +219,7 @@ fn pan_orbit_camera(
         if total_orbit != Vec2::ZERO {
             any = true;
             state.yaw += total_orbit.x;
-            state.pitch += total_orbit.y;
+            state.pitch -= total_orbit.y;
             // wrap around, to stay between +- 180 degrees
             if state.yaw > PI {
                 state.yaw -= TAU; // 2 * PI
