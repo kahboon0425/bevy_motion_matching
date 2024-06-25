@@ -43,7 +43,6 @@ pub struct PanOrbitState {
     pub upside_down: bool,
     pub pitch: f32,
     pub yaw: f32,
-    pub focus_mode: bool,
 }
 
 impl Default for PanOrbitState {
@@ -55,7 +54,6 @@ impl Default for PanOrbitState {
             upside_down: false,
             pitch: 0.0,
             yaw: 0.0,
-            focus_mode: false,
         }
     }
 }
