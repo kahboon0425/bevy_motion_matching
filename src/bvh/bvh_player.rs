@@ -1,10 +1,11 @@
-use crate::{bvh_asset::BvhAsset, bvh_library::BvhLibrary, scene_loader::MainScene};
 use bevy::{
     asset::{DependencyLoadState, LoadState, RecursiveDependencyLoadState},
     prelude::*,
     utils::hashbrown::HashMap,
 };
-use bvh_anim::{Bvh, Channel, Frame};
+use bevy_bvh_anim::prelude::*;
+
+use crate::{bvh_library::BvhLibrary, scene_loader::MainScene};
 
 pub struct BvhPlayerPlugin;
 
@@ -171,7 +172,7 @@ fn generate_bone_transform_map(
         return;
     };
 
-    let bvh = &bvh_map.0;
+    let bvh = bvh_map.get();
     let Some(frame) = bvh.frames().next() else {
         return;
     };
@@ -244,9 +245,10 @@ fn bvh_player(
     bvh_asset: Res<Assets<BvhAsset>>,
     mut local_time: Local<f32>,
 ) {
-    let Some(BvhAsset(bvh)) = bvh_asset.get(selected_bvh_asset.0) else {
+    let Some(bvh) = bvh_asset.get(selected_bvh_asset.0) else {
         return;
     };
+    let bvh = bvh.get();
 
     for event in event_reader.read() {
         *local_time = event.time;

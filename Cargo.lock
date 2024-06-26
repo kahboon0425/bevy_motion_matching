@@ -478,6 +478,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_bvh_anim"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bvh_anim",
+]
+
+[[package]]
 name = "bevy_core"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -806,10 +814,10 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy-inspector-egui",
+ "bevy_bvh_anim",
  "bevy_egui",
  "bevy_gltf",
  "bevy_third_person_camera",
- "bvh_anim",
  "serde",
  "serde_json",
 ]

@@ -1,13 +1,32 @@
-[package]
-name = "bevy_motion_matching"
+[workspace]
+resolver = "2"
+members = ["crates/*", ]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/nixon-voxell/bevy_motion_matching"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace.lints.clippy]
+redundant_type_annotations = "warn"
+bool_comparison = "allow"
+
+[package]
+name = "bevy_motion_matching"
+categories = ["game-engines", "graphics", "gui", "rendering", "multimedia"]
+description = "Motion matching system in Bevy."
+exclude = ["/assets/", "/.github/", "/examples/"]
+keywords = ["motion-matching", "animation", "bevy"]
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
+bevy_bvh_anim = { path = "crates/bevy_bvh_anim" }
 bevy = "0.13"
-bvh_anim = "0.4"
 bevy_gltf = "0.13"
 bevy_third_person_camera = "0.1.10"
 bevy_egui = "0.27"
@@ -17,10 +36,9 @@ serde = "1.0"
 # debug editor (run with debug feature to enable it)
 bevy-inspector-egui = { version = "0.24", optional = true }
 
-[lints.clippy]
-redundant_type_annotations = "warn"
-bool_comparison = "allow"
+[lints]
+workspace = true
 
 [features]
-default = ["debug"]
+default = []
 debug = ["dep:bevy-inspector-egui"]

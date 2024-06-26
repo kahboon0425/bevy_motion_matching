@@ -1,3 +1,5 @@
+pub use bvh_anim;
+
 use bevy::{
     asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
@@ -7,6 +9,13 @@ use bevy::{
     },
 };
 use bvh_anim::Bvh;
+
+pub mod prelude {
+    pub use crate::{BvhAsset, BvhAssetPlugin};
+    pub use bvh_anim::{
+        bvh, Axis as BvhAxis, Bvh, Channel, Frame, Frames, Joint, JointData, JointName,
+    };
+}
 
 pub struct BvhAssetPlugin;
 
@@ -18,7 +27,13 @@ impl Plugin for BvhAssetPlugin {
 }
 
 #[derive(Asset, TypePath)]
-pub struct BvhAsset(pub Bvh);
+pub struct BvhAsset(Bvh);
+
+impl BvhAsset {
+    pub fn get(&self) -> &Bvh {
+        &self.0
+    }
+}
 
 #[derive(Default)]
 struct BvhAssetLoader;

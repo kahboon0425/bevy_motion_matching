@@ -1,4 +1,5 @@
 use bevy::{prelude::*, utils::HashSet};
+use bevy_bvh_anim::prelude::*;
 use bevy_egui::{
     egui::{self, Color32},
     EguiContexts,
@@ -10,9 +11,7 @@ use bevy_egui::EguiPlugin;
 #[cfg(feature = "debug")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-use crate::{
-    bvh_asset::BvhAsset, bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset, motion_database,
-};
+use crate::{bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset, motion_database};
 
 pub struct UiPlugin;
 
