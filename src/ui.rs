@@ -125,6 +125,15 @@ fn build_button(ui: &mut egui::Ui, bvh_asset: &Assets<BvhAsset>, build_config: &
     }
 }
 
+#[derive(Default, Clone, Copy)]
+enum RightPanelPage {
+    #[default]
+    Config,
+    Builder,
+    PlayMode,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn right_panel(
     mut contexts: EguiContexts,
     mut selected_bvh_asset: ResMut<SelectedBvhAsset>,
@@ -133,21 +142,44 @@ fn right_panel(
     asset_server: Res<AssetServer>,
     bvh_assets: Res<Assets<BvhAsset>>,
     bvh_library: Res<BvhLibrary>,
+    mut page: Local<RightPanelPage>,
 ) {
     let ctx = contexts.ctx_mut();
 
     egui::SidePanel::right("right_panel")
-        .resizable(false)
+        .resizable(true)
         .show(ctx, |ui| {
-            ui.heading("Properties");
-            ui.add_space(10.0);
-            arrow_checkbox(ui, &mut show_draw_arrow);
-            ui.add_space(10.0);
-            bvh_map_label(ui, &bvh_library);
-            bvh_selection_menu(ui, &asset_server, &bvh_assets, &mut selected_bvh_asset);
-            ui.add_space(10.0);
-            bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);
-            ui.add_space(10.0);
-            build_button(ui, &bvh_assets, &mut build_configs);
+            ui.horizontal(|ui| {
+                if ui.button("Config").clicked() {
+                    *page = RightPanelPage::Config;
+                }
+                if ui.button("Builder").clicked() {
+                    *page = RightPanelPage::Builder;
+                }
+                if ui.button("Play Mode").clicked() {
+                    *page = RightPanelPage::PlayMode;
+                }
+            });
+
+            match *page {
+                RightPanelPage::Config => {
+                    ui.heading("Configurations");
+                    ui.add_space(10.0);
+                    bvh_map_label(ui, &bvh_library);
+                    bvh_selection_menu(ui, &asset_server, &bvh_assets, &mut selected_bvh_asset);
+                }
+                RightPanelPage::Builder => {
+                    ui.heading("Buidler");
+                    ui.add_space(10.0);
+                    bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);
+                    ui.add_space(10.0);
+                    build_button(ui, &bvh_assets, &mut build_configs);
+                }
+                RightPanelPage::PlayMode => {
+                    ui.heading("Play Mode");
+                    ui.add_space(10.0);
+                    arrow_checkbox(ui, &mut show_draw_arrow);
+                }
+            }
         });
 }

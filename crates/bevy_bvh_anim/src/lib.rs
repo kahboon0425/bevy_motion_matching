@@ -36,7 +36,7 @@ impl BvhAsset {
 }
 
 #[derive(Default)]
-struct BvhAssetLoader;
+pub struct BvhAssetLoader;
 
 impl AssetLoader for BvhAssetLoader {
     type Asset = BvhAsset;
