@@ -4,6 +4,7 @@ use bvh::*;
 mod bvh;
 mod camera;
 mod motion_database;
+mod nearest_trajectories_poses_retriever;
 mod player;
 mod scene_loader;
 mod trajectory;
@@ -21,6 +22,7 @@ fn main() {
             ui::UiPlugin,
             motion_database::MotionDatabasePlugin,
             player::PlayerPlugin,
+            nearest_trajectories_poses_retriever::NearestTrajectoryRetrieverPlugin,
         ))
         .add_systems(Startup, setup)
         .run();
