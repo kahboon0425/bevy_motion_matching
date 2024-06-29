@@ -9,7 +9,10 @@ use bevy::{
     prelude::*,
 };
 
-use crate::scene_loader::MainScene;
+use crate::{
+    scene_loader::MainScene,
+    ui::{MouseInUi, UiSystemSet},
+};
 
 pub struct CameraPlugin;
 
@@ -20,7 +23,9 @@ impl Plugin for CameraPlugin {
             .add_systems(Startup, spawn_camera)
             .add_systems(
                 Update,
-                pan_orbit_camera.run_if(any_with_component::<PanOrbitState>),
+                pan_orbit_camera
+                    .run_if(any_with_component::<PanOrbitState>)
+                    .after(UiSystemSet),
             );
     }
 }
@@ -146,6 +151,7 @@ fn pan_orbit_camera(
     kbd: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     mut camera_focus: ResMut<CameraFocus>,
+    mouse_in_ui: Res<MouseInUi>,
 ) {
     // First, accumulate the total amount of
     // mouse motion and scroll, from all pending events:
@@ -157,15 +163,17 @@ fn pan_orbit_camera(
 
     let mut total_scroll_lines = Vec2::ZERO;
     let mut total_scroll_pixels = Vec2::ZERO;
-    for ev in evr_scroll.read() {
-        match ev.unit {
-            MouseScrollUnit::Line => {
-                total_scroll_lines.x += ev.x;
-                total_scroll_lines.y -= ev.y;
-            }
-            MouseScrollUnit::Pixel => {
-                total_scroll_pixels.x += ev.x;
-                total_scroll_pixels.y -= ev.y;
+    if mouse_in_ui.get() == false {
+        for ev in evr_scroll.read() {
+            match ev.unit {
+                MouseScrollUnit::Line => {
+                    total_scroll_lines.x += ev.x;
+                    total_scroll_lines.y -= ev.y;
+                }
+                MouseScrollUnit::Pixel => {
+                    total_scroll_pixels.x += ev.x;
+                    total_scroll_pixels.y -= ev.y;
+                }
             }
         }
     }

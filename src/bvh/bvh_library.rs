@@ -17,7 +17,7 @@ impl Plugin for BvhLibraryPlugin {
 }
 
 /// Stores the [`Handle::Strong`] of all loaded Bvh assets.
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Debug, Clone)]
 pub struct BvhLibrary {
     map: Option<Handle<BvhAsset>>,
     library: HashSet<Handle<BvhAsset>>,

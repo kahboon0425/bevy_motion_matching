@@ -165,7 +165,7 @@ fn draw_trajectory(
     mut gizmos: Gizmos,
     show_arrow: Res<ShowDrawArrow>,
 ) {
-    if show_arrow.show {
+    if show_arrow.get() {
         for trajectory in q_trajectory.iter() {
             // Draw arrow gizmos of the smoothed out trajectory
             let mut trajectory_iter = trajectory.values.iter();
