@@ -127,22 +127,25 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
             let (frame_index, _interp_factor) = get_pose(time, bvh);
 
             if let Some(future_frame) = bvh.frames().nth(frame_index) {
-                if let Some(hip_joint) = bvh.joints().find(|j| j.data().name() == "Hips") {
-                    let translation = get_joint_position(&hip_joint, future_frame) * 0.01;
-                    let euler_angle = get_joint_euler_angle(&hip_joint, future_frame);
-                    let rotation = Quat::from_euler(
-                        EulerRot::XYZ,
-                        euler_angle.x,
-                        euler_angle.y,
-                        euler_angle.z,
-                    );
-                    let transform_matrix = Mat4::from_rotation_translation(rotation, translation);
+                for joint in bvh.joints() {
+                    if joint.data().channels().len() == 6 {
+                        let translation = get_joint_position(&joint, future_frame) * 0.01;
+                        let euler_angle = get_joint_euler_angle(&joint, future_frame);
+                        let rotation = Quat::from_euler(
+                            EulerRot::XYZ,
+                            euler_angle.x,
+                            euler_angle.y,
+                            euler_angle.z,
+                        );
+                        let transform_matrix =
+                            Mat4::from_rotation_translation(rotation, translation);
 
-                    trajectory_data_len += 1;
-                    motion_data.trajectories.push(TrajectoryTransform {
-                        transform_matrix,
-                        time,
-                    });
+                        trajectory_data_len += 1;
+                        motion_data.trajectories.push(TrajectoryTransform {
+                            transform_matrix,
+                            time,
+                        });
+                    }
                 }
             }
             trajectory_index += 1;

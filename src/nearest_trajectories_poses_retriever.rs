@@ -120,7 +120,7 @@ pub fn get_nearest_trajectories_pose(
         }
     }
 
-    println!("Pose count: {:?}", poses.len());
-    println!("Pose count: {:?}", poses);
+    // println!("Pose count: {:?}", poses.len());
+    // println!("Pose count: {:?}", poses);
     poses
 }
