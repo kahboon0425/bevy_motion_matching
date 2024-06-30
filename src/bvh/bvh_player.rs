@@ -128,10 +128,12 @@ fn generate_bone_map(
                     }
                     if let (Ok(name), Ok(transform)) = (q_names.get(child), q_transforms.get(child))
                     {
+                        // let rotation = transform.rotation.to_euler(EulerRot::XYZ);
+                        let rotation = transform.rotation;
+                        print!("{}", &name);
                         println!(
-                            "{:?}: {:?}",
-                            &name,
-                            transform.rotation.to_euler(EulerRot::XYZ)
+                            "({:.2}, {:.2}, {:.2}, {:.2})",
+                            rotation.x, rotation.y, rotation.z, rotation.w,
                         );
                     }
                     recursive_print(indent + 1, child, q_children, q_names, q_transforms);
@@ -195,7 +197,7 @@ fn generate_bone_transform_map(
 
         // Calculate bvh joint transform matrix
         let offset = joint_data.offset();
-        let mut translation = Vec3::new(offset.x, offset.y, offset.z);
+        let mut bvh_translation = Vec3::new(offset.x, offset.y, offset.z);
 
         let channels = joint_data.channels();
         let rotation;
@@ -206,16 +208,16 @@ fn generate_bone_transform_map(
             let translation_offset;
             (translation_offset, rotation) = frame.get_translation_rotation(channels);
 
-            translation += translation_offset;
+            bvh_translation += translation_offset;
         }
 
-        let rotation = Quat::from_euler(
+        let bvh_rotation = Quat::from_euler(
             EulerRot::XYZ,
             rotation.x.to_radians(),
             rotation.y.to_radians(),
             rotation.z.to_radians(),
         );
-        let joint_matrix = Mat4::from_rotation_translation(rotation, translation);
+        let joint_matrix = Mat4::from_rotation_translation(bvh_rotation, bvh_translation);
 
         // Calculate origin bone transform matrix
         let origin_matrix = Mat4::from_rotation_translation(
@@ -228,7 +230,27 @@ fn generate_bone_transform_map(
 
         bone_transform_map.insert(bone_entity, transform_map);
 
-        println!("{} | {}", origin_transform.translation, translation);
+        println!("\n{}", joint_data.name());
+        println!(
+            "trans: origin|bvh ({:.2}, {:.2}, {:.2}) | ({:.2}, {:.2}, {:.2})",
+            origin_transform.translation.x,
+            origin_transform.translation.y,
+            origin_transform.translation.z,
+            bvh_translation.x,
+            bvh_translation.y,
+            bvh_translation.z,
+        );
+        let origin_rotation = origin_transform.rotation.to_euler(EulerRot::XYZ);
+        let bvh_rotation = bvh_rotation.to_euler(EulerRot::XYZ);
+        println!(
+            "rot: origin|bvh ({:.2}, {:.2}, {:.2}) | ({:.2}, {:.2}, {:.2})",
+            origin_rotation.0.to_degrees(),
+            origin_rotation.1.to_degrees(),
+            origin_rotation.2.to_degrees(),
+            bvh_rotation.0.to_degrees(),
+            bvh_rotation.1.to_degrees(),
+            bvh_rotation.2.to_degrees(),
+        );
     }
 
     commands
@@ -378,37 +400,51 @@ fn draw_armature(
         Color::INDIGO,
         Color::PURPLE,
     ];
+    const SPHERE_SIZE: f32 = 0.03;
+    const AXIS_LENGTH: f32 = 0.1;
 
     fn recursive_draw(
         mut index: usize,
         parent: Entity,
-        translation: Vec3,
+        parent_transform: &GlobalTransform,
         q_children: &Query<&Children>,
         q_transforms: &Query<&GlobalTransform>,
         gizmos: &mut Gizmos,
     ) {
         gizmos.sphere(
-            translation,
+            parent_transform.translation(),
             Quat::IDENTITY,
-            0.04,
+            SPHERE_SIZE,
             RAINBOW[index % RAINBOW.len()],
+        );
+        gizmos.line(
+            parent_transform.translation(),
+            parent_transform.translation() + parent_transform.right() * AXIS_LENGTH,
+            Color::RED,
+        );
+        gizmos.line(
+            parent_transform.translation(),
+            parent_transform.translation() + parent_transform.up() * AXIS_LENGTH,
+            Color::GREEN,
+        );
+        gizmos.line(
+            parent_transform.translation(),
+            parent_transform.translation() + parent_transform.forward() * AXIS_LENGTH,
+            Color::BLUE,
         );
 
         if let Ok(children) = q_children.get(parent) {
             for &child in children.iter() {
                 if let Ok(transform) = q_transforms.get(child) {
                     let child_translation = transform.translation();
-                    gizmos.line(translation, child_translation, Color::CYAN);
+                    gizmos.line(
+                        parent_transform.translation(),
+                        child_translation,
+                        Color::CYAN,
+                    );
                     index += 1;
 
-                    recursive_draw(
-                        index,
-                        child,
-                        child_translation,
-                        q_children,
-                        q_transforms,
-                        gizmos,
-                    );
+                    recursive_draw(index, child, transform, q_children, q_transforms, gizmos);
                 }
             }
         }
@@ -418,7 +454,7 @@ fn draw_armature(
         recursive_draw(
             0,
             entity,
-            transform.translation(),
+            transform,
             &q_children,
             &q_transforms,
             &mut gizmos,
