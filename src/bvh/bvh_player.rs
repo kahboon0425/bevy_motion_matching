@@ -40,6 +40,7 @@ impl OriginGlobalTransform {
     // }
 }
 
+#[allow(dead_code)]
 /// Bvh joint original translations and euler angles.
 #[derive(Component, Default, Debug, Clone)]
 pub struct BvhOriginMap(pub HashMap<Entity, (Vec3, Vec3)>);
