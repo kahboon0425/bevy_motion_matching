@@ -1,7 +1,5 @@
 pub use bvh_anim;
 
-pub mod config;
-
 use bevy::{
     asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
@@ -13,7 +11,6 @@ use bevy::{
 use bvh_anim::Bvh;
 
 pub mod prelude {
-    pub use crate::config;
     pub use crate::{BvhAsset, BvhAssetPlugin};
     // Re-exports bvh_anim's commonly used types
     pub use bvh_anim::{
