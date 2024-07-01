@@ -24,21 +24,9 @@ fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     let scene: Handle<Scene> = asset_server.load("glb/model_skeleton_mixamo.glb#Scene0");
     info!("Loaded scene: {:?}", scene);
     commands
-        .spawn(SpatialBundle::default())
-        .insert(Transform::from_rotation(Quat::from_euler(
-            EulerRot::XYZ,
-            // -90.0_f32.to_radians(),
-            0.0,
-            0.0,
-            0.0,
-        )))
-        .with_children(|c| {
-            c.spawn(SceneBundle { scene, ..default() })
-                // TODO: Fix bvh transform issue
-                .insert(Visibility::Hidden)
-                .insert(MainScene)
-                .insert(ThirdPersonCameraTarget);
-        });
+        .spawn(SceneBundle { scene, ..default() })
+        .insert(MainScene)
+        .insert(ThirdPersonCameraTarget);
 }
 
 fn spawn_light(mut commands: Commands) {
