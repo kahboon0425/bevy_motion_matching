@@ -1,0 +1,13 @@
+[package]
+name = "bevy_bvh_anim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bevy = "0.13"
+bvh_anim = "0.4"
+
+[lints]
+workspace = true

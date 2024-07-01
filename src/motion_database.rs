@@ -6,14 +6,11 @@ use bevy::{
         BoxedFuture,
     },
 };
-use bvh_anim::{Frame, Joint};
+use bevy_bvh_anim::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write};
 
-use crate::{
-    bvh::{bvh_asset::BvhAsset, bvh_player::get_pose},
-    ui::BuildConfig,
-};
+use crate::{bvh::bvh_player::get_pose, ui::BuildConfig};
 
 pub struct MotionDatabasePlugin;
 
@@ -105,9 +102,10 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
     let mut joint_name_data_len = 0;
 
     for id in build_config.bvh_assets.iter() {
-        let Some(BvhAsset(bvh)) = bvh_asset.get(*id) else {
+        let Some(bvh) = bvh_asset.get(*id) else {
             return;
         };
+        let bvh = bvh.get();
 
         let interval = 0.3333;
         let frame_count = bvh.frames().len();
@@ -185,7 +183,7 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
         .unwrap();
 }
 
-pub fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
+fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
     let channels = joint.data().channels();
     let x = frame[&channels[0]];
     let y = frame[&channels[1]];
@@ -193,7 +191,7 @@ pub fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
     Vec3::new(x, y, z)
 }
 
-pub fn get_joint_euler_angle(joint: &Joint, frame: &Frame) -> Vec3 {
+fn get_joint_euler_angle(joint: &Joint, frame: &Frame) -> Vec3 {
     let channels = joint.data().channels();
     let z = frame[&channels[3]];
     let y = frame[&channels[4]];
