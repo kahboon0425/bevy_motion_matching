@@ -215,6 +215,7 @@ fn right_panel(
                 mouse_in_ui.set_is_inside();
             }
 
+            ui.add_space(10.0);
             ui.horizontal(|ui| {
                 if ui.button("Config").clicked() {
                     *page = RightPanelPage::Config;
