@@ -44,11 +44,19 @@ pub fn find_closest_trajectory(
         let file_index = i - 1;
         let start_offset = motion_data.trajectory_offsets[file_index];
 
-        for traj_index in start_offset..(end_offset - 7) {
-            let trajectories = &motion_data.trajectories[traj_index..traj_index + 7];
+        let available_len = end_offset - start_offset;
+        println!("Available Length: {}", available_len);
 
-            // Center point of trajectory
-            let inv_matrix = trajectories[3].transform_matrix.inverse();
+        if available_len < 7 {
+            let mut extended_trajectories = Vec::new();
+            let available_trajectories = &motion_data.trajectories[start_offset..end_offset];
+            let mut index = 0;
+            while extended_trajectories.len() < 7 {
+                extended_trajectories.push(available_trajectories[index % available_len].clone());
+                index += 1;
+            }
+
+            let inv_matrix = extended_trajectories[3].transform_matrix.inverse();
 
             let user_local_translations = user_trajectory
                 .values
@@ -63,7 +71,7 @@ pub fn find_closest_trajectory(
                 .map(|v| v.xz())
                 .collect::<Vec<_>>();
 
-            let local_translations = trajectories
+            let local_translations = extended_trajectories
                 .iter()
                 .map(|trajectory| {
                     inv_matrix.transform_point3(
@@ -79,11 +87,49 @@ pub fn find_closest_trajectory(
             let distance =
                 calculate_trajectory_distance(&user_local_translations, &local_translations);
 
-            nearest_trajectories.push((
-                distance,
-                motion_data.trajectories[traj_index].time,
-                file_index,
-            ));
+            nearest_trajectories.push((distance, extended_trajectories[0].time, file_index));
+        } else {
+            for traj_index in start_offset..(end_offset - 7) {
+                let trajectories = &motion_data.trajectories[traj_index..traj_index + 7];
+
+                // Center point of trajectory
+                let inv_matrix = trajectories[3].transform_matrix.inverse();
+
+                let user_local_translations = user_trajectory
+                    .values
+                    .iter()
+                    .map(|user_trajectory| {
+                        user_inverse_matrix.transform_point3(Vec3::new(
+                            user_trajectory.x,
+                            0.0,
+                            user_trajectory.y,
+                        ))
+                    })
+                    .map(|v| v.xz())
+                    .collect::<Vec<_>>();
+
+                let local_translations = trajectories
+                    .iter()
+                    .map(|trajectory| {
+                        inv_matrix.transform_point3(
+                            trajectory
+                                .transform_matrix
+                                .to_scale_rotation_translation()
+                                .2,
+                        )
+                    })
+                    .map(|v| v.xz())
+                    .collect::<Vec<_>>();
+
+                let distance =
+                    calculate_trajectory_distance(&user_local_translations, &local_translations);
+
+                nearest_trajectories.push((
+                    distance,
+                    motion_data.trajectories[traj_index].time,
+                    file_index,
+                ));
+            }
         }
     }
 
@@ -112,9 +158,11 @@ pub fn get_nearest_trajectories_pose(
 
     for (_distance, time, file_index) in nearest_trajectory.iter() {
         let pose_start_index = motion_data.pose_offsets[*file_index];
-        let pose_index = ((pose_start_index as f32) + time / 0.0333) as usize;
+        println!("Pose Start Index {}", pose_start_index);
+        let pose_index = ((pose_start_index as f32) + time / 0.016667) as usize;
         println!("{pose_index}");
 
+        println!("Motion Data Poses Total Len: {}", motion_data.poses.len());
         if let Some(pose) = motion_data.poses.get(pose_index) {
             poses.push(pose);
         }

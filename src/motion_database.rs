@@ -24,7 +24,7 @@ impl Plugin for MotionDatabasePlugin {
 
 pub type Pose = Vec<f32>;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct TrajectoryTransform {
     pub transform_matrix: Mat4,
     pub time: f32,
