@@ -6,17 +6,14 @@ use bevy::{
         BoxedFuture,
     },
 };
-use bvh_anim::{Frame, Joint};
+use bevy_bvh_anim::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{self},
     io::Write,
 };
 
-use crate::{
-    bvh::{bvh_asset::BvhAsset, bvh_player::get_pose},
-    ui::BuildConfig,
-};
+use crate::{bvh::bvh_player::get_pose, ui::BuildConfig};
 
 pub struct MotionDatabasePlugin;
 
@@ -30,14 +27,14 @@ impl Plugin for MotionDatabasePlugin {
 pub type Pose = Vec<Vec<f32>>;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct TrajectoryPosition {
-    pub position: Vec3,
+pub struct TrajectoryTransform {
+    pub transform_matrix: Mat4,
     pub time: f32,
 }
 
 #[derive(Asset, TypePath, Serialize, Deserialize, Default, Debug)]
 pub struct MotionDataAsset {
-    pub trajectories: Vec<TrajectoryPosition>,
+    pub trajectories: Vec<TrajectoryTransform>,
     pub trajectory_offsets: Vec<usize>,
     pub joint_names: Vec<String>,
     pub joint_name_offsets: Vec<usize>,
@@ -107,9 +104,10 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
     let mut joint_name_data_len = 0;
 
     for id in build_config.bvh_assets.iter() {
-        let Some(BvhAsset(bvh)) = bvh_asset.get(*id) else {
+        let Some(bvh) = bvh_asset.get(*id) else {
             return;
         };
+        let bvh = bvh.get();
 
         let interval = 0.3333;
         let frame_count = bvh.frames().len();
@@ -126,11 +124,21 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
 
             if let Some(future_frame) = bvh.frames().nth(frame_index) {
                 if let Some(hip_joint) = bvh.joints().find(|j| j.data().name() == "Hips") {
-                    let position = get_joint_position(&hip_joint, future_frame);
+                    let translation = get_joint_position(&hip_joint, future_frame);
+                    let euler_angle = get_joint_euler_angle(&hip_joint, future_frame);
+                    let rotation = Quat::from_euler(
+                        EulerRot::XYZ,
+                        euler_angle.x,
+                        euler_angle.y,
+                        euler_angle.z,
+                    );
+                    let transform_matrix = Mat4::from_rotation_translation(rotation, translation);
+
                     trajectory_data_len += 1;
-                    motion_data
-                        .trajectories
-                        .push(TrajectoryPosition { position, time });
+                    motion_data.trajectories.push(TrajectoryTransform {
+                        transform_matrix,
+                        time,
+                    });
                 }
             }
             trajectory_index += 1;
@@ -188,5 +196,13 @@ pub fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
     let x = frame[&channels[0]];
     let y = frame[&channels[1]];
     let z = frame[&channels[2]];
+    Vec3::new(x, y, z)
+}
+
+fn get_joint_euler_angle(joint: &Joint, frame: &Frame) -> Vec3 {
+    let channels = joint.data().channels();
+    let z = frame[&channels[3]];
+    let y = frame[&channels[4]];
+    let x = frame[&channels[5]];
     Vec3::new(x, y, z)
 }

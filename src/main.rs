@@ -4,11 +4,12 @@ use motion_database::load_motion_data_onto;
 
 mod bvh;
 mod camera;
-mod input_trajectory;
 mod motion_database;
-mod scene_loader;
-mod ui;
+mod player;
 mod pose_matching;
+mod scene_loader;
+mod trajectory;
+mod ui;
 
 fn main() {
     App::new()
@@ -17,11 +18,11 @@ fn main() {
             bvh_library::BvhLibraryPlugin,
             scene_loader::SceneLoaderPlugin,
             bvh_player::BvhPlayerPlugin,
-            input_trajectory::InputTrajectoryPlugin,
+            // input_trajectory::InputTrajectoryPlugin,
             camera::CameraPlugin,
             ui::UiPlugin,
             motion_database::MotionDatabasePlugin,
-            pose_matching::PoseMatchingPlugin
+            pose_matching::PoseMatchingPlugin,
         ))
         .add_systems(Startup, setup)
         .add_systems(Startup, load_motion_data_onto)
