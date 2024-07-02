@@ -52,7 +52,7 @@ pub fn find_closest_trajectory(
             let available_trajectories = &motion_data.trajectories[start_offset..end_offset];
             let mut index = 0;
             while extended_trajectories.len() < 7 {
-                extended_trajectories.push(available_trajectories[index % available_len].clone());
+                extended_trajectories.push(available_trajectories[index % available_len]);
                 index += 1;
             }
 
