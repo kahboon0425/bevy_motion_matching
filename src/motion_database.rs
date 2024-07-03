@@ -20,13 +20,14 @@ pub struct MotionDatabasePlugin;
 impl Plugin for MotionDatabasePlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<MotionDataAsset>()
-            .init_asset_loader::<MotionDataAssetLoader>();
+            .init_asset_loader::<MotionDataAssetLoader>()
+            .add_systems(Startup, load_motion_data);
     }
 }
 
-pub type Pose = Vec<Vec<f32>>;
+pub type Pose = Vec<f32>;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct TrajectoryTransform {
     pub transform_matrix: Mat4,
     pub time: f32,
@@ -47,6 +48,11 @@ pub struct MotionDataAsset {
 
 // joint_name_offsets output will be like this
 // joint_name_offsets:[0,6,9,12,15,18,21,24,27,30,33,36,39,42,45,48,51,54,57,60,63,66,69]
+
+fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let handle = asset_server.load::<MotionDataAsset>("motion_data/motion_data.json");
+    commands.spawn(handle);
+}
 
 #[derive(Default)]
 struct MotionDataAssetLoader;
@@ -123,22 +129,25 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
             let (frame_index, _interp_factor) = get_pose(time, bvh);
 
             if let Some(future_frame) = bvh.frames().nth(frame_index) {
-                if let Some(hip_joint) = bvh.joints().find(|j| j.data().name() == "Hips") {
-                    let translation = get_joint_position(&hip_joint, future_frame);
-                    let euler_angle = get_joint_euler_angle(&hip_joint, future_frame);
-                    let rotation = Quat::from_euler(
-                        EulerRot::XYZ,
-                        euler_angle.x,
-                        euler_angle.y,
-                        euler_angle.z,
-                    );
-                    let transform_matrix = Mat4::from_rotation_translation(rotation, translation);
+                for joint in bvh.joints() {
+                    if joint.data().channels().len() == 6 {
+                        let translation = get_joint_position(&joint, future_frame) * 0.01;
+                        let euler_angle = get_joint_euler_angle(&joint, future_frame);
+                        let rotation = Quat::from_euler(
+                            EulerRot::XYZ,
+                            euler_angle.x,
+                            euler_angle.y,
+                            euler_angle.z,
+                        );
+                        let transform_matrix =
+                            Mat4::from_rotation_translation(rotation, translation);
 
-                    trajectory_data_len += 1;
-                    motion_data.trajectories.push(TrajectoryTransform {
-                        transform_matrix,
-                        time,
-                    });
+                        trajectory_data_len += 1;
+                        motion_data.trajectories.push(TrajectoryTransform {
+                            transform_matrix,
+                            time,
+                        });
+                    }
                 }
             }
             trajectory_index += 1;
@@ -158,11 +167,9 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
         motion_data.pose_offsets.push(motion_data_len);
         motion_data_len += bvh.num_frames();
 
-        motion_data.poses.push(
-            bvh.frames()
-                .map(|f| f.as_slice().to_owned())
-                .collect::<Vec<_>>(),
-        );
+        motion_data
+            .poses
+            .extend(bvh.frames().map(|f| f.as_slice().to_owned()));
     }
 
     motion_data.trajectory_offsets.push(trajectory_data_len);
@@ -194,9 +201,9 @@ pub fn load_motion_data_onto(mut commands: Commands, asset_server: Res<AssetServ
 pub fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
     let channels = joint.data().channels();
     let x = frame[&channels[0]];
-    let y = frame[&channels[1]];
+    // let y = frame[&channels[1]];
     let z = frame[&channels[2]];
-    Vec3::new(x, y, z)
+    Vec3::new(x, 0.0, z)
 }
 
 fn get_joint_euler_angle(joint: &Joint, frame: &Frame) -> Vec3 {

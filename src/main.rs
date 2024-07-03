@@ -5,6 +5,7 @@ use motion_database::load_motion_data_onto;
 mod bvh;
 mod camera;
 mod motion_database;
+mod nearest_trajectories_poses_retriever;
 mod player;
 mod pose_matching;
 mod scene_loader;
@@ -18,11 +19,13 @@ fn main() {
             bvh_library::BvhLibraryPlugin,
             scene_loader::SceneLoaderPlugin,
             bvh_player::BvhPlayerPlugin,
-            // input_trajectory::InputTrajectoryPlugin,
+            trajectory::InputTrajectory,
             camera::CameraPlugin,
             ui::UiPlugin,
             motion_database::MotionDatabasePlugin,
-            pose_matching::PoseMatchingPlugin,
+            player::PlayerPlugin,
+            nearest_trajectories_poses_retriever::NearestTrajectoryRetrieverPlugin,
+            // pose_matching::PoseMatchingPlugin,
         ))
         .add_systems(Startup, setup)
         .add_systems(Startup, load_motion_data_onto)
