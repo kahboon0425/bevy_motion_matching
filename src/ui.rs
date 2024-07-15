@@ -25,6 +25,7 @@ impl Plugin for UiPlugin {
         app.init_resource::<MouseInUi>()
             .init_resource::<ShowDrawArrow>()
             .init_resource::<BuildConfig>()
+            .init_resource::<PlaybackState>()
             .add_systems(PreUpdate, reset_mouse_in_ui)
             .add_systems(Update, right_panel.in_set(UiSystemSet));
     }
@@ -64,6 +65,13 @@ impl Default for ShowDrawArrow {
 #[derive(Resource, Default, Debug)]
 pub struct BuildConfig {
     pub bvh_assets: HashSet<AssetId<BvhAsset>>,
+}
+
+#[derive(Resource, Default)]
+pub struct PlaybackState {
+    pub is_playing: bool,
+    pub position: f32,
+    pub duration: f32,
 }
 
 fn reset_mouse_in_ui(mut mouse_in_ui: ResMut<MouseInUi>) {
@@ -203,6 +211,7 @@ fn right_panel(
     asset_server: Res<AssetServer>,
     bvh_assets: Res<Assets<BvhAsset>>,
     bvh_library: Res<BvhLibrary>,
+    mut playback_state: ResMut<PlaybackState>,
     mut page: Local<RightPanelPage>,
     mut mouse_in_ui: ResMut<MouseInUi>,
 ) {
@@ -237,7 +246,7 @@ fn right_panel(
                     bvh_map_config(ui, &bvh_library, &bvh_assets);
                 }
                 RightPanelPage::Builder => {
-                    ui.heading("Buidler");
+                    ui.heading("Builder");
                     ui.add_space(10.0);
                     bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);
                     ui.add_space(10.0);
@@ -247,6 +256,23 @@ fn right_panel(
                     ui.heading("Play Mode");
                     ui.add_space(10.0);
                     arrow_checkbox(ui, &mut show_draw_arrow);
+
+                    ui.add_space(10.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Play").clicked() {
+                            playback_state.is_playing = true;
+                        }
+                        if ui.button("Pause").clicked() {
+                            playback_state.is_playing = false;
+                        }
+                    });
+
+                    ui.add_space(10.0);
+                    ui.label("Playback Position");
+                    ui.add_space(5.0);
+                    let playback_position = playback_state.position;
+                    let playback_duration = playback_state.duration;
+                    ui.add(egui::Slider::new(&mut playback_state.position, 0.0..=playback_duration).text("Position"));
                 }
             })
         });
