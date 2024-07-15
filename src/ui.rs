@@ -271,7 +271,7 @@ fn right_panel(
                     ui.label("Playback Position");
                     ui.add_space(5.0);
                     let playback_position = playback_state.position;
-                    let playback_duration = playback_state.duration;
+                    let playback_duration = 1.0;
                     ui.add(egui::Slider::new(&mut playback_state.position, 0.0..=playback_duration).text("Position"));
                 }
             })
