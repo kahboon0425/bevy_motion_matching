@@ -71,6 +71,7 @@ pub struct BuildConfig {
 pub struct PlaybackState {
     pub is_playing: bool,
     pub position: f32,
+    #[allow(dead_code)]
     pub duration: f32,
 }
 
@@ -262,7 +263,7 @@ fn right_panel(
                         egui::Slider::new(&mut playback_state.position, 0.0..=playback_duration)
                             .text("Position"),
                     );
-                    bvh_map_config(ui, &bvh_library, &bvh_assets);                    
+                    bvh_map_config(ui, &bvh_library, &bvh_assets);
                 }
                 RightPanelPage::Builder => {
                     ui.heading("Builder");
