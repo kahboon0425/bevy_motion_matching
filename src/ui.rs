@@ -243,20 +243,6 @@ fn right_panel(
                     ui.add_space(10.0);
                     bvh_map_label(ui, &bvh_library);
                     bvh_selection_menu(ui, &asset_server, &bvh_assets, &mut selected_bvh_asset);
-                    bvh_map_config(ui, &bvh_library, &bvh_assets);
-                }
-                RightPanelPage::Builder => {
-                    ui.heading("Builder");
-                    ui.add_space(10.0);
-                    bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);
-                    ui.add_space(10.0);
-                    build_button(ui, &bvh_assets, &mut build_configs);
-                }
-                RightPanelPage::PlayMode => {
-                    ui.heading("Play Mode");
-                    ui.add_space(10.0);
-                    arrow_checkbox(ui, &mut show_draw_arrow);
-
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         if ui.button("Play").clicked() {
@@ -270,9 +256,25 @@ fn right_panel(
                     ui.add_space(10.0);
                     ui.label("Playback Position");
                     ui.add_space(5.0);
-                    let playback_position = playback_state.position;
+                    let _playback_position = playback_state.position;
                     let playback_duration = 1.0;
-                    ui.add(egui::Slider::new(&mut playback_state.position, 0.0..=playback_duration).text("Position"));
+                    ui.add(
+                        egui::Slider::new(&mut playback_state.position, 0.0..=playback_duration)
+                            .text("Position"),
+                    );
+                    bvh_map_config(ui, &bvh_library, &bvh_assets);                    
+                }
+                RightPanelPage::Builder => {
+                    ui.heading("Builder");
+                    ui.add_space(10.0);
+                    bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);
+                    ui.add_space(10.0);
+                    build_button(ui, &bvh_assets, &mut build_configs);
+                }
+                RightPanelPage::PlayMode => {
+                    ui.heading("Play Mode");
+                    ui.add_space(10.0);
+                    arrow_checkbox(ui, &mut show_draw_arrow);
                 }
             })
         });
