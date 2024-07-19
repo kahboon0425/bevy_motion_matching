@@ -1,7 +1,9 @@
 use std::cmp::min;
 
-use crate::motion_database::{MotionDataAsset, Pose};
 use bevy::prelude::*;
+use bevy_bvh_anim::prelude::*;
+
+use crate::motion_database::{MotionDataAsset, Pose};
 
 pub fn match_pose(
     motion_data_assets: &Res<Assets<MotionDataAsset>>,
@@ -33,5 +35,5 @@ fn get_distance(p1: &Pose, p2: &Pose) -> f32 {
         distance.push((joint1 - joint2).powf(2.0));
     }
     let total_distance: f32 = distance.iter().sum();
-    return total_distance.sqrt();
+    total_distance.sqrt()
 }

@@ -70,21 +70,11 @@ impl AssetLoader for MotionDataAssetLoader {
     ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
         Box::pin(async move {
             let mut bytes = Vec::new();
-
             reader.read_to_end(&mut bytes).await?;
 
-            let motion_data: MotionDataAsset = serde_json::from_slice(&bytes)?;
+            let motion_data = serde_json::from_slice::<MotionDataAsset>(&bytes)?;
 
-            let motion_data_asset = MotionDataAsset {
-                trajectories: motion_data.trajectories,
-                trajectory_offsets: motion_data.trajectory_offsets,
-                poses: motion_data.poses,
-                pose_offsets: motion_data.pose_offsets,
-                joint_names: motion_data.joint_names,
-                joint_name_offsets: motion_data.joint_name_offsets,
-            };
-
-            Ok(motion_data_asset)
+            Ok(motion_data)
         })
     }
 
