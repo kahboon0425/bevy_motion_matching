@@ -1,11 +1,13 @@
 use bevy::prelude::*;
 use bvh::*;
+use motion_database::load_motion_data_onto;
 
 mod bvh;
 mod camera;
 mod motion_database;
 mod nearest_trajectories_poses_retriever;
 mod player;
+mod pose_matching;
 mod scene_loader;
 mod trajectory;
 mod ui;
@@ -23,8 +25,10 @@ fn main() {
             motion_database::MotionDatabasePlugin,
             player::PlayerPlugin,
             nearest_trajectories_poses_retriever::NearestTrajectoryRetrieverPlugin,
+            // pose_matching::PoseMatchingPlugin,
         ))
         .add_systems(Startup, setup)
+        .add_systems(Startup, load_motion_data_onto)
         .run();
 }
 

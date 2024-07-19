@@ -8,7 +8,10 @@ use bevy::{
 };
 use bevy_bvh_anim::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Write};
+use std::{
+    fs::{self},
+    io::Write,
+};
 
 use crate::{bvh::bvh_player::get_pose, ui::BuildConfig};
 
@@ -67,21 +70,11 @@ impl AssetLoader for MotionDataAssetLoader {
     ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
         Box::pin(async move {
             let mut bytes = Vec::new();
-
             reader.read_to_end(&mut bytes).await?;
 
-            let motion_data: MotionDataAsset = serde_json::from_slice(&bytes)?;
+            let motion_data = serde_json::from_slice::<MotionDataAsset>(&bytes)?;
 
-            let motion_data_asset = MotionDataAsset {
-                trajectories: motion_data.trajectories,
-                trajectory_offsets: motion_data.trajectory_offsets,
-                poses: motion_data.poses,
-                pose_offsets: motion_data.pose_offsets,
-                joint_names: motion_data.joint_names,
-                joint_name_offsets: motion_data.joint_name_offsets,
-            };
-
-            Ok(motion_data_asset)
+            Ok(motion_data)
         })
     }
 
@@ -101,7 +94,6 @@ pub enum MotionDataLoaderError {
 
 pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut BuildConfig) {
     let mut motion_data = MotionDataAsset::default();
-
     let mut trajectory_data_len = 0;
     let mut motion_data_len = 0;
     let mut joint_name_offsets = Vec::new();
@@ -181,7 +173,7 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
         .write(true)
         .create(true)
         .truncate(true)
-        // TODO: specify a file name and possibly a  location
+        // TODO: specify a file name and possibly a location
         .open("assets/motion_data/motion_data.json")
         .unwrap();
 
@@ -190,7 +182,13 @@ pub fn extract_motion_data(bvh_asset: &Assets<BvhAsset>, build_config: &mut Buil
         .unwrap();
 }
 
-fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
+pub fn load_motion_data_onto(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let file_path = "motion_data/motion_data.json";
+    let motion_data_handle = asset_server.load::<MotionDataAsset>(file_path);
+    commands.spawn(motion_data_handle);
+}
+
+pub fn get_joint_position(joint: &Joint, frame: &Frame) -> Vec3 {
     let channels = joint.data().channels();
     let x = frame[&channels[0]];
     // let y = frame[&channels[1]];

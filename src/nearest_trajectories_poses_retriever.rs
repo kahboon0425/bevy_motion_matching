@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use crate::{
     motion_database::{MotionDataAsset, Pose},
     player::PlayerMarker,
+    pose_matching::match_pose,
     trajectory::Trajectory,
 };
 
@@ -26,6 +27,7 @@ pub fn match_trajectory(
                     find_closest_trajectory(motion_data, trajectory, transform);
                 println!("10 nearest trajectory: {:?}", nearest_trajectory);
                 let _poses = get_nearest_trajectories_pose(motion_data, nearest_trajectory);
+                match_pose(&motion_data_assets, &query_motion_data, _poses);
             }
         }
     }
