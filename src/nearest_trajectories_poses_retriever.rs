@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    motion_database::{MotionDataAsset, Pose}, player::PlayerMarker, pose_matching::match_pose, trajectory::Trajectory
+    motion_database::{MotionDataAsset, Pose},
+    player::PlayerMarker,
+    pose_matching::match_pose,
+    trajectory::Trajectory,
 };
 
 pub struct NearestTrajectoryRetrieverPlugin;

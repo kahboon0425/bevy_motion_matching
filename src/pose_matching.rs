@@ -1,7 +1,6 @@
 use std::cmp::min;
 
 use bevy::prelude::*;
-use bevy_bvh_anim::prelude::*;
 
 use crate::motion_database::{MotionDataAsset, Pose};
 
