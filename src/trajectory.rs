@@ -12,10 +12,10 @@ pub struct InputTrajectory;
 impl Plugin for InputTrajectory {
     fn build(&self, app: &mut App) {
         app.insert_resource(TrajectoryConfig {
-            time_length: 1.0,
+            time_length: 0.5,
             count: 3,
         })
-        .insert_resource(TrajectoryHistoryConfig { interval: 0.033 })
+        .insert_resource(TrajectoryHistoryConfig { interval: 0.01667 })
         .add_systems(
             Update,
             ((

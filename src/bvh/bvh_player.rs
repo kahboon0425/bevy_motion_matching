@@ -25,19 +25,9 @@ impl Plugin for BvhPlayerPlugin {
 pub struct OriginTransform(Transform);
 
 impl OriginTransform {
-    // pub fn get(&self) -> Transform {
-    //     self.0
-    // }
-}
-
-/// Original global transform when it was first loaded.
-#[derive(Component, Clone, Copy, Reflect)]
-pub struct OriginGlobalTransform(GlobalTransform);
-
-impl OriginGlobalTransform {
-    // pub fn get(&self) -> GlobalTransform {
-    //     self.0
-    // }
+    pub fn get(&self) -> Transform {
+        self.0
+    }
 }
 
 #[allow(dead_code)]
@@ -91,7 +81,7 @@ fn generate_bone_map(
     q_character: Query<(Entity, &Handle<Scene>), (With<MainScene>, Without<BoneMap>)>,
     q_names: Query<&Name>,
     q_children: Query<&Children>,
-    q_transforms: Query<(&Transform, &GlobalTransform)>,
+    q_transforms: Query<&Transform>,
     server: Res<AssetServer>,
     mut asset_loaded: Local<bool>,
 ) {
@@ -107,11 +97,10 @@ fn generate_bone_map(
         let mut bone_map = BoneMap::default();
 
         for bone_entity in q_children.iter_descendants(entity) {
-            if let Ok((&transform, &global_transform)) = q_transforms.get(bone_entity) {
+            if let Ok(&transform) = q_transforms.get(bone_entity) {
                 commands
                     .entity(bone_entity)
-                    .insert(OriginTransform(transform))
-                    .insert(OriginGlobalTransform(global_transform));
+                    .insert(OriginTransform(transform));
             }
 
             if let Ok(name) = q_names.get(bone_entity) {
@@ -128,21 +117,18 @@ fn generate_bone_map(
             parent: Entity,
             q_children: &Query<&Children>,
             q_names: &Query<&Name>,
-            q_transforms: &Query<(&Transform, &GlobalTransform)>,
+            q_transforms: &Query<&Transform>,
         ) {
             if let Ok(children) = q_children.get(parent) {
                 for &child in children.iter() {
                     for _ in 0..indent {
                         print!("| ");
                     }
-                    if let (Ok(name), Ok((transform, _global_transform))) =
-                        (q_names.get(child), q_transforms.get(child))
+                    if let (Ok(name), Ok(transform)) = (q_names.get(child), q_transforms.get(child))
                     {
-                        // let (_, rotation, _) = _global_transform.to_scale_rotation_translation();
-                        // let rotation = quat_to_eulerdeg(rotation);
                         let rotation = quat_to_eulerdeg(transform.rotation);
-                        print!("{}", &name);
-                        println!("({:.2}, {:.2}, {:.2}", rotation.x, rotation.y, rotation.z,);
+                        print!("{}: ", &name);
+                        println!("({:.2}, {:.2}, {:.2})", rotation.x, rotation.y, rotation.z,);
                     }
                     recursive_print(indent + 1, child, q_children, q_names, q_transforms);
                 }

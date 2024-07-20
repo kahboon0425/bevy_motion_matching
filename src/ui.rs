@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use bevy::{prelude::*, utils::HashSet};
 use bevy_bvh_anim::prelude::*;
 use bevy_egui::{
@@ -11,7 +13,9 @@ use bevy_egui::EguiPlugin;
 #[cfg(feature = "debug")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-use crate::{bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset, motion_database};
+use crate::{
+    bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset, motion_data_asset::MotionDataAsset,
+};
 
 pub struct UiPlugin;
 
@@ -120,13 +124,12 @@ fn bvh_map_config(ui: &mut egui::Ui, bvh_library: &Res<BvhLibrary>, bvh_asset: &
 
         let bvh = asset.get();
 
-        // egui::Grid::new("bvh_map").show(, )
         scrollbox(ui, 300.0, |ui| {
             for joint in bvh.joints() {
                 let joint_data = joint.data();
                 ui.horizontal(|ui| {
                     ui.label(joint_data.name()[6..].to_str().unwrap());
-                    // ui.checkbox(, )
+                    // TODO: Show their position relative to root
                 });
             }
         });
@@ -137,7 +140,7 @@ fn bvh_map_config(ui: &mut egui::Ui, bvh_library: &Res<BvhLibrary>, bvh_asset: &
     });
 }
 
-fn bvh_buider_menu(
+fn motion_data_asset_buider_menu(
     ui: &mut egui::Ui,
     asset_server: &AssetServer,
     bvh_assets: &Assets<BvhAsset>,
@@ -180,9 +183,48 @@ fn scrollbox<R>(ui: &mut egui::Ui, height: f32, add_contents: impl FnOnce(&mut e
         });
 }
 
-fn build_button(ui: &mut egui::Ui, bvh_asset: &Assets<BvhAsset>, build_config: &mut BuildConfig) {
+fn build_motion_data_asset_button(
+    ui: &mut egui::Ui,
+    build_config: &BuildConfig,
+    bvh_library: &BvhLibrary,
+    bvh_assets: &Assets<BvhAsset>,
+) {
     if ui.button("Build").clicked() {
-        motion_database::extract_motion_data(bvh_asset, build_config);
+        // TODO: Add this into BuildConfig?
+        const TRAJECTORY_INTERVAL: f32 = 0.1667;
+
+        let Some(bvh_map) = bvh_library
+            .get_map()
+            .and_then(|handle| bvh_assets.get(handle))
+            .map(|asset| asset.get())
+        else {
+            return;
+        };
+
+        let mut motion_data_asset = MotionDataAsset::new(bvh_map, TRAJECTORY_INTERVAL);
+
+        for id in build_config.bvh_assets.iter() {
+            let Some(bvh) = bvh_assets.get(*id).map(|asset| asset.get()) else {
+                return;
+            };
+
+            motion_data_asset.append_frames(bvh);
+        }
+
+        // TODO(perf): Serialize into binary instead
+        let convert_to_json = serde_json::to_string(&motion_data_asset).unwrap();
+
+        let mut motion_library = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            // TODO: specify a file name and possibly a location
+            .open("assets/motion_data/motion_data.json")
+            .unwrap();
+
+        motion_library
+            .write_all(convert_to_json.as_bytes())
+            .unwrap();
     }
 }
 
@@ -208,7 +250,7 @@ fn right_panel(
 ) {
     let ctx = contexts.ctx_mut();
 
-    egui::SidePanel::right("right_panel")
+    egui::SidePanel::left("left_panel")
         .resizable(true)
         .show(ctx, |ui| {
             if ui.rect_contains_pointer(ui.min_rect()) {
@@ -239,9 +281,14 @@ fn right_panel(
                 RightPanelPage::Builder => {
                     ui.heading("Buidler");
                     ui.add_space(10.0);
-                    bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);
+                    motion_data_asset_buider_menu(
+                        ui,
+                        &asset_server,
+                        &bvh_assets,
+                        &mut build_configs,
+                    );
                     ui.add_space(10.0);
-                    build_button(ui, &bvh_assets, &mut build_configs);
+                    build_motion_data_asset_button(ui, &build_configs, &bvh_library, &bvh_assets);
                 }
                 RightPanelPage::PlayMode => {
                     ui.heading("Play Mode");
