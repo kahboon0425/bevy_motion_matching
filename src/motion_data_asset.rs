@@ -18,13 +18,14 @@ impl Plugin for MotionDataAssetPlugin {
     }
 }
 
+/// A memory and storage efficient storage of [`JointInfo`] and multiple motion data ([`Trajectories`] & [`Poses`]).
 #[derive(Asset, TypePath, Serialize, Deserialize, Debug)]
 pub struct MotionDataAsset {
     /// Joint data.
     pub joints: Vec<JointInfo>,
-    /// Trajectory data.
+    /// Trajectory data for trajectory matching.
     pub trajectories: Trajectories,
-    /// Pose data.
+    /// Pose data for pose matching and animation sampling.
     pub poses: Poses,
 }
 
@@ -62,6 +63,7 @@ fn frame_to_pose(frame: &Frame) -> Pose {
     frame.as_slice().to_vec()
 }
 
+/// Stores chunks of poses.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Poses {
     /// Pose data that can be sampled using [`SJoint`].
@@ -96,6 +98,7 @@ impl Poses {
     }
 }
 
+/// Stores chunks of trajectory matrices.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Trajectories {
     /// Trajectory matrices.

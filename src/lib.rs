@@ -4,13 +4,13 @@ use bvh::*;
 pub mod bvh;
 pub mod camera;
 pub mod motion_data_asset;
-// pub mod motion_database;
-pub mod nearest_trajectories_poses_retriever;
+pub mod nearest_trajectories;
 pub mod player;
 pub mod pose_matching;
 pub mod scene_loader;
 pub mod trajectory;
 pub mod ui;
+// pub mod motion_database;
 
 pub struct MotionMatchingAppPlugin;
 
@@ -26,7 +26,7 @@ impl Plugin for MotionMatchingAppPlugin {
             camera::CameraPlugin,
             ui::UiPlugin,
             player::PlayerPlugin,
-            nearest_trajectories_poses_retriever::NearestTrajectoryRetrieverPlugin,
+            nearest_trajectories::NearestTrajectoryRetrieverPlugin,
             // motion_database::MotionDatabasePlugin,
             // pose_matching::PoseMatchingPlugin,
         ));
