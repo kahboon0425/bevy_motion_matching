@@ -4,6 +4,28 @@ use bevy_egui::egui;
 
 use crate::{bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset, scene_loader::MainScene};
 
+#[derive(Resource, Default)]
+pub struct PlaybackState {
+    pub is_playing: bool,
+    pub current_time: f32,
+    pub duration: f32,
+}
+
+#[derive(Resource)]
+pub struct DrawBvhTrail(bool);
+
+impl DrawBvhTrail {
+    pub fn get(&self) -> bool {
+        self.0
+    }
+}
+
+impl Default for DrawBvhTrail {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
 #[derive(Resource)]
 pub struct DrawTrajectory(bool);
 
@@ -19,21 +41,15 @@ impl Default for DrawTrajectory {
     }
 }
 
-#[derive(Resource, Default)]
-pub struct PlaybackState {
-    pub is_playing: bool,
-    pub current_time: f32,
-    pub duration: f32,
-}
-
 pub fn config_panel(ui: &mut egui::Ui, world: &mut World) {
     ui.heading("Configurations");
     ui.add_space(10.0);
     bvh_map_label(ui, world);
     bvh_playback(ui, world);
     ui.add_space(10.0);
-    draw_trajectory_checkbox(ui, world);
     show_character_checkbox(ui, world);
+    draw_bvh_trail_checkbox(ui, world);
+    draw_trajectory_checkbox(ui, world);
 }
 
 fn bvh_playback(ui: &mut egui::Ui, world: &mut World) {
@@ -101,11 +117,6 @@ fn bvh_map_label(ui: &mut egui::Ui, world: &mut World) {
     });
 }
 
-fn draw_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
-    let mut show_draw_arrow = world.resource_mut::<DrawTrajectory>();
-    ui.checkbox(&mut show_draw_arrow.0, "Show Arrows");
-}
-
 fn show_character_checkbox(ui: &mut egui::Ui, world: &mut World) {
     let mut q_main_scene = world.query_filtered::<&mut Visibility, With<MainScene>>();
     let Ok(mut main_scene_vis) = q_main_scene.get_single_mut(world) else {
@@ -118,4 +129,14 @@ fn show_character_checkbox(ui: &mut egui::Ui, world: &mut World) {
         true => *main_scene_vis = Visibility::Inherited,
         false => *main_scene_vis = Visibility::Hidden,
     }
+}
+
+fn draw_bvh_trail_checkbox(ui: &mut egui::Ui, world: &mut World) {
+    let mut show_draw_arrow = world.resource_mut::<DrawBvhTrail>();
+    ui.checkbox(&mut show_draw_arrow.0, "Show Bvh Trail");
+}
+
+fn draw_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
+    let mut show_draw_arrow = world.resource_mut::<DrawTrajectory>();
+    ui.checkbox(&mut show_draw_arrow.0, "Show Trajectory Arrows");
 }

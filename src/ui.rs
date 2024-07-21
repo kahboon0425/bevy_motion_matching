@@ -24,8 +24,9 @@ impl Plugin for UiPlugin {
         app.add_plugins(EguiPlugin);
 
         app.init_resource::<MouseInUi>()
-            .init_resource::<config::DrawTrajectory>()
             .init_resource::<config::PlaybackState>()
+            .init_resource::<config::DrawBvhTrail>()
+            .init_resource::<config::DrawTrajectory>()
             .init_resource::<builder::BuildConfig>()
             .add_systems(PreUpdate, reset_mouse_in_ui)
             .add_systems(Update, right_panel.in_set(UiSystemSet));

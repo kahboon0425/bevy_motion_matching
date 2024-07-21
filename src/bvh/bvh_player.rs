@@ -6,7 +6,10 @@ use bevy::{
 };
 use bevy_bvh_anim::prelude::*;
 
-use crate::{scene_loader::MainScene, ui::config::PlaybackState};
+use crate::{
+    scene_loader::MainScene,
+    ui::config::{DrawBvhTrail, PlaybackState},
+};
 
 pub struct BvhPlayerPlugin;
 
@@ -347,7 +350,13 @@ fn draw_armature(
     }
 }
 
-fn draw_armature_trail() {}
+fn draw_bvh_trail(draw: Res<DrawBvhTrail>) {
+    if draw.get() == false {
+        return;
+    }
+
+    todo!()
+}
 
 pub fn quat_to_eulerdeg(rotation: Quat) -> Vec3 {
     let euler = rotation.to_euler(EulerRot::XYZ);
