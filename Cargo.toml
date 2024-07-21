@@ -8,6 +8,15 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/nixon-voxell/bevy_motion_matching"
 
+[workspace.dependencies]
+bevy = "0.14"
+bevy_gltf = "0.14"
+bevy_egui = "0.28"
+serde_json = "1.0"
+serde = "1.0"
+bvh_anim = "0.4"
+thiserror = "1.0"
+
 [workspace.lints.clippy]
 redundant_type_annotations = "warn"
 bool_comparison = "allow"
@@ -26,12 +35,12 @@ repository.workspace = true
 
 [dependencies]
 bevy_bvh_anim = { path = "crates/bevy_bvh_anim" }
-bevy = "0.13"
-bevy_gltf = "0.13"
-bevy_third_person_camera = "0.1.10"
-bevy_egui = "0.27"
-serde_json = "1.0"
-serde = "1.0"
+bevy = { workspace = true }
+bevy_gltf = { workspace = true }
+bevy_egui = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 
 # debug editor (run with debug feature to enable it)
 bevy-inspector-egui = { version = "0.24", optional = true }
@@ -42,3 +51,11 @@ workspace = true
 [features]
 default = []
 debug = ["dep:bevy-inspector-egui"]
+
+# Enable a small amount of optimization in debug mode.
+[profile.dev]
+opt-level = 1
+
+# Enable a large amount of optimization in debug mode for dependencies.
+[profile.dev.package."*"]
+opt-level = 3

@@ -5,7 +5,6 @@ use bevy::{
         texture::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor},
     },
 };
-use bevy_third_person_camera::ThirdPersonCameraTarget;
 
 /// Load glb file and setup the scene.
 pub struct SceneLoaderPlugin;
@@ -25,8 +24,7 @@ fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     info!("Loaded scene: {:?}", scene);
     commands
         .spawn(SceneBundle { scene, ..default() })
-        .insert(MainScene)
-        .insert(ThirdPersonCameraTarget);
+        .insert(MainScene);
 }
 
 fn spawn_light(mut commands: Commands) {

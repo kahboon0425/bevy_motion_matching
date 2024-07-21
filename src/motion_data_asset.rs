@@ -1,13 +1,10 @@
 use bevy::{
     asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
-    utils::{
-        thiserror::{self, Error},
-        BoxedFuture,
-    },
 };
 use bevy_bvh_anim::{bvh_anim::ChannelType, prelude::*};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 pub struct MotionDataAssetPlugin;
 
@@ -66,7 +63,7 @@ fn frame_to_pose(frame: &Frame) -> Pose {
 /// Stores chunks of poses.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Poses {
-    /// Pose data that can be sampled using [`SJoint`].
+    /// Pose data that can be sampled using [`JointInfo`].
     pub poses: Vec<Pose>,
     /// Offset index of [`poses`][Self::poses] chunks.
     ///
@@ -341,20 +338,18 @@ impl AssetLoader for MotionDataAssetLoader {
     type Settings = ();
     type Error = MotionDataLoaderError;
 
-    fn load<'a>(
+    async fn load<'a>(
         &'a self,
-        reader: &'a mut Reader,
+        reader: &'a mut Reader<'_>,
         _settings: &'a (),
-        _load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
-        Box::pin(async move {
-            let mut bytes = Vec::new();
-            reader.read_to_end(&mut bytes).await?;
+        _load_context: &'a mut LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await?;
 
-            let motion_data = serde_json::from_slice::<MotionDataAsset>(&bytes)?;
+        let motion_data = serde_json::from_slice::<MotionDataAsset>(&bytes)?;
 
-            Ok(motion_data)
-        })
+        Ok(motion_data)
     }
 
     fn extensions(&self) -> &[&str] {

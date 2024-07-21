@@ -1,12 +1,9 @@
 use bevy::{
     asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
-    utils::{
-        thiserror::{self, Error},
-        BoxedFuture,
-    },
 };
 use bvh_anim::Bvh;
+use thiserror::Error;
 
 pub struct BvhAssetPlugin;
 
@@ -34,18 +31,16 @@ impl AssetLoader for BvhAssetLoader {
     type Settings = ();
     type Error = BvhAssetLoaderError;
 
-    fn load<'a>(
+    async fn load<'a>(
         &'a self,
-        reader: &'a mut Reader,
+        reader: &'a mut Reader<'_>,
         _settings: &'a (),
-        _load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
-        Box::pin(async move {
-            let mut bytes = Vec::new();
-            reader.read_to_end(&mut bytes).await?;
-            let bvh = bvh_anim::from_bytes(bytes)?;
-            Ok(BvhAsset(bvh))
-        })
+        _load_context: &'a mut LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await?;
+        let bvh = bvh_anim::from_bytes(bytes)?;
+        Ok(BvhAsset(bvh))
     }
 
     fn extensions(&self) -> &[&str] {

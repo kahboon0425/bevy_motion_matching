@@ -6,8 +6,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-bevy = "0.13"
-bvh_anim = "0.4"
+bevy = { workspace = true }
+bvh_anim = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true

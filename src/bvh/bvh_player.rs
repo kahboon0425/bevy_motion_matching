@@ -1,11 +1,12 @@
 use bevy::{
     asset::{DependencyLoadState, LoadState, RecursiveDependencyLoadState},
+    color::palettes::css,
     prelude::*,
     utils::hashbrown::HashMap,
 };
 use bevy_bvh_anim::prelude::*;
 
-use crate::{scene_loader::MainScene, ui::PlaybackState};
+use crate::{scene_loader::MainScene, ui::config::PlaybackState};
 
 pub struct BvhPlayerPlugin;
 
@@ -268,20 +269,20 @@ fn draw_armature(
     q_transforms: Query<&GlobalTransform>,
     mut gizmos: Gizmos,
 ) {
-    const RAINBOW: [Color; 7] = [
-        Color::RED,
-        Color::ORANGE,
-        Color::YELLOW,
-        Color::GREEN,
-        Color::BLUE,
-        Color::INDIGO,
-        Color::PURPLE,
+    const RAINBOW: [Srgba; 7] = [
+        css::RED,
+        css::ORANGE,
+        css::YELLOW,
+        css::GREEN,
+        css::BLUE,
+        css::INDIGO,
+        css::PURPLE,
     ];
     const SPHERE_SIZE: f32 = 0.03;
     const AXIS_LENGTH: f32 = 0.1;
 
     fn recursive_draw(
-        mut index: usize,
+        mut color_index: usize,
         parent: Entity,
         parent_transform: &GlobalTransform,
         q_children: &Query<&Children>,
@@ -292,24 +293,25 @@ fn draw_armature(
             parent_transform.translation(),
             Quat::IDENTITY,
             SPHERE_SIZE,
-            RAINBOW[index % RAINBOW.len()],
+            RAINBOW[color_index % RAINBOW.len()].with_alpha(0.4),
         );
         gizmos.line(
             parent_transform.translation(),
             parent_transform.translation() + parent_transform.right() * AXIS_LENGTH,
-            Color::RED,
+            css::RED,
         );
         gizmos.line(
             parent_transform.translation(),
             parent_transform.translation() + parent_transform.up() * AXIS_LENGTH,
-            Color::GREEN,
+            css::GREEN,
         );
         gizmos.line(
             parent_transform.translation(),
             parent_transform.translation() + parent_transform.forward() * AXIS_LENGTH,
-            Color::BLUE,
+            css::BLUE,
         );
 
+        color_index += 1;
         if let Ok(children) = q_children.get(parent) {
             for &child in children.iter() {
                 if let Ok(transform) = q_transforms.get(child) {
@@ -317,11 +319,17 @@ fn draw_armature(
                     gizmos.line(
                         parent_transform.translation(),
                         child_translation,
-                        Color::CYAN,
+                        css::LIGHT_CYAN,
                     );
-                    index += 1;
 
-                    recursive_draw(index, child, transform, q_children, q_transforms, gizmos);
+                    recursive_draw(
+                        color_index,
+                        child,
+                        transform,
+                        q_children,
+                        q_transforms,
+                        gizmos,
+                    );
                 }
             }
         }
@@ -338,6 +346,8 @@ fn draw_armature(
         );
     }
 }
+
+fn draw_armature_trail() {}
 
 pub fn quat_to_eulerdeg(rotation: Quat) -> Vec3 {
     let euler = rotation.to_euler(EulerRot::XYZ);

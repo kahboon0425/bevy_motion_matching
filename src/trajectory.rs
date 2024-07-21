@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 
-use bevy::prelude::*;
+use bevy::{color::palettes::css, prelude::*};
 
 use crate::{
     player::{MovementDirection, PlayerMarker, Speed},
-    ui::ShowDrawArrow,
+    ui::config::DrawTrajectory,
 };
 
 pub struct InputTrajectory;
@@ -163,7 +163,7 @@ fn compute_trajectory(
 fn draw_trajectory(
     q_trajectory: Query<&Trajectory>,
     mut gizmos: Gizmos,
-    show_arrow: Res<ShowDrawArrow>,
+    show_arrow: Res<DrawTrajectory>,
 ) {
     if show_arrow.get() {
         for trajectory in q_trajectory.iter() {
@@ -179,7 +179,7 @@ fn draw_trajectory(
 
                     let arrow_start = Vec3::new(start.x, 0.0, start.y);
                     let arrow_end = Vec3::new(end.x, 0.0, end.y);
-                    gizmos.arrow(arrow_start, arrow_end, Color::RED);
+                    gizmos.arrow(arrow_start, arrow_end, css::RED);
                     start = end;
                 }
             }
