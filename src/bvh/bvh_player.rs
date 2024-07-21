@@ -20,6 +20,7 @@ impl Plugin for BvhPlayerPlugin {
             .add_systems(Update, generate_bone_map)
             .add_systems(Update, draw_armature)
             .add_systems(Update, bvh_player)
+            .add_systems(Update, draw_bvh_trail)
             .register_type::<OriginTransform>();
     }
 }
@@ -164,11 +165,11 @@ fn bvh_player(
     mut event_reader: EventReader<TargetTimeEvent>,
     time: Res<Time>,
     selected_bvh_asset: Res<SelectedBvhAsset>,
-    bvh_asset: Res<Assets<BvhAsset>>,
+    bvh_assets: Res<Assets<BvhAsset>>,
     mut playback_state: ResMut<PlaybackState>,
     mut local_time: Local<f32>,
 ) {
-    let Some(bvh) = bvh_asset.get(selected_bvh_asset.0) else {
+    let Some(bvh) = bvh_assets.get(selected_bvh_asset.0) else {
         return;
     };
     let bvh = bvh.get();
@@ -350,12 +351,42 @@ fn draw_armature(
     }
 }
 
-fn draw_bvh_trail(draw: Res<DrawBvhTrail>) {
+fn draw_bvh_trail(
+    draw: Res<DrawBvhTrail>,
+    selected_bvh_asset: Res<SelectedBvhAsset>,
+    bvh_assets: Res<Assets<BvhAsset>>,
+    mut gizmos: Gizmos,
+) {
     if draw.get() == false {
         return;
     }
 
-    todo!()
+    let Some(bvh) = bvh_assets
+        .get(selected_bvh_asset.0)
+        .map(|asset| asset.get())
+    else {
+        return;
+    };
+
+    let mut joint_matrices = JointMatrices::new(
+        &bvh.joints()
+            .map(|joint| joint.data().clone())
+            .collect::<Vec<_>>(),
+    );
+
+    for frame in bvh.frames() {
+        joint_matrices.apply_frame(frame.as_slice());
+
+        for matrix in joint_matrices.world_matrices() {
+            let (_, rotation, translation) = matrix.to_scale_rotation_translation();
+            gizmos.sphere(
+                translation * 0.01,
+                rotation,
+                0.02,
+                css::YELLOW.with_alpha(0.4),
+            );
+        }
+    }
 }
 
 pub fn quat_to_eulerdeg(rotation: Quat) -> Vec3 {

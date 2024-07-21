@@ -84,7 +84,6 @@ impl<J: JointTrait> JointMatrices<J> {
                 }
                 None => {
                     self.world_matrices[i] = local_matrix;
-                    println!("rotation: {}, translation: {}", rotation, translation);
                 }
             }
         }
