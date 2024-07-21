@@ -5,7 +5,7 @@ use bevy::{
 };
 use bevy_bvh_anim::prelude::*;
 
-use crate::scene_loader::MainScene;
+use crate::{scene_loader::MainScene, ui::PlaybackState};
 
 pub struct BvhPlayerPlugin;
 
@@ -153,6 +153,7 @@ fn generate_bone_map(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn bvh_player(
     mut q_transforms: Query<&mut Transform, Without<MainScene>>,
     mut q_scene: Query<(&mut Transform, &BoneMap), With<MainScene>>,
@@ -160,6 +161,7 @@ fn bvh_player(
     time: Res<Time>,
     selected_bvh_asset: Res<SelectedBvhAsset>,
     bvh_asset: Res<Assets<BvhAsset>>,
+    mut playback_state: ResMut<PlaybackState>,
     mut local_time: Local<f32>,
 ) {
     let Some(bvh) = bvh_asset.get(selected_bvh_asset.0) else {
@@ -236,7 +238,13 @@ fn bvh_player(
         }
     }
 
-    *local_time += time.delta_seconds();
+    // Should not do anything is current_time has not been mutated anywhere else,
+    // otherwise, local_time will be set to the mutated value.
+    *local_time = playback_state.current_time;
+    if playback_state.is_playing {
+        *local_time += time.delta_seconds();
+        playback_state.current_time = *local_time % playback_state.duration
+    }
 }
 
 pub fn get_pose(local_time: f32, bvh_data: &Bvh) -> (usize, f32) {
