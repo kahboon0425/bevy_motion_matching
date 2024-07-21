@@ -25,6 +25,7 @@ impl Plugin for UiPlugin {
         app.init_resource::<MouseInUi>()
             .init_resource::<ShowDrawArrow>()
             .init_resource::<BuildConfig>()
+            .init_resource::<PlaybackState>()
             .add_systems(PreUpdate, reset_mouse_in_ui)
             .add_systems(Update, right_panel.in_set(UiSystemSet));
     }
@@ -66,15 +67,23 @@ pub struct BuildConfig {
     pub bvh_assets: HashSet<AssetId<BvhAsset>>,
 }
 
+#[derive(Resource, Default)]
+pub struct PlaybackState {
+    pub is_playing: bool,
+    pub current_time: f32,
+    pub duration: f32,
+}
+
 fn reset_mouse_in_ui(mut mouse_in_ui: ResMut<MouseInUi>) {
     mouse_in_ui.0 = false;
 }
 
-fn bvh_selection_menu(
+fn bvh_playback_menu(
     ui: &mut egui::Ui,
     asset_server: &AssetServer,
     bvh_assets: &Assets<BvhAsset>,
     selected_bvh_asset: &mut SelectedBvhAsset,
+    playback_state: &mut PlaybackState,
 ) {
     ui.horizontal(|ui| {
         ui.label("Choose Bvh File:");
@@ -93,9 +102,32 @@ fn bvh_selection_menu(
                     };
                     if ui.selectable_label(false, bvh_name.to_string()).clicked() {
                         selected_bvh_asset.0 = id;
+                        if let Some(bvh) = bvh_assets.get(id).map(|asset| asset.get()) {
+                            playback_state.duration =
+                                bvh.frame_time().as_secs_f32() * bvh.num_frames() as f32;
+                        }
                     }
                 }
             });
+    });
+
+    ui.add_space(10.0);
+    ui.label("Playback State");
+    ui.horizontal(|ui| {
+        let button_icon = match playback_state.is_playing {
+            true => "Pause",
+            false => "Play",
+        };
+
+        if ui.button(button_icon).clicked() {
+            playback_state.is_playing = !playback_state.is_playing;
+        }
+
+        let playback_duration = playback_state.duration;
+        ui.add(egui::Slider::new(
+            &mut playback_state.current_time,
+            0.0..=playback_duration,
+        ));
     });
 }
 
@@ -112,7 +144,7 @@ fn bvh_map_label(ui: &mut egui::Ui, bvh_library: &Res<BvhLibrary>) {
     });
 }
 
-fn bvh_map_config(ui: &mut egui::Ui, bvh_library: &Res<BvhLibrary>, bvh_asset: &Assets<BvhAsset>) {
+fn _bvh_map_config(ui: &mut egui::Ui, bvh_library: &Res<BvhLibrary>, bvh_asset: &Assets<BvhAsset>) {
     ui.vertical(|ui| {
         let Some(asset) = bvh_library.get_map().and_then(|id| bvh_asset.get(id)) else {
             return;
@@ -203,6 +235,7 @@ fn right_panel(
     asset_server: Res<AssetServer>,
     bvh_assets: Res<Assets<BvhAsset>>,
     bvh_library: Res<BvhLibrary>,
+    mut playback_state: ResMut<PlaybackState>,
     mut page: Local<RightPanelPage>,
     mut mouse_in_ui: ResMut<MouseInUi>,
 ) {
@@ -233,11 +266,18 @@ fn right_panel(
                     ui.heading("Configurations");
                     ui.add_space(10.0);
                     bvh_map_label(ui, &bvh_library);
-                    bvh_selection_menu(ui, &asset_server, &bvh_assets, &mut selected_bvh_asset);
-                    bvh_map_config(ui, &bvh_library, &bvh_assets);
+                    bvh_playback_menu(
+                        ui,
+                        &asset_server,
+                        &bvh_assets,
+                        &mut selected_bvh_asset,
+                        &mut playback_state,
+                    );
+                    ui.add_space(10.0);
+                    // bvh_map_config(ui, &bvh_library, &bvh_assets);
                 }
                 RightPanelPage::Builder => {
-                    ui.heading("Buidler");
+                    ui.heading("Builder");
                     ui.add_space(10.0);
                     bvh_buider_menu(ui, &asset_server, &bvh_assets, &mut build_configs);
                     ui.add_space(10.0);
