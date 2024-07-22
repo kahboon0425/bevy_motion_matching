@@ -25,7 +25,7 @@ impl Plugin for UiPlugin {
 
         app.init_resource::<MouseInUi>()
             .init_resource::<config::PlaybackState>()
-            .init_resource::<config::DrawBvhTrail>()
+            .init_resource::<config::BvhTrailConfig>()
             .init_resource::<config::DrawTrajectory>()
             .init_resource::<builder::BuildConfig>()
             .add_systems(PreUpdate, reset_mouse_in_ui)
@@ -100,15 +100,19 @@ fn right_panel(world: &mut World, params: &mut SystemState<(EguiContexts, Local<
 }
 
 fn scrollbox<R>(ui: &mut egui::Ui, height: f32, add_contents: impl FnOnce(&mut egui::Ui) -> R) {
+    groupbox(ui, |ui| {
+        egui::ScrollArea::vertical()
+            .max_height(height)
+            .auto_shrink(false)
+            .show(ui, add_contents)
+    });
+}
+
+fn groupbox<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) {
     egui::Frame::default()
         .inner_margin(6.0)
-        .outer_margin(4.0)
+        // .outer_margin(4.0)
         .stroke((1.0, Color32::DARK_GRAY))
-        .rounding(10.0)
-        .show(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .max_height(height)
-                .auto_shrink(false)
-                .show(ui, add_contents)
-        });
+        .rounding(5.0)
+        .show(ui, add_contents);
 }

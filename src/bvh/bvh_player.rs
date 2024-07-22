@@ -8,7 +8,7 @@ use bevy_bvh_anim::prelude::*;
 
 use crate::{
     scene_loader::MainScene,
-    ui::config::{DrawBvhTrail, PlaybackState},
+    ui::config::{BvhTrailConfig, PlaybackState},
 };
 
 pub struct BvhPlayerPlugin;
@@ -352,14 +352,15 @@ fn draw_armature(
 }
 
 fn draw_bvh_trail(
-    draw: Res<DrawBvhTrail>,
+    config: Res<BvhTrailConfig>,
     selected_bvh_asset: Res<SelectedBvhAsset>,
     bvh_assets: Res<Assets<BvhAsset>>,
     mut gizmos: Gizmos,
 ) {
-    if draw.get() == false {
+    if config.draw == false {
         return;
     }
+    let step = BvhTrailConfig::MAX_RESOLUTION - config.resolution + 1;
 
     let Some(bvh) = bvh_assets
         .get(selected_bvh_asset.0)
@@ -374,7 +375,7 @@ fn draw_bvh_trail(
             .collect::<Vec<_>>(),
     );
 
-    for frame in bvh.frames() {
+    for frame in bvh.frames().step_by(step) {
         joint_matrices.apply_frame(frame.as_slice());
 
         for matrix in joint_matrices.world_matrices() {
