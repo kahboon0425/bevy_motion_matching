@@ -10,8 +10,7 @@ pub struct BvhLibraryPlugin;
 
 impl Plugin for BvhLibraryPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(BvhAssetPlugin)
-            .init_resource::<BvhLibrary>()
+        app.init_resource::<BvhLibrary>()
             .add_systems(Startup, load_bvh_library);
     }
 }
@@ -46,7 +45,9 @@ impl<'w> BvhLibraryManager<'w> {
     }
 
     /// Loads Bvh map data from disk.
+    ///
     /// # Warning
+    ///
     /// A warning will be issued if specified asset has been loaded before.
     pub fn load_map(&mut self, asset_server: &AssetServer, file_path: PathBuf) {
         if self.bvh_library.map.is_some() {

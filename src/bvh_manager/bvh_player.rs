@@ -1,26 +1,19 @@
 use bevy::{
     asset::{DependencyLoadState, LoadState, RecursiveDependencyLoadState},
-    color::palettes::css,
     prelude::*,
     utils::hashbrown::HashMap,
 };
 use bevy_bvh_anim::prelude::*;
 
-use crate::{
-    scene_loader::MainScene,
-    ui::config::{BvhTrailConfig, PlaybackState},
-};
+use crate::{scene_loader::MainScene, ui::config::PlaybackState};
 
 pub struct BvhPlayerPlugin;
 
 impl Plugin for BvhPlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SelectedBvhAsset>()
-            .add_event::<TargetTimeEvent>()
             .add_systems(Update, generate_bone_map)
-            .add_systems(Update, draw_armature)
             .add_systems(Update, bvh_player)
-            .add_systems(Update, draw_bvh_trail)
             .register_type::<OriginTransform>();
     }
 }
@@ -46,11 +39,6 @@ pub struct BoneMap(pub HashMap<String, Entity>);
 
 #[derive(Resource, Default, Debug)]
 pub struct SelectedBvhAsset(pub AssetId<BvhAsset>);
-
-#[derive(Event)]
-pub struct TargetTimeEvent {
-    pub time: f32,
-}
 
 #[derive(Debug)]
 pub struct FrameData<'a>(pub &'a Frame);
@@ -162,7 +150,6 @@ fn generate_bone_map(
 fn bvh_player(
     mut q_transforms: Query<&mut Transform, Without<MainScene>>,
     mut q_scene: Query<(&mut Transform, &BoneMap), With<MainScene>>,
-    mut event_reader: EventReader<TargetTimeEvent>,
     time: Res<Time>,
     selected_bvh_asset: Res<SelectedBvhAsset>,
     bvh_assets: Res<Assets<BvhAsset>>,
@@ -173,10 +160,6 @@ fn bvh_player(
         return;
     };
     let bvh = bvh.get();
-
-    for event in event_reader.read() {
-        *local_time = event.time;
-    }
 
     let (current_frame_index, interpolation_factor) = get_pose(*local_time, bvh);
     let next_frame_index = usize::clamp(current_frame_index + 1, 0, bvh.frames().len() - 1);
@@ -267,129 +250,6 @@ pub fn get_pose(local_time: f32, bvh_data: &Bvh) -> (usize, f32) {
     (frame_index, interpolation_factor)
 }
 
-fn draw_armature(
-    q_character: Query<(Entity, &GlobalTransform), With<MainScene>>,
-    q_children: Query<&Children>,
-    q_transforms: Query<&GlobalTransform>,
-    mut gizmos: Gizmos,
-) {
-    const RAINBOW: [Srgba; 7] = [
-        css::RED,
-        css::ORANGE,
-        css::YELLOW,
-        css::GREEN,
-        css::BLUE,
-        css::INDIGO,
-        css::PURPLE,
-    ];
-    const SPHERE_SIZE: f32 = 0.03;
-    const AXIS_LENGTH: f32 = 0.1;
-
-    fn recursive_draw(
-        mut color_index: usize,
-        parent: Entity,
-        parent_transform: &GlobalTransform,
-        q_children: &Query<&Children>,
-        q_transforms: &Query<&GlobalTransform>,
-        gizmos: &mut Gizmos,
-    ) {
-        gizmos.sphere(
-            parent_transform.translation(),
-            Quat::IDENTITY,
-            SPHERE_SIZE,
-            RAINBOW[color_index % RAINBOW.len()].with_alpha(0.4),
-        );
-        gizmos.line(
-            parent_transform.translation(),
-            parent_transform.translation() + parent_transform.right() * AXIS_LENGTH,
-            css::RED,
-        );
-        gizmos.line(
-            parent_transform.translation(),
-            parent_transform.translation() + parent_transform.up() * AXIS_LENGTH,
-            css::GREEN,
-        );
-        gizmos.line(
-            parent_transform.translation(),
-            parent_transform.translation() + parent_transform.forward() * AXIS_LENGTH,
-            css::BLUE,
-        );
-
-        color_index += 1;
-        if let Ok(children) = q_children.get(parent) {
-            for &child in children.iter() {
-                if let Ok(transform) = q_transforms.get(child) {
-                    let child_translation = transform.translation();
-                    gizmos.line(
-                        parent_transform.translation(),
-                        child_translation,
-                        css::LIGHT_CYAN,
-                    );
-
-                    recursive_draw(
-                        color_index,
-                        child,
-                        transform,
-                        q_children,
-                        q_transforms,
-                        gizmos,
-                    );
-                }
-            }
-        }
-    }
-
-    if let Ok((entity, transform)) = q_character.get_single() {
-        recursive_draw(
-            0,
-            entity,
-            transform,
-            &q_children,
-            &q_transforms,
-            &mut gizmos,
-        );
-    }
-}
-
-fn draw_bvh_trail(
-    config: Res<BvhTrailConfig>,
-    selected_bvh_asset: Res<SelectedBvhAsset>,
-    bvh_assets: Res<Assets<BvhAsset>>,
-    mut gizmos: Gizmos,
-) {
-    if config.draw == false {
-        return;
-    }
-    let step = BvhTrailConfig::MAX_RESOLUTION - config.resolution + 1;
-
-    let Some(bvh) = bvh_assets
-        .get(selected_bvh_asset.0)
-        .map(|asset| asset.get())
-    else {
-        return;
-    };
-
-    let mut joint_matrices = JointMatrices::new(
-        &bvh.joints()
-            .map(|joint| joint.data().clone())
-            .collect::<Vec<_>>(),
-    );
-
-    for frame in bvh.frames().step_by(step) {
-        joint_matrices.apply_frame(frame.as_slice());
-
-        for matrix in joint_matrices.world_matrices() {
-            let (_, rotation, translation) = matrix.to_scale_rotation_translation();
-            gizmos.sphere(
-                translation * 0.01,
-                rotation,
-                0.02,
-                css::YELLOW.with_alpha(0.4),
-            );
-        }
-    }
-}
-
 pub fn quat_to_eulerdeg(rotation: Quat) -> Vec3 {
     let euler = rotation.to_euler(EulerRot::XYZ);
     Vec3::new(
@@ -407,9 +267,3 @@ pub fn eulerdeg_to_quat(euler: Vec3) -> Quat {
         euler.z.to_radians(),
     )
 }
-
-// pub fn test(input: Res<ButtonInput<KeyCode>>, mut target_time_event: EventWriter<TargetTimeEvent>) {
-//     if input.just_pressed(KeyCode::Space) {
-//         target_time_event.send(TargetTimeEvent { time: 50.0 });
-//     }
-// }

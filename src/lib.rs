@@ -1,7 +1,6 @@
 use bevy::prelude::*;
-use bvh::*;
 
-pub mod bvh;
+pub mod bvh_manager;
 pub mod camera;
 pub mod motion_data_asset;
 pub mod nearest_trajectories;
@@ -18,10 +17,9 @@ impl Plugin for MotionMatchingAppPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
             DefaultPlugins,
-            bvh_library::BvhLibraryPlugin,
             motion_data_asset::MotionDataAssetPlugin,
             scene_loader::SceneLoaderPlugin,
-            bvh_player::BvhPlayerPlugin,
+            bvh_manager::BvhManagerPlugin,
             trajectory::InputTrajectory,
             camera::CameraPlugin,
             ui::UiPlugin,

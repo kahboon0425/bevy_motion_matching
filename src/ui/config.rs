@@ -2,7 +2,10 @@ use bevy::{ecs::system::SystemState, prelude::*};
 use bevy_bvh_anim::prelude::*;
 use bevy_egui::egui;
 
-use crate::{bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset, scene_loader::MainScene};
+use crate::{
+    bvh_manager::{bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset},
+    scene_loader::MainScene,
+};
 
 use super::groupbox;
 
