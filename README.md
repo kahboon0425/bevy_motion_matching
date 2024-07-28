@@ -3,6 +3,11 @@
 > [!Warning]
 > This project is still in its early phase and currently undergoing heavy development!
 
+Motion matching enables characters to smoothly transition between animations by finding the best matching pose and trajectory from an extensive database, without the need to create state machines.
+Gameplay logic can be embedded side by side with motion matching by querying animations with the desired attributes.
+
+![Screenshot](./.github/assets/screenshot.png)
+
 ## Reference
 
 - [Learned Motion Matching](https://static-wordpress.ubisoft.com/montreal.ubisoft.com/wp-content/uploads/2020/07/09154101/Learned_Motion_Matching.pdf)

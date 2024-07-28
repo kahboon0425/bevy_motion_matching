@@ -5,16 +5,14 @@ use bevy::{
 };
 use bevy_bvh_anim::prelude::*;
 
-use crate::scene_loader::MainScene;
+use crate::{scene_loader::MainScene, ui::config::PlaybackState};
 
 pub struct BvhPlayerPlugin;
 
 impl Plugin for BvhPlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SelectedBvhAsset>()
-            .add_event::<TargetTimeEvent>()
             .add_systems(Update, generate_bone_map)
-            .add_systems(Update, draw_armature)
             .add_systems(Update, bvh_player)
             .register_type::<OriginTransform>();
     }
@@ -25,19 +23,9 @@ impl Plugin for BvhPlayerPlugin {
 pub struct OriginTransform(Transform);
 
 impl OriginTransform {
-    // pub fn get(&self) -> Transform {
-    //     self.0
-    // }
-}
-
-/// Original global transform when it was first loaded.
-#[derive(Component, Clone, Copy, Reflect)]
-pub struct OriginGlobalTransform(GlobalTransform);
-
-impl OriginGlobalTransform {
-    // pub fn get(&self) -> GlobalTransform {
-    //     self.0
-    // }
+    pub fn get(&self) -> Transform {
+        self.0
+    }
 }
 
 #[allow(dead_code)]
@@ -51,11 +39,6 @@ pub struct BoneMap(pub HashMap<String, Entity>);
 
 #[derive(Resource, Default, Debug)]
 pub struct SelectedBvhAsset(pub AssetId<BvhAsset>);
-
-#[derive(Event)]
-pub struct TargetTimeEvent {
-    pub time: f32,
-}
 
 #[derive(Debug)]
 pub struct FrameData<'a>(pub &'a Frame);
@@ -91,7 +74,7 @@ fn generate_bone_map(
     q_character: Query<(Entity, &Handle<Scene>), (With<MainScene>, Without<BoneMap>)>,
     q_names: Query<&Name>,
     q_children: Query<&Children>,
-    q_transforms: Query<(&Transform, &GlobalTransform)>,
+    q_transforms: Query<&Transform>,
     server: Res<AssetServer>,
     mut asset_loaded: Local<bool>,
 ) {
@@ -107,11 +90,10 @@ fn generate_bone_map(
         let mut bone_map = BoneMap::default();
 
         for bone_entity in q_children.iter_descendants(entity) {
-            if let Ok((&transform, &global_transform)) = q_transforms.get(bone_entity) {
+            if let Ok(&transform) = q_transforms.get(bone_entity) {
                 commands
                     .entity(bone_entity)
-                    .insert(OriginTransform(transform))
-                    .insert(OriginGlobalTransform(global_transform));
+                    .insert(OriginTransform(transform));
             }
 
             if let Ok(name) = q_names.get(bone_entity) {
@@ -128,21 +110,18 @@ fn generate_bone_map(
             parent: Entity,
             q_children: &Query<&Children>,
             q_names: &Query<&Name>,
-            q_transforms: &Query<(&Transform, &GlobalTransform)>,
+            q_transforms: &Query<&Transform>,
         ) {
             if let Ok(children) = q_children.get(parent) {
                 for &child in children.iter() {
                     for _ in 0..indent {
                         print!("| ");
                     }
-                    if let (Ok(name), Ok((transform, _global_transform))) =
-                        (q_names.get(child), q_transforms.get(child))
+                    if let (Ok(name), Ok(transform)) = (q_names.get(child), q_transforms.get(child))
                     {
-                        // let (_, rotation, _) = _global_transform.to_scale_rotation_translation();
-                        // let rotation = quat_to_eulerdeg(rotation);
                         let rotation = quat_to_eulerdeg(transform.rotation);
-                        print!("{}", &name);
-                        println!("({:.2}, {:.2}, {:.2}", rotation.x, rotation.y, rotation.z,);
+                        print!("{}: ", &name);
+                        println!("({:.2}, {:.2}, {:.2})", rotation.x, rotation.y, rotation.z,);
                     }
                     recursive_print(indent + 1, child, q_children, q_names, q_transforms);
                 }
@@ -167,23 +146,20 @@ fn generate_bone_map(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn bvh_player(
     mut q_transforms: Query<&mut Transform, Without<MainScene>>,
     mut q_scene: Query<(&mut Transform, &BoneMap), With<MainScene>>,
-    mut event_reader: EventReader<TargetTimeEvent>,
     time: Res<Time>,
     selected_bvh_asset: Res<SelectedBvhAsset>,
-    bvh_asset: Res<Assets<BvhAsset>>,
+    bvh_assets: Res<Assets<BvhAsset>>,
+    mut playback_state: ResMut<PlaybackState>,
     mut local_time: Local<f32>,
 ) {
-    let Some(bvh) = bvh_asset.get(selected_bvh_asset.0) else {
+    let Some(bvh) = bvh_assets.get(selected_bvh_asset.0) else {
         return;
     };
     let bvh = bvh.get();
-
-    for event in event_reader.read() {
-        *local_time = event.time;
-    }
 
     let (current_frame_index, interpolation_factor) = get_pose(*local_time, bvh);
     let next_frame_index = usize::clamp(current_frame_index + 1, 0, bvh.frames().len() - 1);
@@ -250,7 +226,13 @@ fn bvh_player(
         }
     }
 
-    *local_time += time.delta_seconds();
+    // Should not do anything is current_time has not been mutated anywhere else,
+    // otherwise, local_time will be set to the mutated value.
+    *local_time = playback_state.current_time;
+    if playback_state.is_playing {
+        *local_time += time.delta_seconds();
+        playback_state.current_time = *local_time % playback_state.duration
+    }
 }
 
 pub fn get_pose(local_time: f32, bvh_data: &Bvh) -> (usize, f32) {
@@ -266,83 +248,6 @@ pub fn get_pose(local_time: f32, bvh_data: &Bvh) -> (usize, f32) {
     let interpolation_factor = (animation_time % duration_per_frame) / duration_per_frame;
 
     (frame_index, interpolation_factor)
-}
-
-fn draw_armature(
-    q_character: Query<(Entity, &GlobalTransform), With<MainScene>>,
-    q_children: Query<&Children>,
-    q_transforms: Query<&GlobalTransform>,
-    mut gizmos: Gizmos,
-) {
-    const RAINBOW: [Color; 7] = [
-        Color::RED,
-        Color::ORANGE,
-        Color::YELLOW,
-        Color::GREEN,
-        Color::BLUE,
-        Color::INDIGO,
-        Color::PURPLE,
-    ];
-    const SPHERE_SIZE: f32 = 0.03;
-    const AXIS_LENGTH: f32 = 0.1;
-
-    fn recursive_draw(
-        mut index: usize,
-        parent: Entity,
-        parent_transform: &GlobalTransform,
-        q_children: &Query<&Children>,
-        q_transforms: &Query<&GlobalTransform>,
-        gizmos: &mut Gizmos,
-    ) {
-        gizmos.sphere(
-            parent_transform.translation(),
-            Quat::IDENTITY,
-            SPHERE_SIZE,
-            RAINBOW[index % RAINBOW.len()],
-        );
-        gizmos.line(
-            parent_transform.translation(),
-            parent_transform.translation() + parent_transform.right() * AXIS_LENGTH,
-            Color::RED,
-        );
-        gizmos.line(
-            parent_transform.translation(),
-            parent_transform.translation() + parent_transform.up() * AXIS_LENGTH,
-            Color::GREEN,
-        );
-        gizmos.line(
-            parent_transform.translation(),
-            parent_transform.translation() + parent_transform.forward() * AXIS_LENGTH,
-            Color::BLUE,
-        );
-
-        if let Ok(children) = q_children.get(parent) {
-            for &child in children.iter() {
-                if let Ok(transform) = q_transforms.get(child) {
-                    let child_translation = transform.translation();
-                    gizmos.line(
-                        parent_transform.translation(),
-                        child_translation,
-                        Color::CYAN,
-                    );
-                    index += 1;
-
-                    recursive_draw(index, child, transform, q_children, q_transforms, gizmos);
-                }
-            }
-        }
-    }
-
-    if let Ok((entity, transform)) = q_character.get_single() {
-        recursive_draw(
-            0,
-            entity,
-            transform,
-            &q_children,
-            &q_transforms,
-            &mut gizmos,
-        );
-    }
 }
 
 pub fn quat_to_eulerdeg(rotation: Quat) -> Vec3 {
@@ -362,9 +267,3 @@ pub fn eulerdeg_to_quat(euler: Vec3) -> Quat {
         euler.z.to_radians(),
     )
 }
-
-// pub fn test(input: Res<ButtonInput<KeyCode>>, mut target_time_event: EventWriter<TargetTimeEvent>) {
-//     if input.just_pressed(KeyCode::Space) {
-//         target_time_event.send(TargetTimeEvent { time: 50.0 });
-//     }
-// }
