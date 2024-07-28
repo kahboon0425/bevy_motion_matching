@@ -4,7 +4,7 @@ use bevy_egui::egui;
 
 use crate::{
     bvh_manager::{bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset},
-    scene_loader::MainScene,
+    scene_loader::{GroundPlane, MainScene},
 };
 
 use super::groupbox;
@@ -57,6 +57,7 @@ pub fn config_panel(ui: &mut egui::Ui, world: &mut World) {
     bvh_playback(ui, world);
     bvh_trail_config(ui, world);
     show_character_checkbox(ui, world);
+    show_ground_checkbox(ui, world);
     draw_trajectory_checkbox(ui, world);
 }
 
@@ -128,6 +129,18 @@ fn bvh_map_label(ui: &mut egui::Ui, world: &mut World) {
     });
 }
 
+fn bvh_trail_config(ui: &mut egui::Ui, world: &mut World) {
+    let mut config = world.resource_mut::<BvhTrailConfig>();
+    groupbox(ui, |ui| {
+        ui.label("Bvh Trail");
+        ui.checkbox(&mut config.draw, "Show");
+        ui.add(
+            egui::Slider::new(&mut config.resolution, 1..=BvhTrailConfig::MAX_RESOLUTION)
+                .text("Resolution"),
+        );
+    })
+}
+
 fn show_character_checkbox(ui: &mut egui::Ui, world: &mut World) {
     let mut q_main_scene = world.query_filtered::<&mut Visibility, With<MainScene>>();
     let Ok(mut main_scene_vis) = q_main_scene.get_single_mut(world) else {
@@ -142,19 +155,21 @@ fn show_character_checkbox(ui: &mut egui::Ui, world: &mut World) {
     }
 }
 
+fn show_ground_checkbox(ui: &mut egui::Ui, world: &mut World) {
+    let mut q_ground = world.query_filtered::<&mut Visibility, With<GroundPlane>>();
+    let Ok(mut vis) = q_ground.get_single_mut(world) else {
+        return;
+    };
+
+    let mut vis_bool = matches!(*vis, Visibility::Hidden) == false;
+    ui.checkbox(&mut vis_bool, "Show Ground");
+    match vis_bool {
+        true => *vis = Visibility::Inherited,
+        false => *vis = Visibility::Hidden,
+    }
+}
+
 fn draw_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
     let mut draw_trajectory = world.resource_mut::<DrawTrajectory>();
     ui.checkbox(&mut draw_trajectory.0, "Show Trajectory Arrows");
-}
-
-fn bvh_trail_config(ui: &mut egui::Ui, world: &mut World) {
-    let mut config = world.resource_mut::<BvhTrailConfig>();
-    groupbox(ui, |ui| {
-        ui.label("Bvh Trail");
-        ui.checkbox(&mut config.draw, "Show");
-        ui.add(
-            egui::Slider::new(&mut config.resolution, 1..=BvhTrailConfig::MAX_RESOLUTION)
-                .text("Resolution"),
-        );
-    })
 }

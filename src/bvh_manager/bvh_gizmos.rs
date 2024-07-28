@@ -32,8 +32,10 @@ fn armature_gizmos(
     q_transforms: Query<&GlobalTransform>,
     mut gizmos: Gizmos,
 ) {
+    const SKIP_HIERARCHY: usize = 3;
+
     fn recursive_draw(
-        mut color_index: usize,
+        mut index: usize,
         parent: Entity,
         parent_transform: &GlobalTransform,
         q_children: &Query<&Children>,
@@ -45,29 +47,28 @@ fn armature_gizmos(
             translation,
             rotation,
             SPHERE_SIZE,
-            RAINBOW[color_index % RAINBOW.len()].with_alpha(0.4),
+            RAINBOW[index % RAINBOW.len()].with_alpha(0.4),
         );
-        draw_axis(translation, rotation, gizmos);
 
-        color_index += 1;
+        index += 1;
+        if index > SKIP_HIERARCHY {
+            draw_axis(translation, rotation, gizmos);
+        }
+
         if let Ok(children) = q_children.get(parent) {
             for &child in children.iter() {
                 if let Ok(transform) = q_transforms.get(child) {
                     let child_translation = transform.translation();
-                    gizmos.line(
-                        parent_transform.translation(),
-                        child_translation,
-                        css::LIGHT_CYAN,
-                    );
 
-                    recursive_draw(
-                        color_index,
-                        child,
-                        transform,
-                        q_children,
-                        q_transforms,
-                        gizmos,
-                    );
+                    if index > SKIP_HIERARCHY {
+                        gizmos.line(
+                            parent_transform.translation(),
+                            child_translation,
+                            css::LIGHT_CYAN,
+                        );
+                    }
+
+                    recursive_draw(index, child, transform, q_children, q_transforms, gizmos);
                 }
             }
         }
@@ -124,6 +125,24 @@ fn bvh_trail_gizmos(
                 css::YELLOW.with_alpha(0.4),
             );
             draw_axis(translation, rotation, &mut gizmos);
+        }
+
+        for joint in joint_matrices.joints() {
+            let Some(parent_index) = joint.parent_index() else {
+                continue;
+            };
+
+            let (.., parent_translation) =
+                joint_matrices.world_matrices()[parent_index].to_scale_rotation_translation();
+            let (.., curr_translation) =
+                joint_matrices.world_matrices()[joint.index()].to_scale_rotation_translation();
+
+            gizmos.line(
+                // Constant scaling factor of the Bvh data.
+                parent_translation * 0.01,
+                curr_translation * 0.01,
+                css::WHEAT,
+            );
         }
     }
 }

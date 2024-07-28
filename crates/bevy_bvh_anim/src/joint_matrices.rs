@@ -89,6 +89,10 @@ impl<J: JointTrait> JointMatrices<J> {
         }
     }
 
+    pub fn joints(&self) -> &[J] {
+        &self.joints
+    }
+
     pub fn root_joint_matrix(&self) -> Mat4 {
         self.world_matrices[0]
     }
