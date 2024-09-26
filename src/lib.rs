@@ -26,7 +26,7 @@ impl Plugin for MotionMatchingAppPlugin {
             player::PlayerPlugin,
             nearest_trajectories::NearestTrajectoryRetrieverPlugin,
             // motion_database::MotionDatabasePlugin,
-            // pose_matching::PoseMatchingPlugin,
+            pose_matching::PoseMatchingPlugin,
         ));
     }
 }

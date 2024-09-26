@@ -93,6 +93,13 @@ impl Poses {
             self.poses.push(frame_to_pose(frame));
         }
     }
+
+    pub fn get_poses(&self, chunk_index: usize) -> &[Vec<f32>] {
+        let start_index = self.offsets[chunk_index];
+        let end_index = self.offsets[chunk_index + 1];
+
+        &self.poses[start_index..end_index]
+    }
 }
 
 /// Stores chunks of trajectory matrices.

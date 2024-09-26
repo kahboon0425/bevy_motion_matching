@@ -1,9 +1,11 @@
 use bevy::prelude::*;
 
 use crate::{
+    bvh_manager::bvh_player::BoneMap,
     motion_data_asset::{MotionDataAsset, Pose},
     player::PlayerMarker,
-    // pose_matching::match_pose,
+    pose_matching::{apply_pose, match_pose},
+    scene_loader::MainScene,
     trajectory::Trajectory,
 };
 
@@ -11,23 +13,61 @@ pub struct NearestTrajectoryRetrieverPlugin;
 
 impl Plugin for NearestTrajectoryRetrieverPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, match_trajectory);
+        app.add_systems(Update, match_trajectory)
+            .add_systems(Startup, load_motion_data);
     }
+}
+
+pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let file_path = "motion_data/motion_data.json";
+    let motion_data_handle = asset_server.load::<MotionDataAsset>(file_path);
+    commands.spawn(motion_data_handle);
 }
 
 pub fn match_trajectory(
     motion_data_assets: Res<Assets<MotionDataAsset>>,
     query_motion_data: Query<&Handle<MotionDataAsset>>,
     user_input_trajectory: Query<(&Trajectory, &Transform), With<PlayerMarker>>,
+    mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
+    mut main_character: Query<(&mut Transform, &BoneMap), (With<MainScene>, Without<PlayerMarker>)>,
 ) {
     for handle in query_motion_data.iter() {
         if let Some(motion_data) = motion_data_assets.get(handle) {
             for (trajectory, transform) in user_input_trajectory.iter() {
                 let nearest_trajectories =
-                    find_nearest_trajectories::<10>(motion_data, trajectory, transform);
+                    find_nearest_trajectories::<1>(motion_data, trajectory, transform);
                 println!("10 nearest trajectory: {:?}", nearest_trajectories);
-                // let _poses = get_nearest_trajectories_pose(motion_data, nearest_trajectories);
-                // match_pose(&motion_data_assets, &query_motion_data, _poses);
+
+                let mut smallest_pose_distance: f32 = f32::MAX;
+                let mut best_pose: Vec<f32> = vec![];
+                let mut best_trajectory_index = 0;
+
+                // println!("Nearest Trajectory length: {}", nearest_trajectories.len());
+                for (i, nearest_trajectory) in nearest_trajectories.iter().enumerate() {
+                    if let Some(nearest_trajectory) = nearest_trajectory {
+                        let (pose_distance, pose) = match_pose(
+                            &nearest_trajectory,
+                            motion_data,
+                            &mut q_transforms,
+                            &mut main_character,
+                        );
+
+                        if pose_distance < smallest_pose_distance {
+                            smallest_pose_distance = pose_distance;
+                            best_pose = pose;
+                            best_trajectory_index = i;
+                        }
+                    }
+                }
+                let best_trajectory = nearest_trajectories[best_trajectory_index];
+
+                // println!("Best Pose Frame: {:?}", best_pose);
+                apply_pose(
+                    motion_data,
+                    &mut q_transforms,
+                    &mut main_character,
+                    best_pose,
+                );
             }
         }
     }
@@ -64,9 +104,12 @@ pub fn find_nearest_trajectories<const N: usize>(
     for (chunk_index, chunk) in trajectories.iter_chunk().enumerate() {
         let chunk_count = chunk.len();
         if chunk_count < 7 {
-            warn!("Chunk ({chunk_index}) has less than 7 trajectories.");
+            // warn!("Chunk ({chunk_index}) has less than 7 trajectories.");
             continue;
         }
+
+        // println!("Chunk Counttttttt: {}", chunk_count);
+        // println!("Chunk Indexxxxxxx: {}", chunk_index);
 
         for chunk_offset in 0..chunk_count - 7 {
             let trajectory = &chunk[chunk_offset..chunk_offset + 7];
@@ -138,26 +181,3 @@ pub fn calculate_trajectory_distance(t1: &[Vec2], t2: &[Vec2]) -> f32 {
         .map(|(p, traj)| (*p - *traj).length_squared())
         .sum::<f32>()
 }
-
-// pub fn get_nearest_trajectories_pose(
-//     motion_data: &MotionDataAsset,
-//     nearest_trajectory: Vec<(f32, f32, usize)>,
-// ) -> Vec<&Pose> {
-//     let mut poses = Vec::new();
-
-//     for (_distance, time, file_index) in nearest_trajectory.iter() {
-//         let pose_start_index = motion_data.pose_offsets[*file_index];
-//         println!("Pose Start Index {}", pose_start_index);
-//         let pose_index = ((pose_start_index as f32) + time / 0.016667) as usize;
-//         println!("{pose_index}");
-
-//         println!("Motion Data Poses Total Len: {}", motion_data.poses.len());
-//         if let Some(pose) = motion_data.poses.get(pose_index) {
-//             poses.push(pose);
-//         }
-//     }
-
-//     // println!("Pose count: {:?}", poses.len());
-//     // println!("Pose count: {:?}", poses);
-//     poses
-// }
