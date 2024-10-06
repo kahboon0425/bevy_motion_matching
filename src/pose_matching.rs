@@ -1,6 +1,6 @@
 use std::cmp::min;
 
-use bevy::{prelude::*, render::render_resource::encase::rts_array::Length};
+use bevy::prelude::*;
 use bevy_bvh_anim::{bvh_anim::ChannelType, joint_traits::JointChannelTrait};
 
 use crate::{
