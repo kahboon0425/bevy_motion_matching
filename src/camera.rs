@@ -134,7 +134,7 @@ fn spawn_camera(mut commands: Commands) {
             hdr: true,
             ..default()
         },
-        dither: DebandDither::Enabled,
+        deband_dither: DebandDither::Enabled,
         tonemapping: Tonemapping::AcesFitted,
         ..default()
     };

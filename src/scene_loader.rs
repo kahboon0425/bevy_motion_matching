@@ -5,7 +5,6 @@ use bevy::{
         texture::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor},
     },
 };
-use bevy_third_person_camera::ThirdPersonCameraTarget;
 
 /// Load glb file and setup the scene.
 pub struct SceneLoaderPlugin;
@@ -25,8 +24,7 @@ fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     info!("Loaded scene: {:?}", scene);
     commands
         .spawn(SceneBundle { scene, ..default() })
-        .insert(MainScene)
-        .insert(ThirdPersonCameraTarget);
+        .insert(MainScene);
 }
 
 fn spawn_light(mut commands: Commands) {
@@ -63,28 +61,34 @@ fn spawn_ground(
         }
     };
 
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(plane_mesh),
-        material: materials.add(StandardMaterial {
-            base_color: Color::WHITE,
-            base_color_texture: Some(asset_server.load_with_settings(
-                "textures/Grid.png",
-                |s: &mut _| {
-                    *s = ImageLoaderSettings {
-                        sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
-                            // rewriting mode to repeat image,
-                            address_mode_u: ImageAddressMode::Repeat,
-                            address_mode_v: ImageAddressMode::Repeat,
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(plane_mesh),
+            material: materials.add(StandardMaterial {
+                base_color: Color::WHITE,
+                base_color_texture: Some(asset_server.load_with_settings(
+                    "textures/Grid.png",
+                    |s: &mut _| {
+                        *s = ImageLoaderSettings {
+                            sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
+                                // rewriting mode to repeat image,
+                                address_mode_u: ImageAddressMode::Repeat,
+                                address_mode_v: ImageAddressMode::Repeat,
+                                ..default()
+                            }),
                             ..default()
-                        }),
-                        ..default()
-                    }
-                },
-            )),
-            reflectance: 0.5,
-            metallic: 0.5,
+                        }
+                    },
+                )),
+                reflectance: 0.5,
+                metallic: 0.5,
+                ..default()
+            }),
             ..default()
-        }),
-        ..default()
-    });
+        },
+        GroundPlane,
+    ));
 }
+
+#[derive(Component)]
+pub struct GroundPlane;
