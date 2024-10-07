@@ -43,7 +43,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 # debug editor (run with debug feature to enable it)
-bevy-inspector-egui = { version = "0.24", optional = true }
+bevy-inspector-egui = { version = "0.25", optional = true }
 
 [lints]
 workspace = true
