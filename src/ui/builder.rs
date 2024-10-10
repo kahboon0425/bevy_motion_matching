@@ -4,7 +4,8 @@ use bevy::{ecs::system::SystemState, prelude::*, utils::HashSet};
 use bevy_bvh_anim::prelude::*;
 use bevy_egui::egui;
 
-use crate::{bvh_manager::bvh_library::BvhLibrary, motion_data_asset::MotionDataAsset};
+use crate::bvh_manager::bvh_library::BvhLibrary;
+use crate::motion_data::motion_data_asset::MotionDataAsset;
 
 use super::scrollbox;
 

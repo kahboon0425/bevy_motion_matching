@@ -20,6 +20,11 @@ thiserror = "1.0"
 [workspace.lints.clippy]
 redundant_type_annotations = "warn"
 bool_comparison = "allow"
+# Bevy supplies arguments to systems via dependency injection, so it's natural for systems to
+# request more than 7 arguments -- which triggers this lint.
+too_many_arguments = "allow"
+# Queries that access many components may trigger this lint.
+type_complexity = "allow"
 
 [package]
 name = "bevy_motion_matching"

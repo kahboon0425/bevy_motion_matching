@@ -68,7 +68,6 @@ impl<'a> FrameData<'a> {
     }
 }
 
-#[allow(clippy::type_complexity)]
 fn generate_bone_map(
     mut commands: Commands,
     q_character: Query<(Entity, &Handle<Scene>), (With<MainScene>, Without<BoneMap>)>,
@@ -146,7 +145,6 @@ fn generate_bone_map(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn bvh_player(
     mut q_transforms: Query<&mut Transform, Without<MainScene>>,
     mut q_scene: Query<(&mut Transform, &BoneMap), With<MainScene>>,

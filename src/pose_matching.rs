@@ -1,16 +1,15 @@
 use std::cmp::min;
 
 use bevy::prelude::*;
-use bevy_bvh_anim::{bvh_anim::ChannelType, joint_traits::JointChannelTrait};
+use bevy_bvh_anim::bvh_anim::ChannelType;
+use bevy_bvh_anim::joint_traits::JointChannelTrait;
 
-use crate::{
-    bvh_manager::bvh_player::BoneMap,
-    motion_data_asset::MotionDataAsset,
-    nearest_trajectories::{self, NearestTrajectory},
-    player::PlayerMarker,
-    scene_loader::MainScene,
-    trajectory::Trajectory,
-};
+use crate::bvh_manager::bvh_player::BoneMap;
+use crate::motion_data::motion_data_asset::MotionDataAsset;
+use crate::nearest_trajectories::{self, NearestTrajectory};
+use crate::player::PlayerMarker;
+use crate::scene_loader::MainScene;
+use crate::trajectory::Trajectory;
 
 pub struct PoseMatchingPlugin;
 

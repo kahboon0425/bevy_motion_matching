@@ -141,7 +141,6 @@ fn spawn_camera(mut commands: Commands) {
     commands.spawn(camera).insert(BloomSettings::default());
 }
 
-#[allow(clippy::too_many_arguments)]
 fn pan_orbit_camera(
     mut q_camera: Query<(&PanOrbitSettings, &mut PanOrbitState, &mut Transform)>,
     q_global_transforms: Query<&GlobalTransform>,

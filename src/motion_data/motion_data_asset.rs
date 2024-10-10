@@ -1,12 +1,12 @@
-use bevy::{
-    asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
-    prelude::*,
-};
-use bevy_bvh_anim::{bvh_anim::ChannelType, prelude::*};
+use bevy::asset::io::Reader;
+use bevy::asset::{AssetLoader, AsyncReadExt, LoadContext};
+use bevy::prelude::*;
+use bevy_bvh_anim::bvh_anim::ChannelType;
+use bevy_bvh_anim::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub struct MotionDataAssetPlugin;
+pub(super) struct MotionDataAssetPlugin;
 
 impl Plugin for MotionDataAssetPlugin {
     fn build(&self, app: &mut App) {
@@ -14,6 +14,8 @@ impl Plugin for MotionDataAssetPlugin {
             .init_asset_loader::<MotionDataAssetLoader>();
     }
 }
+
+// TODO: Private data structures inside the asset to ensure data integrity.
 
 /// A memory and storage efficient storage of [`JointInfo`] and multiple motion data ([`Trajectories`] & [`Poses`]).
 #[derive(Asset, TypePath, Serialize, Deserialize, Debug)]
@@ -65,7 +67,7 @@ fn frame_to_pose(frame: &Frame) -> Pose {
 pub struct Poses {
     /// Pose data that can be sampled using [`JointInfo`].
     pub poses: Vec<Pose>,
-    /// Offset index of [`poses`][Self::poses] chunks.
+    /// Offset index of [`Self::poses`] chunks.
     ///
     /// # Example
     ///
@@ -107,7 +109,7 @@ impl Poses {
 pub struct Trajectories {
     /// Trajectory matrices.
     pub matrices: Vec<Mat4>,
-    /// Offset index of [`matrices`][Self::matrices] chunks.
+    /// Offset index of [`Self::matrices`] chunks.
     ///
     /// # Example
     ///
