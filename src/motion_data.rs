@@ -8,7 +8,10 @@ pub struct MotionDataPlugin;
 
 impl Plugin for MotionDataPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(motion_data_asset::MotionDataAssetPlugin);
+        app.add_plugins((
+            motion_data_asset::MotionDataAssetPlugin,
+            motion_data_player::MotionDataPlayerPlugin,
+        ));
     }
 }
 

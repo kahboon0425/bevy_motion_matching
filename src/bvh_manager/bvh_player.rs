@@ -33,9 +33,9 @@ impl OriginTransform {
 #[derive(Component, Default, Debug, Clone)]
 pub struct BvhOriginMap(pub HashMap<Entity, (Vec3, Vec3)>);
 
-/// Maps bone name to their respective entity.
-#[derive(Component, Default, Debug, Clone)]
-pub struct BoneMap(pub HashMap<String, Entity>);
+/// Maps joint name to their respective entity.
+#[derive(Component, Default, Debug, Clone, Deref, DerefMut)]
+pub struct JointMap(pub HashMap<String, Entity>);
 
 #[derive(Resource, Default, Debug)]
 pub struct SelectedBvhAsset(pub AssetId<BvhAsset>);
@@ -70,7 +70,7 @@ impl<'a> FrameData<'a> {
 
 fn generate_bone_map(
     mut commands: Commands,
-    q_character: Query<(Entity, &Handle<Scene>), (With<MainScene>, Without<BoneMap>)>,
+    q_character: Query<(Entity, &Handle<Scene>), (With<MainScene>, Without<JointMap>)>,
     q_names: Query<&Name>,
     q_children: Query<&Children>,
     q_transforms: Query<&Transform>,
@@ -86,7 +86,7 @@ fn generate_bone_map(
     };
 
     if *asset_loaded {
-        let mut bone_map = BoneMap::default();
+        let mut joint_map = JointMap::default();
 
         for bone_entity in q_children.iter_descendants(entity) {
             if let Ok(&transform) = q_transforms.get(bone_entity) {
@@ -97,11 +97,11 @@ fn generate_bone_map(
 
             if let Ok(name) = q_names.get(bone_entity) {
                 let bone_name = name.to_string();
-                bone_map.0.insert(bone_name, bone_entity);
+                joint_map.insert(bone_name, bone_entity);
             }
         }
 
-        commands.entity(entity).insert(bone_map);
+        commands.entity(entity).insert(joint_map);
 
         /// Recurisvely print the bone hierarchy.
         fn recursive_print(
@@ -146,8 +146,8 @@ fn generate_bone_map(
 }
 
 fn bvh_player(
-    mut q_transforms: Query<&mut Transform, Without<MainScene>>,
-    mut q_scene: Query<(&mut Transform, &BoneMap), With<MainScene>>,
+    mut q_transforms: Query<&mut Transform>,
+    q_scene: Query<&JointMap, With<MainScene>>,
     time: Res<Time>,
     selected_bvh_asset: Res<SelectedBvhAsset>,
     bvh_assets: Res<Assets<BvhAsset>>,
@@ -172,12 +172,12 @@ fn bvh_player(
     let current_frame = FrameData(current_frame);
     let next_frame = FrameData(next_frame);
 
-    for (mut _scene_transform, bone_map) in q_scene.iter_mut() {
+    for joint_map in q_scene.iter() {
         for joint in bvh.joints() {
             let joint_data = joint.data();
             let bone_name = joint_data.name().to_str().unwrap();
 
-            let Some(&bone_entity) = bone_map.0.get(bone_name) else {
+            let Some(&bone_entity) = joint_map.get(bone_name) else {
                 continue;
             };
             // Get bone transform
@@ -188,7 +188,7 @@ fn bvh_player(
             let o = joint_data.offset();
             let offset = Vec3::new(o.x, o.y, o.z);
 
-            // Get data from 2 frames surrounding the target time
+            // Get data from 2 frames surrounding the target time.
             let mut curr_translation = offset;
             let mut next_translation = offset;
 

@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy_bvh_anim::bvh_anim::ChannelType;
 use bevy_bvh_anim::joint_traits::JointChannelTrait;
 
-use crate::bvh_manager::bvh_player::BoneMap;
+use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
 use crate::nearest_trajectories::{self, NearestTrajectory};
 use crate::player::PlayerMarker;
@@ -27,7 +27,7 @@ pub fn match_pose(
     motion_data: &MotionDataAsset,
     q_transforms: &mut Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
     main_character: &mut Query<
-        (&mut Transform, &BoneMap),
+        (&mut Transform, &JointMap),
         (With<MainScene>, Without<PlayerMarker>),
     >,
 ) -> (f32, Vec<f32>) {
@@ -52,7 +52,7 @@ pub fn match_pose(
 
     let chunk_index = nearest_trajectory.chunk_index;
     let chunk_offset = nearest_trajectory.chunk_offset;
-    let poses = motion_data.poses.get_poses(chunk_index);
+    let poses = motion_data.poses.get_poses_from_chunk(chunk_index);
     let pose = poses.get(chunk_offset).unwrap();
 
     // let time = chunk_offset as f32 * 0.16667;
@@ -68,10 +68,10 @@ pub fn match_pose(
     let mut total_distance = 0.0;
 
     for (mut _scene_transform, bone_map) in main_character.iter_mut() {
-        let joints = &motion_data.joints;
+        let joints = motion_data.joints();
 
         for joint_data in joints.iter() {
-            let bone_name = &joint_data.name;
+            let bone_name = joint_data.name();
             let Some(&bone_entity) = bone_map.0.get(bone_name) else {
                 continue;
             };
@@ -86,7 +86,7 @@ pub fn match_pose(
             let mut pose_translation = Vec3::ZERO;
             let mut pose_rotation = Vec3::ZERO;
 
-            for pose_ref in &joint_data.pose_refs {
+            for pose_ref in joint_data.pose_refs() {
                 let pose_value = pose[pose_ref.motion_index()];
 
                 // println!("Pose ref: {:?}", pose_ref);
@@ -120,7 +120,7 @@ pub fn match_pose(
             // println!("Bone: {}", bone_name);
             let distance = calculate_pose_distance(
                 current_translation,
-                pose_translation + joint_data.offset,
+                pose_translation + joint_data.offset(),
                 current_rotation,
                 pose_rotation_in_quat,
             );
@@ -136,16 +136,16 @@ pub fn apply_pose(
     motion_data: &MotionDataAsset,
     q_transforms: &mut Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
     main_character: &mut Query<
-        (&mut Transform, &BoneMap),
+        (&mut Transform, &JointMap),
         (With<MainScene>, Without<PlayerMarker>),
     >,
     best_pose: Vec<f32>,
 ) {
     for (mut _scene_transform, bone_map) in main_character.iter_mut() {
-        let joints = &motion_data.joints;
+        let joints = motion_data.joints();
 
         for joint_data in joints.iter() {
-            let bone_name = &joint_data.name;
+            let bone_name = joint_data.name();
             let Some(&bone_entity) = bone_map.0.get(bone_name) else {
                 continue;
             };
@@ -157,7 +157,7 @@ pub fn apply_pose(
             let mut pose_translation = Vec3::ZERO;
             let mut pose_rotation = Vec3::ZERO;
 
-            for pose_ref in &joint_data.pose_refs {
+            for pose_ref in joint_data.pose_refs() {
                 let pose_value = best_pose[pose_ref.motion_index()];
 
                 match pose_ref.channel_type() {
@@ -176,7 +176,7 @@ pub fn apply_pose(
                 pose_rotation.y.to_radians(),
                 pose_rotation.z.to_radians(),
             );
-            transform.translation = pose_translation + joint_data.offset;
+            transform.translation = pose_translation + joint_data.offset();
         }
     }
 }

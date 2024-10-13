@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_bvh_anim::bvh_anim::ChannelType;
 use bevy_bvh_anim::joint_traits::JointChannelTrait;
 
-use crate::bvh_manager::bvh_player::BoneMap;
+use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion_data::motion_data_asset::{MotionDataAsset, Pose};
 use crate::motion_data::{MotionData, MotionDataHandle};
 use crate::player::PlayerMarker;
@@ -34,7 +34,10 @@ pub fn match_trajectory(
     motion_data: MotionData,
     user_input_trajectory: Query<(&Trajectory, &Transform), With<PlayerMarker>>,
     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
-    mut main_character: Query<(&mut Transform, &BoneMap), (With<MainScene>, Without<PlayerMarker>)>,
+    mut main_character: Query<
+        (&mut Transform, &JointMap),
+        (With<MainScene>, Without<PlayerMarker>),
+    >,
     mut best_trajectory_event: EventWriter<BestTrajectory>,
     time: Res<Time>,
     mut time_passed: Local<f32>,
@@ -90,17 +93,17 @@ pub fn match_trajectory(
 pub fn play_pose(
     motion_data: MotionData,
     mut q_transforms: Query<&mut Transform, Without<MainScene>>,
-    mut main_character: Query<(&mut Transform, &BoneMap), With<MainScene>>,
+    mut main_character: Query<(&mut Transform, &JointMap), With<MainScene>>,
     mut best_trajectory_event: EventReader<BestTrajectory>,
     time: Res<Time>,
     mut local_time: Local<f32>,
 ) {
     if let Some(motion_data) = motion_data.get() {
         for (mut _scene_transform, bone_map) in main_character.iter_mut() {
-            let joints = &motion_data.joints;
+            let joints = motion_data.joints();
 
             for joint_data in joints.iter() {
-                let bone_name = &joint_data.name;
+                let bone_name = joint_data.name();
                 let Some(&bone_entity) = bone_map.0.get(bone_name) else {
                     continue;
                 };
@@ -117,7 +120,7 @@ pub fn play_pose(
 
                 let mut interpolation_factor = 0.0;
 
-                for pose_ref in &joint_data.pose_refs {
+                for pose_ref in joint_data.pose_refs() {
                     for best_trajectory in best_trajectory_event.read() {
                         let time = best_trajectory.0.chunk_offset as f32 * 0.16667;
 
@@ -129,7 +132,7 @@ pub fn play_pose(
                         // let (current_frame_index, interpolation_factor) =
                         //     get_poses(*local_time, motion_data, time);
 
-                        let frame_count = motion_data.poses.get_poses(chunk_index).len();
+                        let frame_count = motion_data.poses.get_poses_from_chunk(chunk_index).len();
 
                         // let frame_index = (time / frame_time).floor() as usize % frame_count;
                         // println!(
@@ -147,7 +150,7 @@ pub fn play_pose(
 
                         // // println!("Frame count: {}", start_frame.len());
 
-                        let poses = motion_data.poses.get_poses(chunk_index);
+                        let poses = motion_data.poses.get_poses_from_chunk(chunk_index);
 
                         let start_pose = poses.get(current_frame_index).unwrap();
                         let next_pose = poses.get(next_frame_index).unwrap();
@@ -201,7 +204,7 @@ pub fn play_pose(
 
                     transform.rotation = interp_rotation;
 
-                    transform.translation = interp_translation + joint_data.offset;
+                    transform.translation = interp_translation + joint_data.offset();
                 }
             }
         }

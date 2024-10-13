@@ -21,7 +21,7 @@ impl Plugin for MotionDataAssetPlugin {
 #[derive(Asset, TypePath, Serialize, Deserialize, Debug)]
 pub struct MotionDataAsset {
     /// Joint data.
-    pub joints: Vec<JointInfo>,
+    joints: Vec<JointInfo>,
     /// Trajectory data for trajectory matching.
     pub trajectories: Trajectories,
     /// Pose data for pose matching and animation sampling.
@@ -55,30 +55,74 @@ impl MotionDataAsset {
     }
 }
 
-pub type Pose = Vec<f32>;
+impl MotionDataAsset {
+    pub fn joints(&self) -> &[JointInfo] {
+        &self.joints
+    }
+
+    pub fn get_joint(&self, index: usize) -> Option<&JointInfo> {
+        self.joints.get(index)
+    }
+}
+
+#[derive(Serialize, Deserialize, Default, Debug, Deref, DerefMut)]
+pub struct Pose(pub Vec<f32>);
+
+impl Pose {
+    pub fn from_frame(frame: &Frame) -> Self {
+        Self(frame.as_slice().to_vec())
+    }
+
+    /// Get position and rotation.
+    pub fn get_pos_rot(&self, joint_info: &JointInfo) -> (Vec3, Quat) {
+        let mut pos = Vec3::ZERO;
+        let mut euler = Vec3::ZERO;
+        for pose_ref in joint_info.pose_refs() {
+            let i = pose_ref.motion_index();
+            match pose_ref.channel_type() {
+                ChannelType::RotationX => euler.x = self[i].to_radians(),
+                ChannelType::RotationY => euler.y = self[i].to_radians(),
+                ChannelType::RotationZ => euler.z = self[i].to_radians(),
+                ChannelType::PositionX => pos.x = self[i],
+                ChannelType::PositionY => pos.y = self[i],
+                ChannelType::PositionZ => pos.z = self[i],
+            }
+        }
+
+        (
+            pos,
+            Quat::from_euler(EulerRot::XYZ, euler.x, euler.y, euler.z),
+        )
+    }
+}
 
 #[inline]
 fn frame_to_pose(frame: &Frame) -> Pose {
-    frame.as_slice().to_vec()
+    Pose(frame.as_slice().to_vec())
 }
 
 /// Stores chunks of poses.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Poses {
     /// Pose data that can be sampled using [`JointInfo`].
-    pub poses: Vec<Pose>,
+    poses: Vec<Pose>,
     /// Offset index of [`Self::poses`] chunks.
     ///
     /// # Example
     ///
     /// \[0, 3, 5, 7\] contains chunk [0, 3), [3, 5), [5, 7)
-    pub offsets: Vec<usize>,
+    offsets: Vec<usize>,
     /// Duration between each pose in seconds.
-    pub interval: f32,
+    interval: f32,
 }
 
 impl Poses {
     pub fn new(interval: f32) -> Self {
+        assert!(
+            interval > 0.0,
+            "Interval time between poses must be greater than 0!"
+        );
+
         Self {
             poses: vec![],
             offsets: vec![0],
@@ -96,11 +140,37 @@ impl Poses {
         }
     }
 
-    pub fn get_poses(&self, chunk_index: usize) -> &[Vec<f32>] {
+    /// Get poses of a particular chunk.
+    pub fn get_poses_from_chunk(&self, chunk_index: usize) -> &[Pose] {
         let start_index = self.offsets[chunk_index];
         let end_index = self.offsets[chunk_index + 1];
 
         &self.poses[start_index..end_index]
+    }
+
+    /// Calculate the time value from a chunk offset index.
+    pub fn time_from_chunk_offset(&self, chunk_offset: usize) -> f32 {
+        chunk_offset as f32 * self.interval
+    }
+
+    /// Calculate the floored chunk offset index from a time value.
+    pub fn chunk_offset_from_time(&self, time: f32) -> usize {
+        (time / self.interval) as usize
+    }
+}
+
+// Getter functions
+impl Poses {
+    pub fn poses(&self) -> &[Pose] {
+        &self.poses
+    }
+
+    pub fn offsets(&self) -> &[usize] {
+        &self.offsets
+    }
+
+    pub fn interval(&self) -> f32 {
+        self.interval
     }
 }
 
@@ -108,19 +178,24 @@ impl Poses {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Trajectories {
     /// Trajectory matrices.
-    pub matrices: Vec<Mat4>,
+    matrices: Vec<Mat4>,
     /// Offset index of [`Self::matrices`] chunks.
     ///
     /// # Example
     ///
     /// \[0, 3, 5, 7\] contains chunk [0, 3), [3, 5), [5, 7)
-    pub offsets: Vec<usize>,
+    offsets: Vec<usize>,
     /// Duration between each trajectory matrix in seconds.
-    pub interval: f32,
+    interval: f32,
 }
 
 impl Trajectories {
     pub fn new(interval: f32) -> Self {
+        assert!(
+            interval > 0.0,
+            "Interval time between trajectories must be greater than 0!"
+        );
+
         Self {
             matrices: vec![],
             offsets: vec![0],
@@ -128,7 +203,7 @@ impl Trajectories {
         }
     }
 
-    pub fn append_frames(&mut self, bvh: &Bvh) {
+    fn append_frames(&mut self, bvh: &Bvh) {
         let frame_count = bvh.frames().len();
         let frame_time = bvh.frame_time().as_secs_f32();
         // SAFETY: A root joint is expected to be present in the Bvh
@@ -206,7 +281,7 @@ impl Trajectories {
         usize::max(self.offsets.len() - 1, 0)
     }
 
-    /// Get time of trajectory from chunk offset index.
+    /// Calculate the time value from a chunk offset index.
     /// This is best used alongside with [`iter_chunk`][Self::iter_chunk].
     ///
     /// # Example
@@ -227,19 +302,57 @@ impl Trajectories {
     pub fn time_from_chunk_offset(&self, chunk_offset: usize) -> f32 {
         chunk_offset as f32 * self.interval
     }
+
+    /// Calculate the floored chunk offset index from a time value.
+    pub fn chunk_offset_from_time(&self, time: f32) -> usize {
+        (time / self.interval) as usize
+    }
+}
+
+// Getter functions
+impl Trajectories {
+    pub fn matrices(&self) -> &[Mat4] {
+        &self.matrices
+    }
+
+    pub fn offsets(&self) -> &[usize] {
+        &self.offsets
+    }
+
+    pub fn interval(&self) -> f32 {
+        self.interval
+    }
 }
 
 /// Serializable joint with minimal required data.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JointInfo {
     /// Name of joint.
-    pub name: String,
+    name: String,
     /// Offset position of joint.
-    pub offset: Vec3,
+    offset: Vec3,
     /// Parent index of this joint.
-    pub parent_index: Option<usize>,
+    parent_index: Option<usize>,
     /// Information needed for referencing pose data.
-    pub pose_refs: Vec<PoseRef>,
+    pose_refs: Vec<PoseRef>,
+}
+
+impl JointInfo {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn offset(&self) -> Vec3 {
+        self.offset
+    }
+
+    pub fn parent_index(&self) -> Option<usize> {
+        self.parent_index
+    }
+
+    pub fn pose_refs(&self) -> &[PoseRef] {
+        &self.pose_refs
+    }
 }
 
 impl JointInfo {
