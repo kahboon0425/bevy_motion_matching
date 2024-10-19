@@ -22,7 +22,7 @@ impl Plugin for CameraPlugin {
             .init_resource::<CameraFocus>()
             .add_systems(Startup, spawn_camera)
             .add_systems(
-                Update,
+                PreUpdate,
                 pan_orbit_camera
                     .run_if(any_with_component::<PanOrbitState>)
                     .after(UiSystemSet),

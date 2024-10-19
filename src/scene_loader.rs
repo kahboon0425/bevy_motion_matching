@@ -1,10 +1,11 @@
-use bevy::{
-    prelude::*,
-    render::{
-        mesh::VertexAttributeValues,
-        texture::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor},
-    },
+use bevy::prelude::*;
+use bevy::render::mesh::VertexAttributeValues;
+use bevy::render::texture::{
+    ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
+
+use crate::player::PlayerBundle;
+use crate::trajectory::TrajectoryBundle;
 
 /// Load glb file and setup the scene.
 pub struct SceneLoaderPlugin;
@@ -23,8 +24,8 @@ fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     let scene: Handle<Scene> = asset_server.load("glb/model_skeleton_mixamo.glb#Scene0");
     info!("Loaded scene: {:?}", scene);
     commands
-        .spawn(SceneBundle { scene, ..default() })
-        .insert(MainScene);
+        .spawn((MainScene, SceneBundle { scene, ..default() }))
+        .insert((PlayerBundle::default(), TrajectoryBundle::default()));
 }
 
 fn spawn_light(mut commands: Commands) {

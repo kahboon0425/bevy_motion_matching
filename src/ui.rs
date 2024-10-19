@@ -24,7 +24,6 @@ impl Plugin for UiPlugin {
         app.add_plugins(EguiPlugin);
 
         app.init_resource::<MouseInUi>()
-            .init_resource::<config::PlaybackState>()
             .init_resource::<config::BvhTrailConfig>()
             .init_resource::<config::DrawTrajectory>()
             .init_resource::<builder::BuildConfig>()
@@ -82,14 +81,9 @@ fn right_panel(world: &mut World, params: &mut SystemState<(EguiContexts, Local<
             });
 
             egui::ScrollArea::vertical().show(ui, |ui| match *page {
-                RightPanelPage::Config => {
-                    config::config_panel(ui, world);
-                }
-                RightPanelPage::Builder => {
-                    builder::builder_panel(ui, world);
-                }
-                // TODO
-                RightPanelPage::PlayMode => {}
+                RightPanelPage::Config => config::config_panel(ui, world),
+                RightPanelPage::Builder => builder::builder_panel(ui, world),
+                RightPanelPage::PlayMode => play_mode::play_mode_panel(ui, world),
             })
         });
 

@@ -1,54 +1,13 @@
-use bevy::{ecs::system::SystemState, prelude::*};
+use bevy::ecs::system::SystemState;
+use bevy::prelude::*;
 use bevy_bvh_anim::prelude::*;
 use bevy_egui::egui;
 
-use crate::{
-    bvh_manager::{bvh_library::BvhLibrary, bvh_player::SelectedBvhAsset},
-    scene_loader::{GroundPlane, MainScene},
-};
+use crate::bvh_manager::bvh_library::BvhLibrary;
+use crate::bvh_manager::bvh_player::{PlaybackState, SelectedBvhAsset};
+use crate::scene_loader::{GroundPlane, MainScene};
 
 use super::groupbox;
-
-#[derive(Resource, Default)]
-pub struct PlaybackState {
-    pub is_playing: bool,
-    pub current_time: f32,
-    pub duration: f32,
-}
-
-#[derive(Resource)]
-pub struct BvhTrailConfig {
-    pub draw: bool,
-    pub resolution: usize,
-}
-
-impl BvhTrailConfig {
-    pub const MAX_RESOLUTION: usize = 10;
-}
-
-impl Default for BvhTrailConfig {
-    fn default() -> Self {
-        Self {
-            draw: true,
-            resolution: 4,
-        }
-    }
-}
-
-#[derive(Resource)]
-pub struct DrawTrajectory(bool);
-
-impl DrawTrajectory {
-    pub fn get(&self) -> bool {
-        self.0
-    }
-}
-
-impl Default for DrawTrajectory {
-    fn default() -> Self {
-        Self(true)
-    }
-}
 
 pub fn config_panel(ui: &mut egui::Ui, world: &mut World) {
     ui.heading("Configurations");
@@ -172,4 +131,38 @@ fn show_ground_checkbox(ui: &mut egui::Ui, world: &mut World) {
 fn draw_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
     let mut draw_trajectory = world.resource_mut::<DrawTrajectory>();
     ui.checkbox(&mut draw_trajectory.0, "Show Trajectory Arrows");
+}
+
+#[derive(Resource)]
+pub struct BvhTrailConfig {
+    pub draw: bool,
+    pub resolution: usize,
+}
+
+impl BvhTrailConfig {
+    pub const MAX_RESOLUTION: usize = 10;
+}
+
+impl Default for BvhTrailConfig {
+    fn default() -> Self {
+        Self {
+            draw: true,
+            resolution: 4,
+        }
+    }
+}
+
+#[derive(Resource)]
+pub struct DrawTrajectory(bool);
+
+impl DrawTrajectory {
+    pub fn get(&self) -> bool {
+        self.0
+    }
+}
+
+impl Default for DrawTrajectory {
+    fn default() -> Self {
+        Self(true)
+    }
 }

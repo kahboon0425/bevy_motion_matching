@@ -5,13 +5,14 @@ use bevy::{
 };
 use bevy_bvh_anim::prelude::*;
 
-use crate::{scene_loader::MainScene, ui::config::PlaybackState};
+use crate::scene_loader::MainScene;
 
 pub struct BvhPlayerPlugin;
 
 impl Plugin for BvhPlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SelectedBvhAsset>()
+            .init_resource::<PlaybackState>()
             .add_systems(Update, generate_bone_map)
             .add_systems(Update, bvh_player)
             .register_type::<OriginTransform>();
@@ -264,4 +265,11 @@ pub fn eulerdeg_to_quat(euler: Vec3) -> Quat {
         euler.y.to_radians(),
         euler.z.to_radians(),
     )
+}
+
+#[derive(Resource, Default)]
+pub struct PlaybackState {
+    pub is_playing: bool,
+    pub current_time: f32,
+    pub duration: f32,
 }
