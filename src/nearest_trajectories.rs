@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
 use crate::motion_data::motion_data_player::MotionDataPlayer;
-use crate::motion_data::{MotionData, MotionDataHandle};
+use crate::motion_data::MotionData;
 use crate::player::PlayerMarker;
 use crate::pose_matching::{apply_pose, match_pose};
 use crate::scene_loader::MainScene;
@@ -20,72 +20,80 @@ impl Plugin for NearestTrajectoryRetrieverPlugin {
 
 pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) {
     let file_path = "motion_data/motion_data.json";
-    let motion_data_handle = asset_server.load::<MotionDataAsset>(file_path);
-    commands.insert_resource(MotionDataHandle(motion_data_handle));
+    let motion_data = asset_server.load::<MotionDataAsset>(file_path);
+
+    commands.insert_resource(MotionDataPlayer {
+        motion_data,
+        is_playing: true,
+        ..default()
+    });
 }
 
 pub fn match_trajectory(
-    motion_data: MotionData,
+    mut motion_data: MotionData,
     user_input_trajectory: Query<(&Trajectory, &Transform), With<PlayerMarker>>,
     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
     mut main_character: Query<
         (&mut Transform, &JointMap),
         (With<MainScene>, Without<PlayerMarker>),
     >,
-    mut commands: Commands,
     time: Res<Time>,
     mut time_passed: Local<f32>,
-    motion_data_handle: Res<MotionDataHandle>,
 ) {
     *time_passed += time.delta_seconds();
 
     if *time_passed >= 1.0 {
-        if let Some(motion_data) = motion_data.get() {
-            for (trajectory, transform) in user_input_trajectory.iter() {
-                let nearest_trajectories =
-                    find_nearest_trajectories::<1>(motion_data, trajectory, transform);
-                println!("10 nearest trajectory: {:?}", nearest_trajectories);
+        let Ok((trajectory, transform)) = user_input_trajectory.get_single() else {
+            return;
+        };
 
-                let mut smallest_pose_distance = f32::MAX;
-                let mut best_pose: Vec<f32> = vec![];
-                let mut best_trajectory_index = 0;
+        if let Some(motion_asset) = motion_data.get() {
+            let nearest_trajectories =
+                find_nearest_trajectories::<1>(motion_asset, trajectory, transform);
+            println!("10 nearest trajectory: {:?}", nearest_trajectories);
 
-                // println!("Nearest Trajectory length: {}", nearest_trajectories.len());
-                for (i, nearest_trajectory) in nearest_trajectories.iter().enumerate() {
-                    if let Some(nearest_trajectory) = nearest_trajectory {
-                        let (pose_distance, pose) = match_pose(
-                            nearest_trajectory,
-                            motion_data,
-                            &mut q_transforms,
-                            &mut main_character,
-                        );
+            let mut smallest_pose_distance = f32::MAX;
+            let mut best_pose: Vec<f32> = vec![];
+            let mut best_trajectory_index = 0;
 
-                        if pose_distance < smallest_pose_distance {
-                            smallest_pose_distance = pose_distance;
-                            best_pose = pose;
-                            // println!("Best Pose: {:?}", best_pose);
-                            best_trajectory_index = i;
-                            // println!("Chunk Index: {}", best_trajectory_index);
-                        }
+            // println!("Nearest Trajectory length: {}", nearest_trajectories.len());
+            for (i, nearest_trajectory) in nearest_trajectories.iter().enumerate() {
+                if let Some(nearest_trajectory) = nearest_trajectory {
+                    let (pose_distance, pose) = match_pose(
+                        nearest_trajectory,
+                        motion_asset,
+                        &mut q_transforms,
+                        &mut main_character,
+                    );
+
+                    if pose_distance < smallest_pose_distance {
+                        smallest_pose_distance = pose_distance;
+                        best_pose = pose;
+                        // println!("Best Pose: {:?}", best_pose);
+                        best_trajectory_index = i;
+                        // println!("Chunk Index: {}", best_trajectory_index);
                     }
                 }
-                let best_trajectory = nearest_trajectories[best_trajectory_index].unwrap();
-                println!("Best Pose Trajectory: {:?}", best_trajectory);
-
-                commands.insert_resource(MotionDataPlayer {
-                    motion_data: motion_data_handle.0.clone(),
-                    chunk_index: best_trajectory.chunk_index,
-                    time: 0.0,
-                    is_playing: true,
-                });
-
-                apply_pose(
-                    motion_data,
-                    &mut q_transforms,
-                    &mut main_character,
-                    best_pose,
-                );
             }
+            let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] else {
+                return;
+            };
+
+            println!("Best Pose Trajectory: {:?}", best_trajectory);
+
+            motion_data.jump_to_pose(
+                best_trajectory.chunk_index,
+                motion_asset
+                    .trajectories
+                    .time_from_chunk_offset(best_trajectory.chunk_offset),
+            );
+
+            // apply_pose(
+            //     motion_data,
+            //     &mut q_transforms,
+            //     &mut main_character,
+            //     best_pose,
+            // );
         }
 
         // Reset the timer
@@ -131,6 +139,7 @@ pub fn find_nearest_trajectories<const N: usize>(
         // println!("Chunk Counttttttt: {}", chunk_count);
         // println!("Chunk Indexxxxxxx: {}", chunk_index);
 
+        println!("Chunk count: {}", chunk_count);
         for chunk_offset in 0..chunk_count - 7 {
             let trajectory = &chunk[chunk_offset..chunk_offset + 7];
 
@@ -150,16 +159,20 @@ pub fn find_nearest_trajectories<const N: usize>(
                 .map(|v| v.xz())
                 .collect::<Vec<_>>();
 
-            let local_translations = trajectory
+            let data_local_translations = trajectory
                 .iter()
                 .map(|trajectory| {
                     inv_matrix.transform_point3(trajectory.to_scale_rotation_translation().2)
                 })
-                .map(|v| v.xz())
+                // Rescale?
+                .map(|v| v.xz() * 0.01)
                 .collect::<Vec<_>>();
 
+            // println!("{:?}", player_local_translations);
+            // println!("{:?}", data_local_translations);
+
             let distance =
-                calculate_trajectory_distance(&player_local_translations, &local_translations);
+                calculate_trajectory_distance(&player_local_translations, &data_local_translations);
 
             if stack_count < N {
                 // Stack not yet full, push into it
