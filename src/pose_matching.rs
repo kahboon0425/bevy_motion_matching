@@ -1,26 +1,18 @@
-use std::cmp::min;
-
 use bevy::prelude::*;
 use bevy_bvh_anim::bvh_anim::ChannelType;
 use bevy_bvh_anim::joint_traits::JointChannelTrait;
 
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
-use crate::nearest_trajectories::{self, NearestTrajectory};
+use crate::nearest_trajectories::NearestTrajectory;
 use crate::player::PlayerMarker;
 use crate::scene_loader::MainScene;
-use crate::trajectory::Trajectory;
 
 pub struct PoseMatchingPlugin;
 
 impl Plugin for PoseMatchingPlugin {
     fn build(&self, app: &mut App) {}
 }
-
-// struct BestPose {
-//     distance: f32,
-//     pose_frame: Vec<f32>,
-// }
 
 pub fn match_pose(
     nearest_trajectory: &NearestTrajectory,
@@ -31,39 +23,10 @@ pub fn match_pose(
         (With<MainScene>, Without<PlayerMarker>),
     >,
 ) -> (f32, Vec<f32>) {
-    // let mut best_pose = BestPose {
-    //     distance: f32::MAX,
-    //     pose_frame: vec![],
-    // };
-
-    let chunk = motion_data
-        .trajectories
-        .get_chunk(nearest_trajectory.chunk_index);
-
-    // println!("Chunk length: {}", chunk.len());
-
-    // let trajectory = &chunk[nearest_trajectory.chunk_offset..nearest_trajectory.chunk_offset + 7];
-    // println!("Trajectory Length: {}", trajectory.len());
-    // println!("Trajectory: {:?}", trajectory);
-
-    // for (index, matrix) in trajectory.iter().enumerate() {
-    //     // println!("Matrix at index {}: {:?}", index, matrix);
-    // }
-
     let chunk_index = nearest_trajectory.chunk_index;
     let chunk_offset = nearest_trajectory.chunk_offset;
     let poses = motion_data.poses.get_poses_from_chunk(chunk_index);
     let pose = poses.get(chunk_offset).unwrap();
-
-    // let time = chunk_offset as f32 * 0.16667;
-    // println!("Frame: {:?}", frame);
-
-    // println!("{}", pose.len());
-
-    // println!(
-    //     "Chunk Index: {}, Chunk Offset: {}, Time: {}",
-    //     chunk_index, chunk_offset, time
-    // );
 
     let mut total_distance = 0.0;
 
@@ -88,17 +51,6 @@ pub fn match_pose(
 
             for pose_ref in joint_data.pose_refs() {
                 let pose_value = pose[pose_ref.motion_index()];
-
-                // println!("Pose ref: {:?}", pose_ref);
-
-                // println!("Motion Index: {}", pose_value);
-                // println!(
-                //     "Joint: {:?}, Joint Offset: {:?}, Pose Index: {}, Channel Type: {}",
-                //     bone_name,
-                //     o,
-                //     pose.motion_index(),
-                //     pose.channel_type()
-                // );
 
                 match pose_ref.channel_type() {
                     ChannelType::RotationX => pose_rotation.x = pose_value,
@@ -154,6 +106,11 @@ pub fn apply_pose(
                 continue;
             };
 
+            println!(
+                "Translation: {}, Rotation: {}",
+                transform.translation, transform.rotation
+            );
+
             let mut pose_translation = Vec3::ZERO;
             let mut pose_rotation = Vec3::ZERO;
 
@@ -177,6 +134,10 @@ pub fn apply_pose(
                 pose_rotation.z.to_radians(),
             );
             transform.translation = pose_translation + joint_data.offset();
+            println!(
+                "New Translation: {}, New Rotation: {}",
+                transform.translation, transform.rotation
+            );
         }
     }
 }
