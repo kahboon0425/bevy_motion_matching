@@ -4,8 +4,9 @@ use bevy_bvh_anim::prelude::*;
 use bevy_egui::egui;
 
 use crate::bvh_manager::bvh_library::BvhLibrary;
-use crate::bvh_manager::bvh_player::{PlaybackState, SelectedBvhAsset};
+use crate::bvh_manager::bvh_player::{BvhPlayer, SelectedBvhAsset};
 use crate::scene_loader::{GroundPlane, MainScene};
+use crate::GameMode;
 
 use super::groupbox;
 
@@ -25,10 +26,18 @@ fn bvh_playback(ui: &mut egui::Ui, world: &mut World) {
         Res<AssetServer>,
         Res<Assets<BvhAsset>>,
         ResMut<SelectedBvhAsset>,
-        ResMut<PlaybackState>,
+        ResMut<BvhPlayer>,
+        Res<State<GameMode>>,
+        ResMut<NextState<GameMode>>,
     )>::new(world);
-    let (asset_server, bvh_assets, mut selected_bvh_asset, mut playback_state) =
-        params.get_mut(world);
+    let (
+        asset_server,
+        bvh_assets,
+        mut selected_bvh_asset,
+        mut bvh_player,
+        game_mode,
+        mut next_game_mode,
+    ) = params.get_mut(world);
 
     groupbox(ui, |ui| {
         // Choose Bvh file
@@ -50,7 +59,7 @@ fn bvh_playback(ui: &mut egui::Ui, world: &mut World) {
                         if ui.selectable_label(false, bvh_name.to_string()).clicked() {
                             selected_bvh_asset.0 = id;
                             if let Some(bvh) = bvh_assets.get(id).map(|asset| asset.get()) {
-                                playback_state.duration =
+                                bvh_player.duration =
                                     bvh.frame_time().as_secs_f32() * bvh.num_frames() as f32;
                             }
                         }
@@ -60,18 +69,21 @@ fn bvh_playback(ui: &mut egui::Ui, world: &mut World) {
 
         // Playback Ui
         ui.horizontal(|ui| {
-            let button_icon = match playback_state.is_playing {
-                true => "Pause",
-                false => "Play",
+            let button_text = match **game_mode {
+                GameMode::Config => "Pause",
+                _ => "Play",
             };
 
-            if ui.button(button_icon).clicked() {
-                playback_state.is_playing = !playback_state.is_playing;
+            if ui.button(button_text).clicked() {
+                match **game_mode {
+                    GameMode::Config => next_game_mode.set(GameMode::None),
+                    _ => next_game_mode.set(GameMode::Config),
+                }
             }
 
-            let playback_duration = playback_state.duration;
+            let playback_duration = bvh_player.duration;
             ui.add(egui::Slider::new(
-                &mut playback_state.current_time,
+                &mut bvh_player.current_time,
                 0.0..=playback_duration,
             ));
         });

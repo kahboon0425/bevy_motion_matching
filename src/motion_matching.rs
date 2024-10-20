@@ -3,15 +3,15 @@ use bevy::prelude::*;
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
 use crate::motion_data::motion_data_player::MotionDataPlayer;
-use crate::motion_data::MotionData;
+use crate::motion_data::{MotionData, MotionDataHandle};
 use crate::player::PlayerMarker;
-use crate::pose_matching::{apply_pose, match_pose};
+use crate::pose_matching::match_pose;
 use crate::scene_loader::MainScene;
 use crate::trajectory::Trajectory;
 
-pub struct NearestTrajectoryRetrieverPlugin;
+pub struct MotionMatchingPlugin;
 
-impl Plugin for NearestTrajectoryRetrieverPlugin {
+impl Plugin for MotionMatchingPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load_motion_data)
             .add_systems(Update, match_trajectory);
@@ -22,15 +22,10 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
     let file_path = "motion_data/motion_data.json";
     let motion_data = asset_server.load::<MotionDataAsset>(file_path);
 
-    commands.insert_resource(MotionDataPlayer {
-        motion_data,
-        is_playing: true,
-        ..default()
-    });
+    commands.insert_resource(MotionDataHandle(motion_data));
 }
 
 pub fn match_trajectory(
-    mut motion_data: MotionData,
     user_input_trajectory: Query<(&Trajectory, &Transform), With<PlayerMarker>>,
     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
     mut main_character: Query<
@@ -38,8 +33,14 @@ pub fn match_trajectory(
         (With<MainScene>, Without<PlayerMarker>),
     >,
     time: Res<Time>,
+    mut motion_player: ResMut<MotionDataPlayer>,
+    motion_data: MotionData,
     mut time_passed: Local<f32>,
 ) {
+    if motion_player.is_playing == false {
+        return;
+    }
+
     *time_passed += time.delta_seconds();
 
     if *time_passed >= 1.0 {
@@ -81,7 +82,7 @@ pub fn match_trajectory(
 
             println!("Best Pose Trajectory: {:?}", best_trajectory);
 
-            motion_data.jump_to_pose(
+            motion_player.jump_to_pose(
                 best_trajectory.chunk_index,
                 motion_asset
                     .trajectories

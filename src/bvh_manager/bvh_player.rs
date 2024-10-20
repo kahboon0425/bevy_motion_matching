@@ -5,67 +5,24 @@ use bevy::{
 };
 use bevy_bvh_anim::prelude::*;
 
-use crate::scene_loader::MainScene;
+use crate::{scene_loader::MainScene, GameMode};
 
 pub struct BvhPlayerPlugin;
 
 impl Plugin for BvhPlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<SelectedBvhAsset>()
-            .init_resource::<PlaybackState>()
-            .add_systems(Update, generate_bone_map)
-            .add_systems(Update, bvh_player)
-            .register_type::<OriginTransform>();
-    }
-}
-
-/// Original transform when it was first loaded.
-#[derive(Component, Clone, Copy, Reflect)]
-pub struct OriginTransform(Transform);
-
-impl OriginTransform {
-    pub fn get(&self) -> Transform {
-        self.0
-    }
-}
-
-#[allow(dead_code)]
-/// Bvh joint original translations and euler angles.
-#[derive(Component, Default, Debug, Clone)]
-pub struct BvhOriginMap(pub HashMap<Entity, (Vec3, Vec3)>);
-
-/// Maps joint name to their respective entity.
-#[derive(Component, Default, Debug, Clone, Deref, DerefMut)]
-pub struct JointMap(pub HashMap<String, Entity>);
-
-#[derive(Resource, Default, Debug)]
-pub struct SelectedBvhAsset(pub AssetId<BvhAsset>);
-
-#[derive(Debug)]
-pub struct FrameData<'a>(pub &'a Frame);
-
-impl<'a> FrameData<'a> {
-    pub fn get_euler(&self, channels: &[Channel]) -> Vec3 {
-        Vec3::new(
-            self.0[&channels[0]],
-            self.0[&channels[1]],
-            self.0[&channels[2]],
-        )
-    }
-
-    pub fn get_translation_euler(&self, channels: &[Channel]) -> (Vec3, Vec3) {
-        (
-            Vec3::new(
-                self.0[&channels[0]],
-                self.0[&channels[1]],
-                self.0[&channels[2]],
-            ),
-            Vec3::new(
-                self.0[&channels[3]],
-                self.0[&channels[4]],
-                self.0[&channels[5]],
-            ),
-        )
+            .init_resource::<BvhPlayer>()
+            .add_systems(Update, (generate_bone_map, bvh_player))
+            .add_systems(
+                OnEnter(GameMode::Config),
+                |mut player: ResMut<BvhPlayer>| {
+                    player.is_playing = true;
+                },
+            )
+            .add_systems(OnExit(GameMode::Config), |mut player: ResMut<BvhPlayer>| {
+                player.is_playing = false;
+            });
     }
 }
 
@@ -90,12 +47,6 @@ fn generate_bone_map(
         let mut joint_map = JointMap::default();
 
         for bone_entity in q_children.iter_descendants(entity) {
-            if let Ok(&transform) = q_transforms.get(bone_entity) {
-                commands
-                    .entity(bone_entity)
-                    .insert(OriginTransform(transform));
-            }
-
             if let Ok(name) = q_names.get(bone_entity) {
                 let bone_name = name.to_string();
                 joint_map.insert(bone_name, bone_entity);
@@ -152,7 +103,7 @@ fn bvh_player(
     time: Res<Time>,
     selected_bvh_asset: Res<SelectedBvhAsset>,
     bvh_assets: Res<Assets<BvhAsset>>,
-    mut playback_state: ResMut<PlaybackState>,
+    mut bvh_player: ResMut<BvhPlayer>,
     mut local_time: Local<f32>,
 ) {
     let Some(bvh) = bvh_assets.get(selected_bvh_asset.0) else {
@@ -227,10 +178,10 @@ fn bvh_player(
 
     // Should not do anything is current_time has not been mutated anywhere else,
     // otherwise, local_time will be set to the mutated value.
-    *local_time = playback_state.current_time;
-    if playback_state.is_playing {
+    *local_time = bvh_player.current_time;
+    if bvh_player.is_playing {
         *local_time += time.delta_seconds();
-        playback_state.current_time = *local_time % playback_state.duration
+        bvh_player.current_time = *local_time % bvh_player.duration
     }
 }
 
@@ -267,8 +218,43 @@ pub fn eulerdeg_to_quat(euler: Vec3) -> Quat {
     )
 }
 
+/// Maps joint name to their respective entity.
+#[derive(Component, Default, Debug, Clone, Deref, DerefMut)]
+pub struct JointMap(pub HashMap<String, Entity>);
+
+#[derive(Resource, Default, Debug)]
+pub struct SelectedBvhAsset(pub AssetId<BvhAsset>);
+
+#[derive(Debug)]
+pub struct FrameData<'a>(pub &'a Frame);
+
+impl<'a> FrameData<'a> {
+    pub fn get_euler(&self, channels: &[Channel]) -> Vec3 {
+        Vec3::new(
+            self.0[&channels[0]],
+            self.0[&channels[1]],
+            self.0[&channels[2]],
+        )
+    }
+
+    pub fn get_translation_euler(&self, channels: &[Channel]) -> (Vec3, Vec3) {
+        (
+            Vec3::new(
+                self.0[&channels[0]],
+                self.0[&channels[1]],
+                self.0[&channels[2]],
+            ),
+            Vec3::new(
+                self.0[&channels[3]],
+                self.0[&channels[4]],
+                self.0[&channels[5]],
+            ),
+        )
+    }
+}
+
 #[derive(Resource, Default)]
-pub struct PlaybackState {
+pub struct BvhPlayer {
     pub is_playing: bool,
     pub current_time: f32,
     pub duration: f32,

@@ -3,7 +3,7 @@ use bevy::prelude::*;
 pub mod bvh_manager;
 pub mod camera;
 pub mod motion_data;
-pub mod nearest_trajectories;
+pub mod motion_matching;
 pub mod player;
 pub mod pose_matching;
 pub mod scene_loader;
@@ -23,9 +23,19 @@ impl Plugin for MotionMatchingAppPlugin {
             camera::CameraPlugin,
             ui::UiPlugin,
             player::PlayerPlugin,
-            nearest_trajectories::NearestTrajectoryRetrieverPlugin,
-            // motion_database::MotionDatabasePlugin,
+            motion_matching::MotionMatchingPlugin,
+            // TODO: Merge this into motion matching plugin.
             pose_matching::PoseMatchingPlugin,
         ));
+
+        app.init_state::<GameMode>();
     }
+}
+
+#[derive(States, Default, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum GameMode {
+    #[default]
+    None,
+    Config,
+    Play,
 }

@@ -2,34 +2,47 @@
 
 use bevy::prelude::*;
 
-use crate::bvh_manager::bvh_player::JointMap;
 use crate::scene_loader::MainScene;
+use crate::{bvh_manager::bvh_player::JointMap, GameMode};
 
-use super::motion_data_asset::MotionDataAsset;
+use super::{MotionData, MotionDataHandle};
 
 pub(super) struct MotionDataPlayerPlugin;
 
 impl Plugin for MotionDataPlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            motion_data_player.run_if(resource_exists::<MotionDataPlayer>),
-        );
+        app.init_resource::<MotionDataPlayer>()
+            .add_systems(
+                Update,
+                motion_data_player.run_if(resource_exists::<MotionDataHandle>),
+            )
+            .add_systems(
+                OnEnter(GameMode::Play),
+                |mut player: ResMut<MotionDataPlayer>| {
+                    player.is_playing = true;
+                },
+            )
+            .add_systems(
+                OnExit(GameMode::Play),
+                |mut player: ResMut<MotionDataPlayer>| {
+                    player.is_playing = false;
+                },
+            );
     }
 }
 
 fn motion_data_player(
     mut q_transforms: Query<&mut Transform>,
     q_scene: Query<&JointMap, With<MainScene>>,
+    motion_data: MotionData,
     mut motion_player: ResMut<MotionDataPlayer>,
-    motion_assets: Res<Assets<MotionDataAsset>>,
     time: Res<Time>,
 ) {
     if motion_player.is_playing == false {
         return;
     }
 
-    let Some(motion_data) = motion_assets.get(&motion_player.motion_data) else {
+    let Some(motion_data) = motion_data.get() else {
         return;
     };
 
@@ -72,11 +85,9 @@ fn motion_data_player(
 /// Insert this resource to start playing motion data.
 #[derive(Resource, Default, Debug)]
 pub struct MotionDataPlayer {
-    /// The referenced asset to play.
-    pub motion_data: Handle<MotionDataAsset>,
     /// The current chunk in the motion data asset to play.
     ///
-    /// Get chunk using [`Poses::get_poses_from_chunk`][get_poses_from_chunk].
+    /// Get poses using [`Poses::get_poses_from_chunk`][get_poses_from_chunk].
     ///
     /// [get_poses_from_chunk]: crate::motion_data::motion_data_asset::Poses::get_poses_from_chunk
     pub chunk_index: usize,
@@ -85,4 +96,11 @@ pub struct MotionDataPlayer {
     /// Is the player currently playing?
     /// Set to false to pause the player and vice versa.
     pub is_playing: bool,
+}
+
+impl MotionDataPlayer {
+    pub fn jump_to_pose(&mut self, chunk_index: usize, time: f32) {
+        self.chunk_index = chunk_index;
+        self.time = time;
+    }
 }

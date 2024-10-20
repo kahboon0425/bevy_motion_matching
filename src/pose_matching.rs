@@ -4,7 +4,7 @@ use bevy_bvh_anim::joint_traits::JointChannelTrait;
 
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
-use crate::nearest_trajectories::NearestTrajectory;
+use crate::motion_matching::NearestTrajectory;
 use crate::player::PlayerMarker;
 use crate::scene_loader::MainScene;
 

@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use bevy::{color::palettes::css, prelude::*};
 
 use crate::{
-    player::{MovementDirection, PlayerMarker, Speed},
+    player::{MovementDirection, MovementSpeed, PlayerMarker},
     ui::config::DrawTrajectory,
 };
 
@@ -120,7 +120,7 @@ fn compute_trajectory(
             &mut Trajectory,
             &TrajectoryHistory,
             &MovementDirection,
-            &Speed,
+            &MovementSpeed,
         ),
         With<PlayerMarker>,
     >,
