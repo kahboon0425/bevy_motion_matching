@@ -84,7 +84,7 @@ fn bvh_playback(ui: &mut egui::Ui, world: &mut World) {
             let playback_duration = bvh_player.duration;
             ui.add(egui::Slider::new(
                 &mut bvh_player.current_time,
-                0.0..=playback_duration,
+                0.0..=playback_duration - f32::EPSILON,
             ));
         });
     });

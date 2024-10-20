@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::scene_loader::MainScene;
 use crate::{bvh_manager::bvh_player::JointMap, GameMode};
 
+use super::motion_data_asset::JointInfo;
 use super::{MotionData, MotionDataHandle};
 
 pub(super) struct MotionDataPlayerPlugin;
@@ -59,23 +60,42 @@ fn motion_data_player(
     let time_leak = motion_player.time - motion_poses.time_from_chunk_offset(chunk_offset);
     let time_factor = f32::clamp(time_leak / motion_poses.interval(), 0.0, 1.0);
 
+    // Calculate interpolated position and rotation from a joint.
+    let calculate_trans_rot = |joint: &JointInfo| -> (Vec3, Quat) {
+        let (start_pos, start_rot) = start_pose.get_pos_rot(joint);
+        let (end_pos, end_rot) = end_pose.get_pos_rot(joint);
+
+        let translation = Vec3::lerp(start_pos, end_pos, time_factor);
+        let rotation = Quat::slerp(start_rot, end_rot, time_factor);
+
+        (translation, rotation)
+    };
+
     for joint_map in q_scene.iter() {
-        for joint in motion_data.joints() {
-            let name = joint.name();
+        let root_joint = &motion_data.joints()[0];
 
-            // Get joint transform.
-            let Some(mut transform) = joint_map
-                .get(name)
+        if let Some(mut transform) = joint_map
+            // Get root_joint transform.
+            .get(root_joint.name())
+            .and_then(|entity| q_transforms.get_mut(*entity).ok())
+        {
+            let (translation, rotation) = calculate_trans_rot(root_joint);
+
+            transform.translation.y = translation.y;
+            transform.rotation = rotation;
+        }
+
+        for joint in motion_data.joints().iter().skip(1) {
+            if let Some(mut transform) = joint_map
+                // Get joint transform.
+                .get(joint.name())
                 .and_then(|entity| q_transforms.get_mut(*entity).ok())
-            else {
-                continue;
-            };
+            {
+                let (translation, rotation) = calculate_trans_rot(joint);
 
-            let (start_pos, start_rot) = start_pose.get_pos_rot(joint);
-            let (end_pos, end_rot) = end_pose.get_pos_rot(joint);
-
-            transform.translation = joint.offset() + Vec3::lerp(start_pos, end_pos, time_factor);
-            transform.rotation = Quat::slerp(start_rot, end_rot, time_factor);
+                transform.translation = joint.offset() + translation;
+                transform.rotation = rotation;
+            }
         }
     }
 
