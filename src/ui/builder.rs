@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use bevy::utils::HashMap;
 use bevy::{ecs::system::SystemState, prelude::*, utils::HashSet};
 use bevy_bvh_anim::prelude::*;
 use bevy_egui::egui;
@@ -10,8 +11,14 @@ use crate::motion_data::motion_data_asset::MotionDataAsset;
 use super::scrollbox;
 
 #[derive(Resource, Default, Debug)]
-pub struct BuildConfig {
+pub struct BuildConfigs {
+    pub selections: HashMap<AssetId<BvhAsset>, bool>,
     pub bvh_assets: HashSet<AssetId<BvhAsset>>,
+}
+
+pub struct BuildConfig {
+    pub selection: bool,
+    pub loopable: bool,
 }
 
 pub fn builder_panel(ui: &mut egui::Ui, world: &mut World) {
@@ -23,8 +30,11 @@ pub fn builder_panel(ui: &mut egui::Ui, world: &mut World) {
 }
 
 fn motion_data_asset_buider_menu(ui: &mut egui::Ui, world: &mut World) {
-    let mut params =
-        SystemState::<(Res<AssetServer>, Res<Assets<BvhAsset>>, ResMut<BuildConfig>)>::new(world);
+    let mut params = SystemState::<(
+        Res<AssetServer>,
+        Res<Assets<BvhAsset>>,
+        ResMut<BuildConfigs>,
+    )>::new(world);
     let (asset_server, bvh_assets, mut build_config) = params.get_mut(world);
 
     ui.label("Bvh Builder");
@@ -52,7 +62,7 @@ fn motion_data_asset_buider_menu(ui: &mut egui::Ui, world: &mut World) {
 
 fn build_motion_data_asset_button(ui: &mut egui::Ui, world: &mut World) {
     let mut params =
-        SystemState::<(Res<BvhLibrary>, Res<Assets<BvhAsset>>, Res<BuildConfig>)>::new(world);
+        SystemState::<(Res<BvhLibrary>, Res<Assets<BvhAsset>>, Res<BuildConfigs>)>::new(world);
     let (bvh_library, bvh_assets, build_config) = params.get(world);
 
     if ui.button("Build").clicked() {
@@ -74,7 +84,9 @@ fn build_motion_data_asset_button(ui: &mut egui::Ui, world: &mut World) {
                 return;
             };
 
-            motion_data_asset.append_frames(bvh);
+            // TODO: Allow for config, set to true for testing purposes
+            motion_data_asset.append_frames(bvh, true);
+            // motion_data_asset.append_frames(bvh, xx);
         }
 
         // TODO(perf): Serialize into binary instead

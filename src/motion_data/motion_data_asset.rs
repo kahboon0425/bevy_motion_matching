@@ -40,7 +40,7 @@ impl MotionDataAsset {
         }
     }
 
-    pub fn append_frames(&mut self, bvh: &Bvh) {
+    pub fn append_frames(&mut self, bvh: &Bvh, loopable: bool) {
         let bvh_frame_time = bvh.frame_time().as_secs_f32();
         if bvh_frame_time != self.poses.interval {
             error!(
@@ -51,7 +51,7 @@ impl MotionDataAsset {
         }
 
         self.poses.append_frames(bvh);
-        self.trajectories.append_frames(bvh);
+        self.trajectories.append_frames(bvh, loopable);
     }
 }
 
@@ -130,7 +130,7 @@ impl Poses {
         }
     }
 
-    pub fn append_frames(&mut self, bvh: &Bvh) {
+    fn append_frames(&mut self, bvh: &Bvh) {
         let frames = bvh.frames();
         self.offsets
             .push(self.offsets[self.offsets.len() - 1] + frames.len());
@@ -185,6 +185,8 @@ pub struct Trajectories {
     ///
     /// \[0, 3, 5, 7\] contains chunk [0, 3), [3, 5), [5, 7)
     offsets: Vec<usize>,
+    /// Is a chunk loopable?
+    loopables: Vec<bool>,
     /// Duration between each trajectory matrix in seconds.
     interval: f32,
 }
@@ -197,23 +199,26 @@ impl Trajectories {
         );
 
         Self {
-            matrices: vec![],
+            matrices: Vec::new(),
             offsets: vec![0],
+            loopables: Vec::new(),
             interval,
         }
     }
 
-    fn append_frames(&mut self, bvh: &Bvh) {
+    fn append_frames(&mut self, bvh: &Bvh, loopable: bool) {
         let frame_count = bvh.frames().len();
         let frame_time = bvh.frame_time().as_secs_f32();
-        // SAFETY: A root joint is expected to be present in the Bvh
-        let root_joint = bvh.root_joint().unwrap();
+        let root_joint = bvh
+            .root_joint()
+            .expect("A root joint should be present in the Bvh.");
 
         let total_frame_time = frame_count as f32 * frame_time;
         let trajectory_count = (total_frame_time / self.interval) as usize;
 
         self.offsets
             .push(self.offsets[self.offsets.len() - 1] + trajectory_count);
+        self.loopables.push(loopable);
 
         for t in 0..trajectory_count {
             let time = t as f32 * self.interval;

@@ -41,17 +41,28 @@ pub fn match_trajectory(
         return;
     }
 
+    const MATCH_TRAJECTORY_COUNT: usize = 1;
+
     *time_passed += time.delta_seconds();
 
     if *time_passed >= 1.0 {
+        // Reset the timer
+        *time_passed = 0.0;
+
         let Ok((trajectory, transform)) = user_input_trajectory.get_single() else {
             return;
         };
 
         if let Some(motion_asset) = motion_data.get() {
-            let nearest_trajectories =
-                find_nearest_trajectories::<1>(motion_asset, trajectory, transform);
-            println!("10 nearest trajectory: {:?}", nearest_trajectories);
+            let nearest_trajectories = find_nearest_trajectories::<MATCH_TRAJECTORY_COUNT>(
+                motion_asset,
+                trajectory,
+                transform,
+            );
+            println!(
+                "{MATCH_TRAJECTORY_COUNT} nearest trajectories:\n{:?}",
+                nearest_trajectories
+            );
 
             let mut smallest_pose_distance = f32::MAX;
             let mut best_pose: Vec<f32> = vec![];
@@ -96,9 +107,6 @@ pub fn match_trajectory(
             //     best_pose,
             // );
         }
-
-        // Reset the timer
-        *time_passed = 0.0
     }
 }
 

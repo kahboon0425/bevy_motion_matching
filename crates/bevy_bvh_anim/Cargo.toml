@@ -9,6 +9,7 @@ repository.workspace = true
 bevy = { workspace = true }
 bvh_anim = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }
 
 [lints]
 workspace = true

@@ -15,7 +15,10 @@ pub struct MotionMatchingAppPlugin;
 impl Plugin for MotionMatchingAppPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(AssetPlugin {
+                mode: AssetMode::Processed,
+                ..default()
+            }),
             motion_data::MotionDataPlugin,
             scene_loader::SceneLoaderPlugin,
             bvh_manager::BvhManagerPlugin,

@@ -1,0 +1,17 @@
+(
+    meta_format_version: "1.0",
+    processed_info: Some((
+        hash: (95, 127, 251, 255, 186, 214, 202, 151, 114, 202, 221, 61, 131, 173, 206, 211, 57, 51, 187, 5, 42, 203, 190, 172, 64, 64, 11, 133, 69, 114, 34, 128),
+        full_hash: (95, 127, 251, 255, 186, 214, 202, 151, 114, 202, 221, 61, 131, 173, 206, 211, 57, 51, 187, 5, 42, 203, 190, 172, 64, 64, 11, 133, 69, 114, 34, 128),
+        process_dependencies: [],
+    )),
+    asset: Load(
+        loader: "bevy_render::texture::image_loader::ImageLoader",
+        settings: (
+            format: FromExtension,
+            is_srgb: true,
+            sampler: Default,
+            asset_usage: ("MAIN_WORLD | RENDER_WORLD"),
+        ),
+    ),
+)

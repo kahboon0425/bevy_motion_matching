@@ -1,0 +1,7 @@
+(
+    meta_format_version: "1.0",
+    asset: Load(
+        loader: "bevy_motion_matching::motion_data::motion_data_asset::MotionDataAssetLoader",
+        settings: (),
+    ),
+)

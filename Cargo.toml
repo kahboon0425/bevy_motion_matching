@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/nixon-voxell/bevy_motion_matching"
 
 [workspace.dependencies]
-bevy = "0.14"
+bevy = { version = "0.14", features = ["asset_processor"] }
 bevy_gltf = "0.14"
 bevy_egui = "0.28"
 serde_json = "1.0"
