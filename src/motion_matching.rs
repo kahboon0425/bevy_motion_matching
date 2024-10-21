@@ -4,7 +4,7 @@ use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
 use crate::motion_data::motion_data_player::MotionDataPlayer;
 use crate::motion_data::{MotionData, MotionDataHandle};
-use crate::player::PlayerMarker;
+use crate::player::{MovementDirection, PlayerMarker};
 use crate::pose_matching::match_pose;
 use crate::scene_loader::MainScene;
 use crate::trajectory::Trajectory;
@@ -30,7 +30,7 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
 // TODO: if no user input change, only breathing/idle.
 
 pub fn match_trajectory(
-    user_input_trajectory: Query<(&Trajectory, &Transform), With<PlayerMarker>>,
+    user_input_trajectory: Query<(&Trajectory, &Transform, &MovementDirection), With<PlayerMarker>>,
     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
     mut main_character: Query<
         (&mut Transform, &JointMap),
@@ -40,24 +40,31 @@ pub fn match_trajectory(
     mut motion_player: ResMut<MotionDataPlayer>,
     motion_data: MotionData,
     mut time_passed: Local<f32>,
+    mut prev_direction: Local<Vec2>,
 ) {
     const MATCH_INTERVAL: f32 = 0.5;
+    const MATCH_TRAJECTORY_COUNT: usize = 1;
+
+    let Ok((trajectory, transform, movement_direction)) = user_input_trajectory.get_single() else {
+        return;
+    };
+
+    if Vec2::dot(**movement_direction, *prev_direction) < 0.5
+        && movement_direction.length_squared() > 0.1
+    {
+        *time_passed = 0.0;
+    }
+    *prev_direction = **movement_direction;
 
     if motion_player.is_playing == false {
         return;
     }
-
-    const MATCH_TRAJECTORY_COUNT: usize = 1;
 
     *time_passed -= time.delta_seconds();
 
     if *time_passed <= 0.0 {
         // Reset the timer
         *time_passed = MATCH_INTERVAL;
-
-        let Ok((trajectory, transform)) = user_input_trajectory.get_single() else {
-            return;
-        };
 
         if let Some(motion_asset) = motion_data.get() {
             let nearest_trajectories = find_nearest_trajectories::<MATCH_TRAJECTORY_COUNT>(
@@ -154,9 +161,9 @@ pub fn find_nearest_trajectories<const N: usize>(
         // println!("Chunk Counttttttt: {}", chunk_count);
         // println!("Chunk Indexxxxxxx: {}", chunk_index);
 
-        println!("Chunk count: {}", chunk_count);
+        // println!("Chunk count: {}", chunk_count);
         for chunk_offset in 0..chunk_count - 6 {
-            println!("{chunk_offset}");
+            // println!("{chunk_offset}");
             let trajectory = &chunk[chunk_offset..chunk_offset + 7];
 
             // Center point of trajectory
