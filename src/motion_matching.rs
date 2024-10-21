@@ -25,6 +25,10 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
     commands.insert_resource(MotionDataHandle(motion_data));
 }
 
+// TODO: when user input not changing, match every 0.5s
+// TODO: if user input change, match!
+// TODO: if no user input change, only breathing/idle.
+
 pub fn match_trajectory(
     user_input_trajectory: Query<(&Trajectory, &Transform), With<PlayerMarker>>,
     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
@@ -37,17 +41,19 @@ pub fn match_trajectory(
     motion_data: MotionData,
     mut time_passed: Local<f32>,
 ) {
+    const MATCH_INTERVAL: f32 = 0.5;
+
     if motion_player.is_playing == false {
         return;
     }
 
     const MATCH_TRAJECTORY_COUNT: usize = 1;
 
-    *time_passed += time.delta_seconds();
+    *time_passed -= time.delta_seconds();
 
-    if *time_passed >= 1.0 {
+    if *time_passed <= 0.0 {
         // Reset the timer
-        *time_passed = 0.0;
+        *time_passed = MATCH_INTERVAL;
 
         let Ok((trajectory, transform)) = user_input_trajectory.get_single() else {
             return;
@@ -149,7 +155,8 @@ pub fn find_nearest_trajectories<const N: usize>(
         // println!("Chunk Indexxxxxxx: {}", chunk_index);
 
         println!("Chunk count: {}", chunk_count);
-        for chunk_offset in 0..chunk_count - 7 {
+        for chunk_offset in 0..chunk_count - 6 {
+            println!("{chunk_offset}");
             let trajectory = &chunk[chunk_offset..chunk_offset + 7];
 
             // Center point of trajectory
