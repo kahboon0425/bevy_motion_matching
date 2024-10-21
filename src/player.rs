@@ -1,18 +1,13 @@
 use bevy::prelude::*;
 
-use crate::{motion_data::motion_data_player::MotionDataPlayer, trajectory::TrajectoryBundle};
+use crate::motion_data::motion_data_player::MotionDataPlayer;
 
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_player)
-            .add_systems(PreUpdate, input_direction);
+        app.add_systems(PreUpdate, input_direction);
     }
-}
-
-fn setup_player(mut commands: Commands) {
-    commands.spawn((PlayerBundle::default(), TrajectoryBundle::default()));
 }
 
 fn input_direction(
