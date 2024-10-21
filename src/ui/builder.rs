@@ -80,12 +80,12 @@ fn build_motion_data_asset_button(ui: &mut egui::Ui, world: &mut World) {
         let mut motion_data_asset = MotionDataAsset::new(bvh_map, TRAJECTORY_INTERVAL);
 
         for id in build_config.bvh_assets.iter() {
-            let Some(bvh) = bvh_assets.get(*id).map(|asset| asset.get()) else {
+            let Some(bvh) = bvh_assets.get(*id) else {
                 return;
             };
 
             // TODO: Allow for config, set to true for testing purposes
-            motion_data_asset.append_frames(bvh, true);
+            motion_data_asset.append_frames(bvh.get(), bvh.loopable());
             // motion_data_asset.append_frames(bvh, xx);
         }
 

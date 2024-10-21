@@ -50,7 +50,7 @@ impl MotionDataAsset {
             return;
         }
 
-        self.poses.append_frames(bvh);
+        self.poses.append_frames(bvh, loopable);
         self.trajectories.append_frames(bvh, loopable);
     }
 }
@@ -112,6 +112,8 @@ pub struct Poses {
     ///
     /// \[0, 3, 5, 7\] contains chunk [0, 3), [3, 5), [5, 7)
     offsets: Vec<usize>,
+    /// Is a chunk loopable?
+    loopables: Vec<bool>,
     /// Duration between each pose in seconds.
     interval: f32,
 }
@@ -124,16 +126,18 @@ impl Poses {
         );
 
         Self {
-            poses: vec![],
+            poses: Vec::new(),
             offsets: vec![0],
+            loopables: Vec::new(),
             interval,
         }
     }
 
-    fn append_frames(&mut self, bvh: &Bvh) {
+    fn append_frames(&mut self, bvh: &Bvh, loopable: bool) {
         let frames = bvh.frames();
         self.offsets
             .push(self.offsets[self.offsets.len() - 1] + frames.len());
+        self.loopables.push(loopable);
 
         for frame in frames {
             self.poses.push(frame_to_pose(frame));
