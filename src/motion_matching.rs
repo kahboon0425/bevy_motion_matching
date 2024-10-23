@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
-use crate::motion_data::motion_data_player::MotionDataPlayer;
+use crate::motion_data::motion_data_player::{MotionDataPlayer, MotionDataPlayerPair};
 use crate::motion_data::{MotionData, MotionDataHandle};
 use crate::player::{MovementDirection, PlayerMarker};
 use crate::pose_matching::match_pose;
@@ -35,11 +35,16 @@ pub fn match_trajectory(
     mut main_character: Query<&JointMap, With<MainScene>>,
     time: Res<Time>,
     mut motion_player: ResMut<MotionDataPlayer>,
+    mut motion_player_pair: ResMut<MotionDataPlayerPair>,
     motion_data: MotionData,
-    mut time_passed: Local<f32>,
+    mut match_time: Local<f32>,
+    mut interpolation_time: Local<f32>,
     mut prev_direction: Local<Vec2>,
 ) {
-    const MATCH_INTERVAL: f32 = 0.5;
+    const TRAJECTORY_INTERVAL: f32 = 0.5;
+    const MATCH_INTERVAL: f32 = 0.4;
+    const INTERPOLATION_DURATION: f32 = TRAJECTORY_INTERVAL - MATCH_INTERVAL;
+
     const MATCH_TRAJECTORY_COUNT: usize = 5;
 
     let Ok((trajectory, transform, movement_direction)) = user_input_trajectory.get_single() else {
@@ -50,7 +55,7 @@ pub fn match_trajectory(
     if Vec2::dot(**movement_direction, *prev_direction) < 0.5
         && movement_direction.length_squared() > 0.1
     {
-        *time_passed = 0.0;
+        *match_time = 0.0;
     }
     *prev_direction = **movement_direction;
 
@@ -58,12 +63,29 @@ pub fn match_trajectory(
         return;
     }
 
-    *time_passed -= time.delta_seconds();
+    // MATCH_INTERVAL -> 0.0
+    *match_time -= time.delta_seconds();
+    // 0.0 -> INTERPOLATION_DURATION
+    *interpolation_time = f32::min(
+        INTERPOLATION_DURATION,
+        *interpolation_time + time.delta_seconds(),
+    );
 
-    if *time_passed <= 0.0 {
-        // means 0.5s have passed
-        // Reset the timer
-        *time_passed = MATCH_INTERVAL;
+    let mut interpolation_factor = *interpolation_time / INTERPOLATION_DURATION;
+    if motion_player_pair.pair_bool == true {
+        // Reverse interpolation factor.
+        interpolation_factor = 1.0 - interpolation_factor;
+    }
+    motion_player_pair.interpolation_factor = interpolation_factor;
+
+    if *match_time <= 0.0 {
+        // If MATCH_INTERVAL have passed, match!
+
+        // Reset the timers.
+        *match_time = MATCH_INTERVAL;
+        *interpolation_time = 0.0;
+
+        motion_player_pair.pair_bool = !motion_player_pair.pair_bool;
 
         if let Some(motion_asset) = motion_data.get() {
             let nearest_trajectories = find_nearest_trajectories::<MATCH_TRAJECTORY_COUNT>(

@@ -1,6 +1,7 @@
 //! Play motion data based on events and resources.
 
 use bevy::prelude::*;
+use bevy::utils::HashMap;
 
 use crate::scene_loader::MainScene;
 use crate::{bvh_manager::bvh_player::JointMap, GameMode};
@@ -12,7 +13,8 @@ pub(super) struct MotionDataPlayerPlugin;
 
 impl Plugin for MotionDataPlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<MotionDataPlayer>()
+        app.init_resource::<MotionDataPlayerPair>()
+            .init_resource::<MotionDataPlayer>() // TODO: Remove this as a resource
             .add_systems(
                 Update,
                 motion_data_player.run_if(resource_exists::<MotionDataHandle>),
@@ -102,6 +104,26 @@ fn motion_data_player(
     motion_player.time += time.delta_seconds();
 }
 
+/// Maps joint name to their respective transform.
+#[derive(Resource, Default, Debug, Clone, Deref, DerefMut)]
+pub struct JointTransformMaps(pub [HashMap<String, Transform>; 2]);
+
+#[derive(Resource, Default, Debug)]
+pub struct MotionDataPlayerPair {
+    pub joint_transform_maps: [HashMap<String, Transform>; 2],
+    pub players: [MotionDataPlayer; 2],
+    pub interpolation_factor: f32,
+    pub is_playing: bool,
+    pub pair_bool: bool,
+}
+
+// impl MotionDataPlayerPair {
+//     pub fn get_player(&self, index: usize) -> (&HashMap<String, Transform>, &MotionDataPlayer) {
+//         (&self.joint_transform_maps[index], &self.players[index])
+//     }
+// }
+
+// TODO: Remove this as a resource
 /// Insert this resource to start playing motion data.
 #[derive(Resource, Default, Debug)]
 pub struct MotionDataPlayer {
@@ -113,6 +135,7 @@ pub struct MotionDataPlayer {
     pub chunk_index: usize,
     /// Duration in terms of seconds inside the [`Self::chunk_index`].
     pub time: f32,
+    // TODO: Remove this
     /// Is the player currently playing?
     /// Set to false to pause the player and vice versa.
     pub is_playing: bool,
