@@ -18,10 +18,7 @@ pub fn match_pose(
     nearest_trajectory: &NearestTrajectory,
     motion_data: &MotionDataAsset,
     q_transforms: &mut Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
-    main_character: &mut Query<
-        (&mut Transform, &JointMap),
-        (With<MainScene>, Without<PlayerMarker>),
-    >,
+    main_character: &mut Query<&JointMap, With<MainScene>>,
 ) -> (f32, Vec<f32>) {
     let chunk_index = nearest_trajectory.chunk_index;
     let chunk_offset = nearest_trajectory.chunk_offset;
@@ -30,7 +27,7 @@ pub fn match_pose(
 
     let mut total_distance = 0.0;
 
-    for (mut _scene_transform, bone_map) in main_character.iter_mut() {
+    for bone_map in main_character.iter() {
         let joints = motion_data.joints();
 
         for joint_data in joints.iter() {
@@ -82,64 +79,6 @@ pub fn match_pose(
     }
 
     (total_distance, pose.to_vec())
-}
-
-pub fn apply_pose(
-    motion_data: &MotionDataAsset,
-    q_transforms: &mut Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
-    main_character: &mut Query<
-        (&mut Transform, &JointMap),
-        (With<MainScene>, Without<PlayerMarker>),
-    >,
-    best_pose: Vec<f32>,
-) {
-    for (mut _scene_transform, bone_map) in main_character.iter_mut() {
-        let joints = motion_data.joints();
-
-        for joint_data in joints.iter() {
-            let bone_name = joint_data.name();
-            let Some(&bone_entity) = bone_map.0.get(bone_name) else {
-                continue;
-            };
-
-            let Ok(mut transform) = q_transforms.get_mut(bone_entity) else {
-                continue;
-            };
-
-            println!(
-                "Translation: {}, Rotation: {}",
-                transform.translation, transform.rotation
-            );
-
-            let mut pose_translation = Vec3::ZERO;
-            let mut pose_rotation = Vec3::ZERO;
-
-            for pose_ref in joint_data.pose_refs() {
-                let pose_value = best_pose[pose_ref.motion_index()];
-
-                match pose_ref.channel_type() {
-                    ChannelType::RotationX => pose_rotation.x = pose_value,
-                    ChannelType::RotationY => pose_rotation.y = pose_value,
-                    ChannelType::RotationZ => pose_rotation.z = pose_value,
-                    ChannelType::PositionX => pose_translation.x = pose_value,
-                    ChannelType::PositionY => pose_translation.y = pose_value,
-                    ChannelType::PositionZ => pose_translation.z = pose_value,
-                }
-            }
-
-            transform.rotation = Quat::from_euler(
-                EulerRot::XYZ,
-                pose_rotation.x.to_radians(),
-                pose_rotation.y.to_radians(),
-                pose_rotation.z.to_radians(),
-            );
-            transform.translation = pose_translation + joint_data.offset();
-            println!(
-                "New Translation: {}, New Rotation: {}",
-                transform.translation, transform.rotation
-            );
-        }
-    }
 }
 
 pub fn calculate_pose_distance(

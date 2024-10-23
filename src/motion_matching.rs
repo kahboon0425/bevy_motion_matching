@@ -32,10 +32,7 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
 pub fn match_trajectory(
     user_input_trajectory: Query<(&Trajectory, &Transform, &MovementDirection), With<PlayerMarker>>,
     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
-    mut main_character: Query<
-        (&mut Transform, &JointMap),
-        (With<MainScene>, Without<PlayerMarker>),
-    >,
+    mut main_character: Query<&JointMap, With<MainScene>>,
     time: Res<Time>,
     mut motion_player: ResMut<MotionDataPlayer>,
     motion_data: MotionData,
@@ -43,12 +40,13 @@ pub fn match_trajectory(
     mut prev_direction: Local<Vec2>,
 ) {
     const MATCH_INTERVAL: f32 = 0.5;
-    const MATCH_TRAJECTORY_COUNT: usize = 1;
+    const MATCH_TRAJECTORY_COUNT: usize = 5;
 
     let Ok((trajectory, transform, movement_direction)) = user_input_trajectory.get_single() else {
         return;
     };
 
+    // if user input not changing, match every 0.5, if user input change, match
     if Vec2::dot(**movement_direction, *prev_direction) < 0.5
         && movement_direction.length_squared() > 0.1
     {
@@ -63,6 +61,7 @@ pub fn match_trajectory(
     *time_passed -= time.delta_seconds();
 
     if *time_passed <= 0.0 {
+        // means 0.5s have passed
         // Reset the timer
         *time_passed = MATCH_INTERVAL;
 
@@ -72,13 +71,12 @@ pub fn match_trajectory(
                 trajectory,
                 transform,
             );
-            println!(
-                "{MATCH_TRAJECTORY_COUNT} nearest trajectories:\n{:?}",
-                nearest_trajectories
-            );
+            // println!(
+            //     "{MATCH_TRAJECTORY_COUNT} nearest trajectories:\n{:?}",
+            //     nearest_trajectories
+            // );
 
             let mut smallest_pose_distance = f32::MAX;
-            let mut best_pose: Vec<f32> = vec![];
             let mut best_trajectory_index = 0;
 
             // println!("Nearest Trajectory length: {}", nearest_trajectories.len());
@@ -91,10 +89,10 @@ pub fn match_trajectory(
                         &mut main_character,
                     );
 
+                    println!("Pose Distance: {}", pose_distance);
+
                     if pose_distance < smallest_pose_distance {
                         smallest_pose_distance = pose_distance;
-                        best_pose = pose;
-                        // println!("Best Pose: {:?}", best_pose);
                         best_trajectory_index = i;
                         // println!("Chunk Index: {}", best_trajectory_index);
                     }
@@ -104,7 +102,7 @@ pub fn match_trajectory(
                 return;
             };
 
-            println!("Best Pose Trajectory: {:?}", best_trajectory);
+            // println!("Best Pose Trajectory: {:?}", best_trajectory);
 
             motion_player.jump_to_pose(
                 best_trajectory.chunk_index,
@@ -112,13 +110,6 @@ pub fn match_trajectory(
                     .trajectories
                     .time_from_chunk_offset(best_trajectory.chunk_offset),
             );
-
-            // apply_pose(
-            //     motion_data,
-            //     &mut q_transforms,
-            //     &mut main_character,
-            //     best_pose,
-            // );
         }
     }
 }
