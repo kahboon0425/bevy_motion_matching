@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::motion_data::motion_data_player::MotionDataPlayer;
+use crate::motion_data::motion_data_player::{MotionDataPlayer, MotionDataPlayerPair};
 
 pub struct PlayerPlugin;
 
@@ -23,7 +23,7 @@ fn input_direction(
     q_camera: Query<&GlobalTransform, With<Camera>>,
     key_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
-    motion_player: Res<MotionDataPlayer>,
+    motion_player: Res<MotionDataPlayerPair>,
 ) {
     if motion_player.is_playing == false {
         return;

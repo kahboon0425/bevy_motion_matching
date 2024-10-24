@@ -1,8 +1,10 @@
 use bevy::prelude::*;
+use bevy_bvh_anim::bvh_anim::ChannelType;
+use bevy_bvh_anim::joint_traits::JointChannelTrait;
 
 use crate::bvh_manager::bvh_player::JointMap;
-use crate::motion_data::motion_data_asset::MotionDataAsset;
-use crate::motion_data::motion_data_player::{MotionDataPlayer, MotionDataPlayerPair};
+use crate::motion_data::motion_data_asset::{self, MotionDataAsset};
+use crate::motion_data::motion_data_player::{self, MotionDataPlayer, MotionDataPlayerPair};
 use crate::motion_data::{MotionData, MotionDataHandle};
 use crate::player::{MovementDirection, PlayerMarker};
 use crate::pose_matching::match_pose;
@@ -25,7 +27,7 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
     commands.insert_resource(MotionDataHandle(motion_data));
 }
 
-// TODO: when user input not changing, match every 0.5s
+// TODO: when user input not changing, match every 0.4s
 // TODO: if user input change, match!
 // TODO: if no user input change, only breathing/idle.
 
@@ -34,12 +36,12 @@ pub fn match_trajectory(
     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
     mut main_character: Query<&JointMap, With<MainScene>>,
     time: Res<Time>,
-    mut motion_player: ResMut<MotionDataPlayer>,
     mut motion_player_pair: ResMut<MotionDataPlayerPair>,
     motion_data: MotionData,
     mut match_time: Local<f32>,
     mut interpolation_time: Local<f32>,
     mut prev_direction: Local<Vec2>,
+    mut best_trajectory: Local<Option<NearestTrajectory>>,
 ) {
     const TRAJECTORY_INTERVAL: f32 = 0.5;
     const MATCH_INTERVAL: f32 = 0.4;
@@ -59,18 +61,19 @@ pub fn match_trajectory(
     }
     *prev_direction = **movement_direction;
 
-    if motion_player.is_playing == false {
+    if motion_player_pair.is_playing == false {
         return;
     }
 
     // MATCH_INTERVAL -> 0.0
     *match_time -= time.delta_seconds();
-    // 0.0 -> INTERPOLATION_DURATION
+    // 0.0 -> INTERPOLATION_DURATION (0 to 0.1)
     *interpolation_time = f32::min(
         INTERPOLATION_DURATION,
         *interpolation_time + time.delta_seconds(),
     );
 
+    // (0 to 1)
     let mut interpolation_factor = *interpolation_time / INTERPOLATION_DURATION;
     if motion_player_pair.pair_bool == true {
         // Reverse interpolation factor.
@@ -120,19 +123,41 @@ pub fn match_trajectory(
                     }
                 }
             }
-            let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] else {
-                return;
-            };
+            // let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] else {
+            //     return;
+            // };
 
-            // println!("Best Pose Trajectory: {:?}", best_trajectory);
+            *best_trajectory = nearest_trajectories[best_trajectory_index].clone();
 
-            motion_player.jump_to_pose(
-                best_trajectory.chunk_index,
-                motion_asset
-                    .trajectories
-                    .time_from_chunk_offset(best_trajectory.chunk_offset),
-            );
+            if let Some(best_trajectory) = *best_trajectory {
+                if motion_player_pair.pair_bool {
+                    motion_player_pair.jump_to_pose(
+                        best_trajectory.chunk_index,
+                        motion_asset
+                            .trajectories
+                            .time_from_chunk_offset(best_trajectory.chunk_offset),
+                        0,
+                    );
+                } else {
+                    motion_player_pair.jump_to_pose(
+                        best_trajectory.chunk_index,
+                        motion_asset
+                            .trajectories
+                            .time_from_chunk_offset(best_trajectory.chunk_offset),
+                        1,
+                    );
+                }
+            }
         }
+    } else {
+        *interpolation_time += time.delta_seconds();
+        *interpolation_time = f32::min(*interpolation_time, INTERPOLATION_DURATION);
+
+        let interpolation_factor = *interpolation_time / INTERPOLATION_DURATION;
+
+        motion_player_pair.interpolation_factor = interpolation_factor;
+
+        *interpolation_time = 0.0;
     }
 }
 

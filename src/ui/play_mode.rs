@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy_egui::egui;
 
 use crate::bvh_manager::bvh_player::BvhPlayer;
-use crate::motion_data::motion_data_player::MotionDataPlayer;
+use crate::motion_data::motion_data_player::{MotionDataPlayer, MotionDataPlayerPair};
 use crate::motion_data::MotionData;
 use crate::GameMode;
 
@@ -18,7 +18,7 @@ pub fn play_mode_panel(ui: &mut egui::Ui, world: &mut World) {
 fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     let mut params = SystemState::<(
         MotionData,
-        ResMut<MotionDataPlayer>,
+        ResMut<MotionDataPlayerPair>,
         ResMut<BvhPlayer>,
         Res<State<GameMode>>,
         ResMut<NextState<GameMode>>,
