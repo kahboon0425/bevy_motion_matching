@@ -1,15 +1,12 @@
-use bevy::prelude::*;
-use bevy_bvh_anim::bvh_anim::ChannelType;
-use bevy_bvh_anim::joint_traits::JointChannelTrait;
-
 use crate::bvh_manager::bvh_player::JointMap;
-use crate::motion_data::motion_data_asset::{self, MotionDataAsset};
-use crate::motion_data::motion_data_player::{self, MotionDataPlayer, MotionDataPlayerPair};
+use crate::motion_data::motion_data_asset::MotionDataAsset;
+use crate::motion_data::motion_data_player::MotionDataPlayerPair;
 use crate::motion_data::{MotionData, MotionDataHandle};
 use crate::player::{MovementDirection, PlayerMarker};
 use crate::pose_matching::match_pose;
 use crate::scene_loader::MainScene;
 use crate::trajectory::Trajectory;
+use bevy::prelude::*;
 
 pub struct MotionMatchingPlugin;
 
@@ -27,10 +24,6 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
     commands.insert_resource(MotionDataHandle(motion_data));
 }
 
-// TODO: when user input not changing, match every 0.4s
-// TODO: if user input change, match!
-// TODO: if no user input change, only breathing/idle.
-
 pub fn match_trajectory(
     user_input_trajectory: Query<(&Trajectory, &Transform, &MovementDirection), With<PlayerMarker>>,
     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
@@ -41,19 +34,18 @@ pub fn match_trajectory(
     mut match_time: Local<f32>,
     mut interpolation_time: Local<f32>,
     mut prev_direction: Local<Vec2>,
-    mut best_trajectory: Local<Option<NearestTrajectory>>,
 ) {
     const TRAJECTORY_INTERVAL: f32 = 0.5;
     const MATCH_INTERVAL: f32 = 0.4;
     const INTERPOLATION_DURATION: f32 = TRAJECTORY_INTERVAL - MATCH_INTERVAL;
 
-    const MATCH_TRAJECTORY_COUNT: usize = 5;
+    const MATCH_TRAJECTORY_COUNT: usize = 10;
 
     let Ok((trajectory, transform, movement_direction)) = user_input_trajectory.get_single() else {
         return;
     };
 
-    // if user input not changing, match every 0.5, if user input change, match
+    // if user input not changing, match every 0.4, if user input change, match
     if Vec2::dot(**movement_direction, *prev_direction) < 0.5
         && movement_direction.length_squared() > 0.1
     {
@@ -123,41 +115,37 @@ pub fn match_trajectory(
                     }
                 }
             }
-            // let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] else {
-            //     return;
-            // };
+            let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] else {
+                return;
+            };
 
-            *best_trajectory = nearest_trajectories[best_trajectory_index].clone();
-
-            if let Some(best_trajectory) = *best_trajectory {
-                if motion_player_pair.pair_bool {
-                    motion_player_pair.jump_to_pose(
-                        best_trajectory.chunk_index,
-                        motion_asset
-                            .trajectories
-                            .time_from_chunk_offset(best_trajectory.chunk_offset),
-                        0,
-                    );
-                } else {
-                    motion_player_pair.jump_to_pose(
-                        best_trajectory.chunk_index,
-                        motion_asset
-                            .trajectories
-                            .time_from_chunk_offset(best_trajectory.chunk_offset),
-                        1,
-                    );
-                }
+            if motion_player_pair.pair_bool {
+                motion_player_pair.jump_to_pose(
+                    best_trajectory.chunk_index,
+                    motion_asset
+                        .trajectories
+                        .time_from_chunk_offset(best_trajectory.chunk_offset),
+                    0,
+                );
+            } else {
+                motion_player_pair.jump_to_pose(
+                    best_trajectory.chunk_index,
+                    motion_asset
+                        .trajectories
+                        .time_from_chunk_offset(best_trajectory.chunk_offset),
+                    1,
+                );
             }
         }
     } else {
-        *interpolation_time += time.delta_seconds();
-        *interpolation_time = f32::min(*interpolation_time, INTERPOLATION_DURATION);
+        // *interpolation_time += time.delta_seconds();
+        // *interpolation_time = f32::min(*interpolation_time, INTERPOLATION_DURATION);
 
-        let interpolation_factor = *interpolation_time / INTERPOLATION_DURATION;
+        // let interpolation_factor = *interpolation_time / INTERPOLATION_DURATION;
 
-        motion_player_pair.interpolation_factor = interpolation_factor;
+        // motion_player_pair.interpolation_factor = interpolation_factor;
 
-        *interpolation_time = 0.0;
+        // *interpolation_time = 0.0;
     }
 }
 
@@ -196,12 +184,7 @@ pub fn find_nearest_trajectories<const N: usize>(
             continue;
         }
 
-        // println!("Chunk Counttttttt: {}", chunk_count);
-        // println!("Chunk Indexxxxxxx: {}", chunk_index);
-
-        // println!("Chunk count: {}", chunk_count);
         for chunk_offset in 0..chunk_count - 6 {
-            // println!("{chunk_offset}");
             let trajectory = &chunk[chunk_offset..chunk_offset + 7];
 
             // Center point of trajectory
@@ -228,9 +211,6 @@ pub fn find_nearest_trajectories<const N: usize>(
                 // Rescale?
                 .map(|v| v.xz() * 0.01)
                 .collect::<Vec<_>>();
-
-            // println!("{:?}", player_local_translations);
-            // println!("{:?}", data_local_translations);
 
             let distance =
                 calculate_trajectory_distance(&player_local_translations, &data_local_translations);
