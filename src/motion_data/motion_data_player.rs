@@ -1,11 +1,9 @@
 //! Play motion data based on events and resources.
 
-use bevy::prelude::*;
-use bevy::utils::HashMap;
-
 use crate::motion_matching::NearestTrajectory;
 use crate::scene_loader::MainScene;
 use crate::{bvh_manager::bvh_player::JointMap, GameMode};
+use bevy::prelude::*;
 
 use super::motion_data_asset::JointInfo;
 use super::{MotionData, MotionDataHandle};
@@ -195,7 +193,6 @@ pub struct MotionDataPlayerPair {
     pub interpolation_factor: f32,
     pub is_playing: bool,
     pub pair_bool: bool,
-    pub last_matched_trajectory: Option<NearestTrajectory>,
 }
 
 #[derive(Component, Default, Debug)]

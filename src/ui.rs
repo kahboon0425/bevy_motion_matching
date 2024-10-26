@@ -10,6 +10,8 @@ use bevy_egui::EguiPlugin;
 #[cfg(feature = "debug")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
+use crate::motion_matching::NearestTrajectoriesResource;
+
 pub mod builder;
 pub mod config;
 pub mod play_mode;
@@ -60,8 +62,15 @@ enum RightPanelPage {
     PlayMode,
 }
 
-fn right_panel(world: &mut World, params: &mut SystemState<(EguiContexts, Local<RightPanelPage>)>) {
-    let (mut contexts, mut page) = params.get_mut(world);
+fn right_panel(
+    world: &mut World,
+    params: &mut SystemState<(
+        EguiContexts,
+        Res<NearestTrajectoriesResource>,
+        Local<RightPanelPage>,
+    )>,
+) {
+    let (mut contexts, nearest_trajectories, mut page) = params.get_mut(world);
 
     let ctx = contexts.ctx_mut().clone();
     egui::SidePanel::left("left_panel")
@@ -83,7 +92,10 @@ fn right_panel(world: &mut World, params: &mut SystemState<(EguiContexts, Local<
             egui::ScrollArea::vertical().show(ui, |ui| match *page {
                 RightPanelPage::Config => config::config_panel(ui, world),
                 RightPanelPage::Builder => builder::builder_panel(ui, world),
-                RightPanelPage::PlayMode => play_mode::play_mode_panel(ui, world),
+                RightPanelPage::PlayMode => {
+                    // play_mode::play_mode_panel(ui, world)
+                    play_mode::play_mode_panel(ui, world)
+                }
             })
         });
 

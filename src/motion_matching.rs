@@ -12,8 +12,11 @@ pub struct MotionMatchingPlugin;
 
 impl Plugin for MotionMatchingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, load_motion_data)
-            .add_systems(Update, match_trajectory);
+        app.insert_resource(NearestTrajectoriesResource {
+            nearest_trajectories: [None; 5],
+        })
+        .add_systems(Startup, load_motion_data)
+        .add_systems(Update, match_trajectory);
     }
 }
 
@@ -34,12 +37,13 @@ pub fn match_trajectory(
     mut match_time: Local<f32>,
     mut interpolation_time: Local<f32>,
     mut prev_direction: Local<Vec2>,
+    mut nearest_trajectories_resource: ResMut<NearestTrajectoriesResource>,
 ) {
     const TRAJECTORY_INTERVAL: f32 = 0.5;
     const MATCH_INTERVAL: f32 = 0.4;
     const INTERPOLATION_DURATION: f32 = TRAJECTORY_INTERVAL - MATCH_INTERVAL;
 
-    const MATCH_TRAJECTORY_COUNT: usize = 10;
+    const MATCH_TRAJECTORY_COUNT: usize = 5;
 
     let Ok((trajectory, transform, movement_direction)) = user_input_trajectory.get_single() else {
         return;
@@ -93,6 +97,8 @@ pub fn match_trajectory(
             //     nearest_trajectories
             // );
 
+            nearest_trajectories_resource.nearest_trajectories = nearest_trajectories;
+
             let mut smallest_pose_distance = f32::MAX;
             let mut best_trajectory_index = 0;
 
@@ -106,7 +112,7 @@ pub fn match_trajectory(
                         &mut main_character,
                     );
 
-                    println!("Pose Distance: {}", pose_distance);
+                    // println!("Pose Distance: {}", pose_distance);
 
                     if pose_distance < smallest_pose_distance {
                         smallest_pose_distance = pose_distance;
@@ -147,6 +153,10 @@ pub fn match_trajectory(
 
         // *interpolation_time = 0.0;
     }
+}
+#[derive(Default, Resource)]
+pub struct NearestTrajectoriesResource {
+    pub nearest_trajectories: [Option<NearestTrajectory>; 5],
 }
 
 #[derive(Clone, Copy, Debug)]
