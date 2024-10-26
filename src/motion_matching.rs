@@ -15,7 +15,12 @@ impl Plugin for MotionMatchingPlugin {
         app.insert_resource(MotionMatchingResult {
             nearest_trajectories: [None; 5],
             pose_matching_result: [0.0; 5],
-            best_pose_result: 0.0,
+            best_pose_result: BesePoseResult {
+                chunk_index: 0,
+                chunk_offset: 0,
+                trajectory_distance: 0.0,
+                pose_distance: 0.0,
+            },
         })
         .add_systems(Startup, load_motion_data)
         .add_systems(Update, match_trajectory);
@@ -129,6 +134,11 @@ pub fn match_trajectory(
                 return;
             };
 
+            motion_matching_result.best_pose_result.chunk_index = best_trajectory.chunk_index;
+            motion_matching_result.best_pose_result.chunk_offset = best_trajectory.chunk_offset;
+            motion_matching_result.best_pose_result.trajectory_distance = best_trajectory.distance;
+            motion_matching_result.best_pose_result.pose_distance = smallest_pose_distance;
+
             if motion_player_pair.pair_bool {
                 motion_player_pair.jump_to_pose(
                     best_trajectory.chunk_index,
@@ -158,11 +168,20 @@ pub fn match_trajectory(
         // *interpolation_time = 0.0;
     }
 }
+
+#[derive(Component, Default, Debug)]
+pub struct BesePoseResult {
+    pub chunk_index: usize,
+    pub chunk_offset: usize,
+    pub trajectory_distance: f32,
+    pub pose_distance: f32,
+}
+
 #[derive(Default, Resource)]
 pub struct MotionMatchingResult {
     pub nearest_trajectories: [Option<NearestTrajectory>; 5],
     pub pose_matching_result: [f32; 5],
-    pub best_pose_result: f32,
+    pub best_pose_result: BesePoseResult,
 }
 
 #[derive(Clone, Copy, Debug)]

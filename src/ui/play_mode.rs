@@ -1,6 +1,6 @@
 use bevy::ecs::system::SystemState;
 use bevy::prelude::*;
-use bevy_egui::egui;
+use bevy_egui::egui::{self, Color32};
 
 use crate::bvh_manager::bvh_player::BvhPlayer;
 use crate::motion_data::motion_data_player::MotionDataPlayerPair;
@@ -110,21 +110,41 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
                     .zip(motion_matching_result.pose_matching_result.iter())
                 {
                     if let Some(trajectory) = nearest_trajectory {
+                        let is_best_pose = trajectory.chunk_index
+                            == motion_matching_result.best_pose_result.chunk_index
+                            && trajectory.chunk_offset
+                                == motion_matching_result.best_pose_result.chunk_offset
+                            && trajectory
+                                .distance
+                                .eq(&motion_matching_result.best_pose_result.trajectory_distance)
+                            && pose_matching_result
+                                .eq(&motion_matching_result.best_pose_result.pose_distance);
+
+                        let row_color = if is_best_pose {
+                            Some(Color32::RED)
+                        } else {
+                            Some(Color32::GRAY)
+                        };
                         body.row(20.0, |mut row| {
                             row.col(|ui| {
+                                ui.visuals_mut().override_text_color = row_color;
+
                                 ui.label(format!("{}", trajectory.chunk_index));
                                 ui.separator();
                             });
                             row.col(|ui| {
+                                ui.visuals_mut().override_text_color = row_color;
                                 ui.label(format!("{}", trajectory.chunk_offset));
                                 ui.separator();
                             });
                             row.col(|ui| {
-                                ui.label(format!("{:.3}", trajectory.distance));
+                                ui.visuals_mut().override_text_color = row_color;
+                                ui.label(format!("{}", trajectory.distance));
                                 ui.separator();
                             });
                             row.col(|ui| {
-                                ui.label(format!("{:.3}", pose_matching_result));
+                                ui.visuals_mut().override_text_color = row_color;
+                                ui.label(format!("{}", pose_matching_result));
                                 ui.separator();
                             });
                         });
@@ -134,4 +154,24 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     });
 
     ui.add_space(10.0);
+
+    ui.label("Best Match Pose");
+    groupbox(ui, |ui| {
+        ui.label(format!(
+            "Chunk Index: {}",
+            motion_matching_result.best_pose_result.chunk_index
+        ));
+        ui.label(format!(
+            "Chunk Offset: {}",
+            motion_matching_result.best_pose_result.chunk_offset
+        ));
+        ui.label(format!(
+            "Trajectory Distance: {}",
+            motion_matching_result.best_pose_result.trajectory_distance
+        ));
+        ui.label(format!(
+            "Pose Distance: {}",
+            motion_matching_result.best_pose_result.pose_distance
+        ));
+    });
 }
