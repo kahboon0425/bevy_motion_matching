@@ -12,8 +12,10 @@ pub struct MotionMatchingPlugin;
 
 impl Plugin for MotionMatchingPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(NearestTrajectoriesResource {
+        app.insert_resource(MotionMatchingResult {
             nearest_trajectories: [None; 5],
+            pose_matching_result: [0.0; 5],
+            best_pose_result: 0.0,
         })
         .add_systems(Startup, load_motion_data)
         .add_systems(Update, match_trajectory);
@@ -37,7 +39,7 @@ pub fn match_trajectory(
     mut match_time: Local<f32>,
     mut interpolation_time: Local<f32>,
     mut prev_direction: Local<Vec2>,
-    mut nearest_trajectories_resource: ResMut<NearestTrajectoriesResource>,
+    mut motion_matching_result: ResMut<MotionMatchingResult>,
 ) {
     const TRAJECTORY_INTERVAL: f32 = 0.5;
     const MATCH_INTERVAL: f32 = 0.4;
@@ -97,7 +99,7 @@ pub fn match_trajectory(
             //     nearest_trajectories
             // );
 
-            nearest_trajectories_resource.nearest_trajectories = nearest_trajectories;
+            motion_matching_result.nearest_trajectories = nearest_trajectories;
 
             let mut smallest_pose_distance = f32::MAX;
             let mut best_trajectory_index = 0;
@@ -112,7 +114,9 @@ pub fn match_trajectory(
                         &mut main_character,
                     );
 
-                    // println!("Pose Distance: {}", pose_distance);
+                    motion_matching_result.pose_matching_result[i] = pose_distance;
+
+                    println!("Pose Distance: {}", pose_distance);
 
                     if pose_distance < smallest_pose_distance {
                         smallest_pose_distance = pose_distance;
@@ -155,8 +159,10 @@ pub fn match_trajectory(
     }
 }
 #[derive(Default, Resource)]
-pub struct NearestTrajectoriesResource {
+pub struct MotionMatchingResult {
     pub nearest_trajectories: [Option<NearestTrajectory>; 5],
+    pub pose_matching_result: [f32; 5],
+    pub best_pose_result: f32,
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -10,7 +10,7 @@ use bevy_egui::EguiPlugin;
 #[cfg(feature = "debug")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-use crate::motion_matching::NearestTrajectoriesResource;
+use crate::motion_matching::MotionMatchingResult;
 
 pub mod builder;
 pub mod config;
@@ -66,7 +66,7 @@ fn right_panel(
     world: &mut World,
     params: &mut SystemState<(
         EguiContexts,
-        Res<NearestTrajectoriesResource>,
+        Res<MotionMatchingResult>,
         Local<RightPanelPage>,
     )>,
 ) {
