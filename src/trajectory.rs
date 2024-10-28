@@ -214,8 +214,6 @@ pub fn draw_trajectory_plot(
             .map(|v| v.xz())
             .collect();
 
-        println!("Trajectory Length: {:?}", player_local_translations.len());
-
         if let Some(mut start) = player_local_translations.get(0) {
             trajectories_point.trajectories_points.clear();
             for next in &player_local_translations[1..] {

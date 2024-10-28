@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use bevy_egui::egui::{self, Color32};
 use egui_plot::{Line, Plot, PlotPoints};
 
+use crate::motion_data::motion_data_asset::JointInfo;
 use crate::motion_data::motion_data_player::MotionDataPlayerPair;
 use crate::motion_data::MotionData;
 use crate::motion_matching::MotionMatchingResult;
@@ -84,26 +85,53 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     ui.add_space(10.0);
     groupbox(ui, |ui| {
         ui.label("Trajectories Matching Visualization");
+
+        let motion_trajs = &motion_asset.trajectories;
+
+        let chunk_index = motion_matching_result.best_pose_result.chunk_index;
+        let chunk_offset = motion_matching_result.best_pose_result.chunk_offset;
+
+        let trajs = motion_trajs.get_chunk(chunk_index);
+        let trajectory = &trajs[chunk_offset..chunk_offset + 7];
+
+        // Center point of trajectory
+        let inv_matrix = trajectory[3].inverse();
+
+        let best_trajectory_points = trajectory
+            .iter()
+            .map(|trajectory| {
+                inv_matrix.transform_point3(trajectory.to_scale_rotation_translation().2)
+            })
+            // Rescale?
+            .map(|v| (v.xz() * 0.01).as_dvec2().to_array())
+            .collect::<Vec<_>>();
+
         let plot_points =
             PlotPoints::from_iter(trajectory_points.trajectories_points.iter().cloned());
 
+        let trajectory_line = Line::new(plot_points)
+            .color(Color32::from_rgb(255, 0, 0))
+            .name("Trajectory");
+
+        let best_pose_line = Line::new(PlotPoints::from_iter(best_trajectory_points))
+            .color(Color32::from_rgb(0, 255, 0))
+            .name("Best Pose");
         // let plot_points_2 = PlotPoints::from_iter(vec![
         //     [0.0, 0.0], // Start point
         //     [1.0, 1.0], // End point
         // ]);
 
-        // let trajectory_line = Line::new(plot_points_2)
-        //     .color(Color32::from_rgb(255, 0, 0))
+        // let trajectory_line_2 = Line::new(plot_points_2)
+        //     .color(Color32::from_rgb(255, 0, 255))
         //     .name("Trajectory");
-        let trajectory_line = Line::new(plot_points)
-            .color(Color32::from_rgb(255, 0, 0))
-            .name("Trajectory");
 
         Plot::new("trajectory_plot")
             .width(500.0)
             .height(300.0)
             .show(ui, |plot_ui| {
+                plot_ui.line(best_pose_line);
                 plot_ui.line(trajectory_line);
+                // plot_ui.line(trajectory_line_y);
             });
     });
 

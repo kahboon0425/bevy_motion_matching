@@ -93,10 +93,10 @@ pub fn match_trajectory(
                 trajectory,
                 transform,
             );
-            println!(
-                "{MATCH_TRAJECTORY_COUNT} nearest trajectories:\n{:?}",
-                nearest_trajectories
-            );
+            // println!(
+            //     "{MATCH_TRAJECTORY_COUNT} nearest trajectories:\n{:?}",
+            //     nearest_trajectories
+            // );
 
             let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
             let trajectory_duration_str = format!("{:.4}", traj_duration);
