@@ -56,16 +56,16 @@ fn input_direction(
             input_dir.x * transform.left().xz() + input_dir.y * transform.forward().xz();
 
         *movement_direction = MovementDirection(direction);
-        // transform.translation +=
-        //     movement_direction.get_vec3() * movement_speed.get() * time.delta_seconds();
+        transform.translation +=
+            movement_direction.get_vec3() * movement_speed.get() * time.delta_seconds();
 
         let desired_direction = camera_transform.forward().zx();
         let desired_rotation = Quat::from_rotation_y(desired_direction.to_angle());
-        // transform.rotation = Quat::slerp(
-        //     transform.rotation,
-        //     desired_rotation,
-        //     time.delta_seconds() * rotation_speed.get(),
-        // );
+        transform.rotation = Quat::slerp(
+            transform.rotation,
+            desired_rotation,
+            time.delta_seconds() * rotation_speed.get(),
+        );
     }
 }
 

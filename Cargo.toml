@@ -50,6 +50,7 @@ thiserror = { workspace = true }
 # debug editor (run with debug feature to enable it)
 bevy-inspector-egui = { version = "0.25", optional = true }
 egui_extras = "0.28.1"
+egui_plot = "0.28.1"
 
 [lints]
 workspace = true

@@ -1,12 +1,14 @@
 use bevy::ecs::system::SystemState;
 use bevy::prelude::*;
 use bevy_egui::egui::{self, Color32};
+use egui_plot::{Line, Plot, PlotPoints};
 
-use crate::bvh_manager::bvh_player::BvhPlayer;
 use crate::motion_data::motion_data_player::MotionDataPlayerPair;
 use crate::motion_data::MotionData;
 use crate::motion_matching::MotionMatchingResult;
+use crate::trajectory::TrajectoryPlot;
 use crate::GameMode;
+use crate::{bvh_manager::bvh_player::BvhPlayer, trajectory::Trajectory};
 
 use super::groupbox;
 use egui_extras::{Column, TableBuilder};
@@ -25,6 +27,7 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         Res<State<GameMode>>,
         ResMut<NextState<GameMode>>,
         Res<MotionMatchingResult>,
+        Res<TrajectoryPlot>,
     )>::new(world);
     let (
         motion_data,
@@ -33,6 +36,7 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         game_mode,
         mut next_game_mode,
         motion_matching_result,
+        trajectory_points,
     ) = params.get_mut(world);
 
     let Some(motion_asset) = motion_data.get() else {
@@ -78,7 +82,32 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     }
 
     ui.add_space(10.0);
+    groupbox(ui, |ui| {
+        ui.label("Trajectories Matching Visualization");
+        let plot_points =
+            PlotPoints::from_iter(trajectory_points.trajectories_points.iter().cloned());
 
+        // let plot_points_2 = PlotPoints::from_iter(vec![
+        //     [0.0, 0.0], // Start point
+        //     [1.0, 1.0], // End point
+        // ]);
+
+        // let trajectory_line = Line::new(plot_points_2)
+        //     .color(Color32::from_rgb(255, 0, 0))
+        //     .name("Trajectory");
+        let trajectory_line = Line::new(plot_points)
+            .color(Color32::from_rgb(255, 0, 0))
+            .name("Trajectory");
+
+        Plot::new("trajectory_plot")
+            .width(500.0)
+            .height(300.0)
+            .show(ui, |plot_ui| {
+                plot_ui.line(trajectory_line);
+            });
+    });
+
+    ui.add_space(10.0);
     ui.label("Motion Matching Result");
 
     ui.group(|ui| {
@@ -188,5 +217,5 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     ));
 
     ui.label("Memory Usage");
-    ui.label("Trajectories Matching Visualization");
+    ui.add_space(10.0);
 }

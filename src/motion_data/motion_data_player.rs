@@ -223,8 +223,8 @@ fn motion_data_player(
             let trans_offset = trans_offset0.lerp(trans_offset1, factor);
             let rot_offset = rot_offset0.lerp(rot_offset1, factor);
 
-            transform.translation.x += trans_offset.x * 0.1;
-            transform.translation.z += trans_offset.z * 0.1;
+            // transform.translation.x += trans_offset.x * 0.1;
+            // transform.translation.z += trans_offset.z * 0.1;
         }
 
         for joint in motion_data.joints().iter().skip(1) {

@@ -15,6 +15,7 @@ impl Plugin for InputTrajectory {
             time_length: 0.5,
             count: 3,
         })
+        .init_resource::<TrajectoryPlot>()
         .insert_resource(TrajectoryHistoryConfig { interval: 0.01667 })
         .add_systems(
             Update,
@@ -23,6 +24,7 @@ impl Plugin for InputTrajectory {
                 store_trajectory_history,
                 compute_trajectory,
                 draw_trajectory,
+                draw_trajectory_plot,
             )
                 .chain(),),
         );
@@ -183,6 +185,49 @@ fn draw_trajectory(
                     start = end;
                 }
             }
+        }
+    }
+}
+
+#[derive(Resource, Debug, Default)]
+pub struct TrajectoryPlot {
+    pub trajectories_points: Vec<[f64; 2]>,
+}
+
+pub fn draw_trajectory_plot(
+    mut trajectories_point: ResMut<TrajectoryPlot>,
+    user_input_trajectory: Query<(&Trajectory, &Transform), With<PlayerMarker>>,
+) {
+    for (trajectory, transform) in user_input_trajectory.iter() {
+        let player_inv_matrix = transform.compute_matrix().inverse();
+
+        let player_local_translations: Vec<_> = trajectory
+            .values
+            .iter()
+            .map(|player_trajectory| {
+                player_inv_matrix.transform_point3(Vec3::new(
+                    player_trajectory.x,
+                    0.0,
+                    player_trajectory.y,
+                ))
+            })
+            .map(|v| v.xz())
+            .collect();
+
+        println!("Trajectory Length: {:?}", player_local_translations.len());
+
+        if let Some(mut start) = player_local_translations.get(0) {
+            trajectories_point.trajectories_points.clear();
+            for next in &player_local_translations[1..] {
+                trajectories_point
+                    .trajectories_points
+                    .push([start.x as f64, start.y as f64]);
+                start = next;
+            }
+
+            trajectories_point
+                .trajectories_points
+                .push([start.x as f64, start.y as f64]);
         }
     }
 }
