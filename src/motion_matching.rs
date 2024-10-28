@@ -7,23 +7,15 @@ use crate::pose_matching::match_pose;
 use crate::scene_loader::MainScene;
 use crate::trajectory::Trajectory;
 use bevy::prelude::*;
+use std::time::Instant;
 
 pub struct MotionMatchingPlugin;
 
 impl Plugin for MotionMatchingPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(MotionMatchingResult {
-            nearest_trajectories: [None; 5],
-            pose_matching_result: [0.0; 5],
-            best_pose_result: BesePoseResult {
-                chunk_index: 0,
-                chunk_offset: 0,
-                trajectory_distance: 0.0,
-                pose_distance: 0.0,
-            },
-        })
-        .add_systems(Startup, load_motion_data)
-        .add_systems(Update, match_trajectory);
+        app.init_resource::<MotionMatchingResult>()
+            .add_systems(Startup, load_motion_data)
+            .add_systems(Update, match_trajectory);
     }
 }
 
@@ -93,21 +85,30 @@ pub fn match_trajectory(
 
         motion_player_pair.pair_bool = !motion_player_pair.pair_bool;
 
+        let start_time = Instant::now();
+
         if let Some(motion_asset) = motion_data.get() {
             let nearest_trajectories = find_nearest_trajectories::<MATCH_TRAJECTORY_COUNT>(
                 motion_asset,
                 trajectory,
                 transform,
             );
-            // println!(
-            //     "{MATCH_TRAJECTORY_COUNT} nearest trajectories:\n{:?}",
-            //     nearest_trajectories
-            // );
+            println!(
+                "{MATCH_TRAJECTORY_COUNT} nearest trajectories:\n{:?}",
+                nearest_trajectories
+            );
+
+            let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
+            let trajectory_duration_str = format!("{:.4}", traj_duration);
+            // println!("Time taken for trajectory matching: {trajectory_duration_str}");
+            motion_matching_result.traj_matching_time = trajectory_duration_str;
 
             motion_matching_result.nearest_trajectories = nearest_trajectories;
 
             let mut smallest_pose_distance = f32::MAX;
             let mut best_trajectory_index = 0;
+
+            let start_pose_time = Instant::now();
 
             // println!("Nearest Trajectory length: {}", nearest_trajectories.len());
             for (i, nearest_trajectory) in nearest_trajectories.iter().enumerate() {
@@ -121,8 +122,6 @@ pub fn match_trajectory(
 
                     motion_matching_result.pose_matching_result[i] = pose_distance;
 
-                    println!("Pose Distance: {}", pose_distance);
-
                     if pose_distance < smallest_pose_distance {
                         smallest_pose_distance = pose_distance;
                         best_trajectory_index = i;
@@ -130,6 +129,12 @@ pub fn match_trajectory(
                     }
                 }
             }
+
+            let pose_duration = start_pose_time.elapsed().as_secs_f64() * 1000.0;
+            let pose_duration_str = format!("{:.4}", pose_duration);
+            // println!("Time taken for pose matching: {pose_duration_str}");
+            motion_matching_result.pose_matching_time = pose_duration_str;
+
             let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] else {
                 return;
             };
@@ -170,7 +175,7 @@ pub fn match_trajectory(
 }
 
 #[derive(Component, Default, Debug)]
-pub struct BesePoseResult {
+pub struct BestPoseResult {
     pub chunk_index: usize,
     pub chunk_offset: usize,
     pub trajectory_distance: f32,
@@ -181,7 +186,9 @@ pub struct BesePoseResult {
 pub struct MotionMatchingResult {
     pub nearest_trajectories: [Option<NearestTrajectory>; 5],
     pub pose_matching_result: [f32; 5],
-    pub best_pose_result: BesePoseResult,
+    pub best_pose_result: BestPoseResult,
+    pub traj_matching_time: String,
+    pub pose_matching_time: String,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -210,6 +217,7 @@ pub fn find_nearest_trajectories<const N: usize>(
     let player_inv_matrix = player_transform.compute_matrix().inverse();
     let mut stack_count = 0;
     let mut nearest_trajectories_stack = [None::<NearestTrajectory>; N];
+    let threshold = 1.0;
 
     let trajectories = &motion_data.trajectories;
     for (chunk_index, chunk) in trajectories.iter_chunk().enumerate() {
@@ -249,6 +257,11 @@ pub fn find_nearest_trajectories<const N: usize>(
 
             let distance =
                 calculate_trajectory_distance(&player_local_translations, &data_local_translations);
+
+            // println!("Distance: {}", distance);
+            if distance > threshold {
+                continue;
+            }
 
             if stack_count < N {
                 // Stack not yet full, push into it

@@ -174,4 +174,19 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
             motion_matching_result.best_pose_result.pose_distance
         ));
     });
+
+    ui.add_space(10.0);
+
+    ui.label(format!(
+        "Trajactory Matching Time: {} ms",
+        motion_matching_result.traj_matching_time,
+    ));
+
+    ui.label(format!(
+        "Pose Matching Time: {} ms",
+        motion_matching_result.pose_matching_time,
+    ));
+
+    ui.label("Memory Usage");
+    ui.label("Trajectories Matching Visualization");
 }
