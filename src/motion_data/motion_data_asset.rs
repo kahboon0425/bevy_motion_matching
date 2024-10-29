@@ -211,14 +211,14 @@ impl Trajectories {
     }
 
     fn append_frames(&mut self, bvh: &Bvh, loopable: bool) {
-        let frame_count = bvh.frames().len();
+        let frame_count = bvh.num_frames();
         let frame_time = bvh.frame_time().as_secs_f32();
         let root_joint = bvh
             .root_joint()
             .expect("A root joint should be present in the Bvh.");
 
         let total_frame_time = frame_count as f32 * frame_time;
-        let trajectory_count = (total_frame_time / self.interval) as usize;
+        let trajectory_count = (total_frame_time / self.interval) as usize + 1;
 
         self.offsets
             .push(self.offsets[self.offsets.len() - 1] + trajectory_count);

@@ -3,17 +3,19 @@ use std::collections::VecDeque;
 use bevy::{color::palettes::css, prelude::*};
 
 use crate::{
-    player::{MovementDirection, MovementSpeed, PlayerMarker},
+    player::{DesiredDirection, MovementSpeed, PlayerMarker},
+    transform2d::Transform2d,
     ui::config::DrawTrajectory,
 };
 
-pub struct InputTrajectory;
+pub struct TrajectoryPlugin;
 
-impl Plugin for InputTrajectory {
+impl Plugin for TrajectoryPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TrajectoryConfig {
-            time_length: 0.5,
-            count: 3,
+            interval_time: 0.1667,
+            predict_count: 5,
+            history_count: 1,
         })
         .insert_resource(TrajectoryHistoryConfig { interval: 0.01667 })
         .add_systems(
@@ -29,48 +31,12 @@ impl Plugin for InputTrajectory {
     }
 }
 
-#[derive(Bundle, Default)]
-pub struct TrajectoryBundle {
-    pub trajectory: Trajectory,
-    pub history: TrajectoryHistory,
-}
-
-/// Configuration for all trajectories.
-#[derive(Resource)]
-pub struct TrajectoryConfig {
-    time_length: f32,
-    count: usize,
-}
-
-impl TrajectoryConfig {
-    pub fn interval(&self) -> f32 {
-        self.time_length / self.count as f32
-    }
-}
-
-#[derive(Resource)]
-pub struct TrajectoryHistoryConfig {
-    interval: f32,
-}
-
-/// Translations that stores the trajectory history.
-#[derive(Component, Default, Clone)]
-pub struct TrajectoryHistory {
-    histories: VecDeque<Vec2>,
-}
-
-/// Final trajectory following the [`TrajectoryConfig`] used for matching.
-#[derive(Component, Default, Clone)]
-pub struct Trajectory {
-    pub values: Vec<Vec2>,
-}
-
 fn change_trajectory_history_len(
     mut q_history: Query<&mut TrajectoryHistory, With<PlayerMarker>>,
     config: Res<TrajectoryConfig>,
     history_config: Res<TrajectoryHistoryConfig>,
 ) {
-    let target_len = f32::ceil(config.time_length / history_config.interval) as usize;
+    let target_len = f32::ceil(config.total_history_time() / history_config.interval) as usize;
 
     for mut trajectory in q_history.iter_mut() {
         match trajectory.histories.len().cmp(&target_len) {
@@ -119,7 +85,7 @@ fn compute_trajectory(
         (
             &mut Trajectory,
             &TrajectoryHistory,
-            &MovementDirection,
+            &DesiredDirection,
             &MovementSpeed,
         ),
         With<PlayerMarker>,
@@ -128,16 +94,17 @@ fn compute_trajectory(
     history_config: Res<TrajectoryHistoryConfig>,
 ) {
     for (mut trajectory, trajectory_history, direction, speed) in q_trajectory.iter_mut() {
-        if trajectory.values.len() != config.count {
-            trajectory.values = vec![default(); config.count * 2 + 1];
+        let traj_len = config.predict_count + config.history_count + 1;
+        if trajectory.len() != traj_len {
+            **trajectory = vec![default(); traj_len];
         }
 
         // Populate current & history
-        for c in 0..=config.count {
+        for c in 0..=config.history_count {
             // Percentage factor to the history
-            let offset_factor = c as f32 / config.count as f32;
+            let offset_factor = c as f32 / config.predict_count as f32;
             // Time offset into the history
-            let time_offset = offset_factor * config.time_length;
+            let time_offset = offset_factor * config.interval_time;
             // Starting index offset
             let index_offset_f = time_offset / history_config.interval;
             let start_index_offset = index_offset_f as usize;
@@ -149,13 +116,14 @@ fn compute_trajectory(
             let end_translation = trajectory_history.histories[end_index_offset];
             let translation = Vec2::lerp(start_translation, end_translation, factor);
 
-            trajectory.values[config.count - c] = translation;
+            trajectory[config.predict_count - c].translation = translation;
         }
 
-        let current_translation = trajectory.values[config.count];
-        for c in 1..=config.count {
-            let prediction = direction.get() * speed.get() * c as f32 * config.interval();
-            trajectory.values[c + config.count] = current_translation + prediction;
+        // Populate prediction
+        let current_translation = trajectory[config.predict_count].translation;
+        for c in 1..=config.predict_count {
+            let prediction = direction.get() * speed.get() * c as f32 * config.interval_time;
+            trajectory[c + config.history_count].translation = current_translation + prediction;
         }
     }
 }
@@ -165,17 +133,17 @@ fn draw_trajectory(
     mut gizmos: Gizmos,
     show_arrow: Res<DrawTrajectory>,
 ) {
-    if show_arrow.get() {
+    if **show_arrow {
         for trajectory in q_trajectory.iter() {
             // Draw arrow gizmos of the smoothed out trajectory
-            let mut trajectory_iter = trajectory.values.iter();
+            let mut trajectory_iter = trajectory.iter();
             let next = trajectory_iter.next();
 
             if let Some(next) = next {
-                let mut start = *next;
+                let mut start = next.translation;
 
                 for next in trajectory_iter {
-                    let end = *next;
+                    let end = next.translation;
 
                     let arrow_start = Vec3::new(start.x, 0.0, start.y);
                     let arrow_end = Vec3::new(end.x, 0.0, end.y);
@@ -186,3 +154,42 @@ fn draw_trajectory(
         }
     }
 }
+
+#[derive(Bundle, Default)]
+pub struct TrajectoryBundle {
+    pub trajectory: Trajectory,
+    pub history: TrajectoryHistory,
+}
+
+/// Configuration for all trajectories.
+#[derive(Resource)]
+pub struct TrajectoryConfig {
+    interval_time: f32,
+    predict_count: usize,
+    history_count: usize,
+}
+
+impl TrajectoryConfig {
+    pub fn total_prediction_time(&self) -> f32 {
+        self.interval_time * self.predict_count as f32
+    }
+
+    pub fn total_history_time(&self) -> f32 {
+        self.interval_time * self.history_count as f32
+    }
+}
+
+#[derive(Resource)]
+pub struct TrajectoryHistoryConfig {
+    interval: f32,
+}
+
+/// Translations that stores the trajectory history.
+#[derive(Component, Default, Clone)]
+pub struct TrajectoryHistory {
+    histories: VecDeque<Vec2>,
+}
+
+/// Final trajectory following the [`TrajectoryConfig`] used for matching.
+#[derive(Component, Default, Clone, Deref, DerefMut)]
+pub struct Trajectory(Vec<Transform2d>);

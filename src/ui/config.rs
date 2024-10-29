@@ -164,14 +164,8 @@ impl Default for BvhTrailConfig {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Deref)]
 pub struct DrawTrajectory(bool);
-
-impl DrawTrajectory {
-    pub fn get(&self) -> bool {
-        self.0
-    }
-}
 
 impl Default for DrawTrajectory {
     fn default() -> Self {

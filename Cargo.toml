@@ -47,15 +47,18 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
+egui_extras = "0.28.1"
+egui_plot = "0.28.1"
+leafwing-input-manager = "0.14"
+
 # debug editor (run with debug feature to enable it)
 bevy-inspector-egui = { version = "0.25", optional = true }
-egui_extras = "0.28.1"
 
 [lints]
 workspace = true
 
 [features]
-default = []
+default = ["bevy/file_watcher"]
 debug = ["dep:bevy-inspector-egui"]
 
 # Enable a small amount of optimization in debug mode.

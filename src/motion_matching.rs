@@ -1,13 +1,16 @@
+use std::time::Instant;
+
+use bevy::prelude::*;
+
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
 use crate::motion_data::motion_data_player::MotionDataPlayerPair;
 use crate::motion_data::{MotionData, MotionDataHandle};
-use crate::player::{MovementDirection, PlayerMarker};
+use crate::player::{DesiredDirection, PlayerMarker};
 use crate::pose_matching::match_pose;
 use crate::scene_loader::MainScene;
-use crate::trajectory::Trajectory;
-use bevy::prelude::*;
-use std::time::Instant;
+use crate::trajectory::{Trajectory, TrajectoryConfig};
+use crate::BVH_SCALE_RATIO;
 
 pub struct MotionMatchingPlugin;
 
@@ -27,7 +30,7 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
 }
 
 pub fn match_trajectory(
-    user_input_trajectory: Query<(&Trajectory, &Transform, &MovementDirection), With<PlayerMarker>>,
+    user_input_trajectory: Query<(&Trajectory, &Transform, &DesiredDirection), With<PlayerMarker>>,
     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
     mut main_character: Query<&JointMap, With<MainScene>>,
     time: Res<Time>,
@@ -37,6 +40,7 @@ pub fn match_trajectory(
     mut interpolation_time: Local<f32>,
     mut prev_direction: Local<Vec2>,
     mut motion_matching_result: ResMut<MotionMatchingResult>,
+    trajectory_config: Res<TrajectoryConfig>,
 ) {
     const TRAJECTORY_INTERVAL: f32 = 0.5;
     const MATCH_INTERVAL: f32 = 0.4;
@@ -76,14 +80,11 @@ pub fn match_trajectory(
     }
     motion_player_pair.interpolation_factor = interpolation_factor;
 
+    // `MATCH_INTERVAL` have passed, match!
     if *match_time <= 0.0 {
-        // If MATCH_INTERVAL have passed, match!
-
         // Reset the timers.
         *match_time = MATCH_INTERVAL;
         *interpolation_time = 0.0;
-
-        motion_player_pair.pair_bool = !motion_player_pair.pair_bool;
 
         let start_time = Instant::now();
 
@@ -93,7 +94,7 @@ pub fn match_trajectory(
                 trajectory,
                 transform,
             );
-            println!(
+            info!(
                 "{MATCH_TRAJECTORY_COUNT} nearest trajectories:\n{:?}",
                 nearest_trajectories
             );
@@ -135,42 +136,26 @@ pub fn match_trajectory(
             // println!("Time taken for pose matching: {pose_duration_str}");
             motion_matching_result.pose_matching_time = pose_duration_str;
 
-            let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] else {
-                return;
-            };
+            if let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] {
+                motion_matching_result.best_pose_result.chunk_index = best_trajectory.chunk_index;
+                motion_matching_result.best_pose_result.chunk_offset = best_trajectory.chunk_offset;
+                motion_matching_result.best_pose_result.trajectory_distance =
+                    best_trajectory.distance;
+                motion_matching_result.best_pose_result.pose_distance = smallest_pose_distance;
 
-            motion_matching_result.best_pose_result.chunk_index = best_trajectory.chunk_index;
-            motion_matching_result.best_pose_result.chunk_offset = best_trajectory.chunk_offset;
-            motion_matching_result.best_pose_result.trajectory_distance = best_trajectory.distance;
-            motion_matching_result.best_pose_result.pose_distance = smallest_pose_distance;
-
-            if motion_player_pair.pair_bool {
+                let player_index = motion_player_pair.pair_bool as usize;
                 motion_player_pair.jump_to_pose(
                     best_trajectory.chunk_index,
                     motion_asset
                         .trajectories
-                        .time_from_chunk_offset(best_trajectory.chunk_offset),
-                    0,
-                );
-            } else {
-                motion_player_pair.jump_to_pose(
-                    best_trajectory.chunk_index,
-                    motion_asset
-                        .trajectories
-                        .time_from_chunk_offset(best_trajectory.chunk_offset),
-                    1,
+                        .time_from_chunk_offset(best_trajectory.chunk_offset + 3),
+                    player_index,
                 );
             }
         }
-    } else {
-        // *interpolation_time += time.delta_seconds();
-        // *interpolation_time = f32::min(*interpolation_time, INTERPOLATION_DURATION);
 
-        // let interpolation_factor = *interpolation_time / INTERPOLATION_DURATION;
-
-        // motion_player_pair.interpolation_factor = interpolation_factor;
-
-        // *interpolation_time = 0.0;
+        // Flip boolean for the next match.
+        motion_player_pair.pair_bool = !motion_player_pair.pair_bool;
     }
 }
 
@@ -201,6 +186,11 @@ pub struct NearestTrajectory {
     pub chunk_offset: usize,
 }
 
+#[derive(Event, Debug, Deref, DerefMut)]
+pub struct NearestTrajectories(Vec<NearestTrajectory>);
+
+/// Find `N` number of nearest trajectories.
+///
 /// # Panic
 ///
 /// Panic if `N` is 0.
@@ -217,13 +207,13 @@ pub fn find_nearest_trajectories<const N: usize>(
     let player_inv_matrix = player_transform.compute_matrix().inverse();
     let mut stack_count = 0;
     let mut nearest_trajectories_stack = [None::<NearestTrajectory>; N];
-    let threshold = 1.0;
+    let threshold = 10.0;
 
     let trajectories = &motion_data.trajectories;
     for (chunk_index, chunk) in trajectories.iter_chunk().enumerate() {
         let chunk_count = chunk.len();
         if chunk_count < 7 {
-            // warn!("Chunk ({chunk_index}) has less than 7 trajectories.");
+            warn!("Chunk ({chunk_index}) has less than 7 trajectories. (only {chunk_count})");
             continue;
         }
 
@@ -234,13 +224,12 @@ pub fn find_nearest_trajectories<const N: usize>(
             let inv_matrix = trajectory[3].inverse();
 
             let player_local_translations = player_trajectory
-                .values
                 .iter()
                 .map(|player_trajectory| {
                     player_inv_matrix.transform_point3(Vec3::new(
-                        player_trajectory.x,
+                        player_trajectory.translation.x,
                         0.0,
-                        player_trajectory.y,
+                        player_trajectory.translation.y,
                     ))
                 })
                 .map(|v| v.xz())
@@ -252,16 +241,16 @@ pub fn find_nearest_trajectories<const N: usize>(
                     inv_matrix.transform_point3(trajectory.to_scale_rotation_translation().2)
                 })
                 // Rescale?
-                .map(|v| v.xz() * 0.01)
+                .map(|v| v.xz() * BVH_SCALE_RATIO)
                 .collect::<Vec<_>>();
 
             let distance =
-                calculate_trajectory_distance(&player_local_translations, &data_local_translations);
+                trajectory_distance(&player_local_translations, &data_local_translations);
 
             // println!("Distance: {}", distance);
-            if distance > threshold {
-                continue;
-            }
+            // if distance > threshold {
+            //     continue;
+            // }
 
             if stack_count < N {
                 // Stack not yet full, push into it
@@ -296,10 +285,19 @@ pub fn find_nearest_trajectories<const N: usize>(
     nearest_trajectories_stack
 }
 
-pub fn calculate_trajectory_distance(t1: &[Vec2], t2: &[Vec2]) -> f32 {
-    // distance = sqrt((p1-q1)^2 + (p2-q2)^2)
-    t1.iter()
-        .zip(t2.iter())
-        .map(|(p, traj)| (*p - *traj).length_squared())
-        .sum::<f32>()
+pub fn trajectory_distance(traj0: &[Vec2], traj1: &[Vec2]) -> f32 {
+    // println!("{traj0:?}");
+    // println!("{traj1:?}");
+    // println!("===============\n");
+    let mut distance = 0.0;
+    for i in 1..traj0.len() {
+        let offset0 = traj0[i] - traj0[i - 1];
+        let offset1 = traj1[i] - traj1[i - 1];
+
+        // TOOD: Use distance without squared instead?
+        // (squared is faster, might be better for optimization purposes)
+        distance += Vec2::distance_squared(offset1, offset0);
+    }
+
+    distance
 }

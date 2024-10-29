@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+pub mod action;
 pub mod bvh_manager;
 pub mod camera;
 pub mod motion_data;
@@ -8,7 +9,10 @@ pub mod player;
 pub mod pose_matching;
 pub mod scene_loader;
 pub mod trajectory;
+pub mod transform2d;
 pub mod ui;
+
+pub const BVH_SCALE_RATIO: f32 = 0.01;
 
 pub struct MotionMatchingAppPlugin;
 
@@ -19,10 +23,12 @@ impl Plugin for MotionMatchingAppPlugin {
                 mode: AssetMode::Processed,
                 ..default()
             }),
+            transform2d::Transform2dPlugin,
+            action::ActionPlugin,
             motion_data::MotionDataPlugin,
             scene_loader::SceneLoaderPlugin,
             bvh_manager::BvhManagerPlugin,
-            trajectory::InputTrajectory,
+            trajectory::TrajectoryPlugin,
             camera::CameraPlugin,
             ui::UiPlugin,
             player::PlayerPlugin,

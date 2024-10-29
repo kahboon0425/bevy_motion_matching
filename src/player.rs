@@ -1,29 +1,29 @@
 use bevy::prelude::*;
+use leafwing_input_manager::prelude::*;
 
+use crate::action::PlayerAction;
 use crate::motion_data::motion_data_player::{MotionDataPlayer, MotionDataPlayerPair};
+use crate::transform2d::Transform2d;
 
-pub struct PlayerPlugin;
+pub(super) struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreUpdate, input_direction);
+        app.init_resource::<MovementConfig>()
+            .add_systems(PreUpdate, input_direction);
     }
 }
 
 fn input_direction(
     mut q_player: Query<
-        (
-            &mut MovementDirection,
-            &mut Transform,
-            &MovementSpeed,
-            &RotationSpeed,
-        ),
+        (&mut DesiredDirection, &mut MovementSpeed, &Transform2d),
         With<PlayerMarker>,
     >,
-    q_camera: Query<&GlobalTransform, With<Camera>>,
-    key_input: Res<ButtonInput<KeyCode>>,
+    q_camera: Query<&Transform, With<Camera>>,
     time: Res<Time>,
     motion_player: Res<MotionDataPlayerPair>,
+    movement_config: Res<MovementConfig>,
+    action_state: Res<ActionState<PlayerAction>>,
 ) {
     if motion_player.is_playing == false {
         return;
@@ -33,55 +33,56 @@ fn input_direction(
         return;
     };
 
-    let mut input_dir = Vec2::ZERO;
+    let Ok((mut movement_direction, mut movement_speed, transform2d)) = q_player.get_single_mut()
+    else {
+        return;
+    };
 
-    if key_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]) {
-        input_dir.y -= 1.0;
-    }
-    if key_input.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]) {
-        input_dir.y += 1.0;
-    }
-    if key_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]) {
-        input_dir.x += 1.0;
-    }
-    if key_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]) {
-        input_dir.x -= 1.0;
+    let lerp_factor = f32::min(1.0, time.delta_seconds() * movement_config.lerp_factor);
+
+    let is_walking = action_state.pressed(&PlayerAction::Walk);
+    let is_running = action_state.pressed(&PlayerAction::Run);
+
+    let mut target_speed = 0.0;
+    if is_walking {
+        target_speed = match is_running {
+            true => movement_config.run_speed,
+            false => movement_config.walk_speed,
+        };
     }
 
-    input_dir = input_dir.normalize_or_zero();
-    for (mut movement_direction, mut transform, movement_speed, rotation_speed) in
-        q_player.iter_mut()
-    {
-        let direction =
-            input_dir.x * transform.left().xz() + input_dir.y * transform.forward().xz();
+    **movement_speed = f32::lerp(**movement_speed, target_speed, lerp_factor);
 
-        *movement_direction = MovementDirection(direction);
-        // transform.translation +=
-        //     movement_direction.get_vec3() * movement_speed.get() * time.delta_seconds();
+    let input_dir = action_state
+        .clamped_axis_pair(&PlayerAction::Walk)
+        .map(|axis| axis.xy().normalize_or_zero())
+        .unwrap_or_default();
 
-        let desired_direction = camera_transform.forward().zx();
-        let desired_rotation = Quat::from_rotation_y(desired_direction.to_angle());
-        // transform.rotation = Quat::slerp(
-        //     transform.rotation,
-        //     desired_rotation,
-        //     time.delta_seconds() * rotation_speed.get(),
-        // );
-    }
+    let direction = input_dir.x * -transform2d.right() + input_dir.y * transform2d.forward();
+    *movement_direction = DesiredDirection(direction);
+    // println!(
+    //     "{}",
+    //     movement_direction.get_vec3() * movement_speed.get() * time.delta_seconds()
+    // );
+
+    // Create a copy tranfsorm.
+    let mut camera_transform = *camera_transform;
+    camera_transform.rotate(Quat::from_rotation_y(f32::atan2(input_dir.y, input_dir.x)));
+    let camera_forward = camera_transform.forward().zx();
 }
 
 #[derive(Bundle, Default)]
 pub struct PlayerBundle {
     pub marker: PlayerMarker,
-    pub transform: Transform,
+    pub transform2d: Transform2d,
     pub movement_speed: MovementSpeed,
-    pub rotation_speed: RotationSpeed,
-    pub direction: MovementDirection,
+    pub direction: DesiredDirection,
 }
 
 #[derive(Component, Default)]
 pub struct PlayerMarker;
 
-#[derive(Component, Deref)]
+#[derive(Component, Default, Deref, DerefMut, Clone, Copy)]
 pub struct MovementSpeed(f32);
 
 impl MovementSpeed {
@@ -90,36 +91,34 @@ impl MovementSpeed {
     }
 }
 
-impl Default for MovementSpeed {
-    fn default() -> Self {
-        Self(2.0)
-    }
-}
-
-#[derive(Component, Deref)]
-pub struct RotationSpeed(f32);
-
-impl RotationSpeed {
-    pub fn get(&self) -> f32 {
-        self.0
-    }
-}
-
-impl Default for RotationSpeed {
-    fn default() -> Self {
-        Self(2.0)
-    }
-}
-
 #[derive(Component, Default, Deref, Debug)]
-pub struct MovementDirection(Vec2);
+pub struct DesiredDirection(Vec2);
 
-impl MovementDirection {
+impl DesiredDirection {
     pub fn get(&self) -> Vec2 {
         self.0
     }
 
     pub fn get_vec3(&self) -> Vec3 {
         Vec3::new(self.0.x, 0.0, self.0.y)
+    }
+}
+
+#[derive(Resource, Debug)]
+pub struct MovementConfig {
+    pub walk_speed: f32,
+    pub run_speed: f32,
+    pub rotation_speed: f32,
+    pub lerp_factor: f32,
+}
+
+impl Default for MovementConfig {
+    fn default() -> Self {
+        Self {
+            walk_speed: 2.0,
+            run_speed: 4.0,
+            rotation_speed: 2.0,
+            lerp_factor: 10.0,
+        }
     }
 }

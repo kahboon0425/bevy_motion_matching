@@ -179,6 +179,7 @@ fn pan_orbit_camera(
 
     let left_clicked = mouse.pressed(MouseButton::Left);
 
+    let is_focus = camera_focus.get().is_some();
     for (settings, mut state, mut transform) in &mut q_camera {
         // Camera focus
         if settings
@@ -186,7 +187,7 @@ fn pan_orbit_camera(
             .map(|key| kbd.just_pressed(key))
             .unwrap_or(false)
         {
-            if camera_focus.get().is_some() {
+            if is_focus {
                 camera_focus.clear();
             } else if let Ok(entity) = q_main_scene.get_single() {
                 camera_focus.set(entity);
@@ -210,7 +211,7 @@ fn pan_orbit_camera(
         if settings
             .orbit_key
             .map(|key| kbd.pressed(key))
-            .unwrap_or(false)
+            .unwrap_or(is_focus)
             && left_clicked
         {
             total_orbit -= total_motion * settings.orbit_sensitivity;

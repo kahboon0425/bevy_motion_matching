@@ -1,7 +1,9 @@
 //! Play motion data based on events and resources.
 
-use crate::motion_matching::NearestTrajectory;
+use crate::player::PlayerMarker;
 use crate::scene_loader::MainScene;
+use crate::transform2d::Transform2d;
+use crate::BVH_SCALE_RATIO;
 use crate::{bvh_manager::bvh_player::JointMap, GameMode};
 use bevy::prelude::*;
 
@@ -27,129 +29,22 @@ impl Plugin for MotionDataPlayerPlugin {
                 OnExit(GameMode::Play),
                 |mut player: ResMut<MotionDataPlayerPair>| {
                     player.is_playing = false;
+                    for player in player.players.iter_mut() {
+                        player.chunk_index = 0;
+                        player.time = 0.0;
+                        player.prev_time = 0.0;
+                    }
                 },
             );
     }
 }
 
-// pub fn motion_data_player_pair_interpolation(
-//     mut q_transforms: Query<&mut Transform>,
-//     q_scene: Query<(&JointMap, Entity), With<MainScene>>,
-//     motion_data: MotionData,
-//     motion_data_player_pair: ResMut<MotionDataPlayerPair>,
-// ) {
-//     if motion_data_player_pair.is_playing == false {
-//         return;
-//     }
-
-//     let Some(motion_data) = motion_data.get() else {
-//         return;
-//     };
-
-//     let motion_poses = &motion_data.poses;
-
-//     let current_motion_data_player = &motion_data_player_pair.players[0];
-//     let next_motion_data_player = &motion_data_player_pair.players[1];
-
-//     let current_chunk_index = current_motion_data_player.chunk_index;
-//     let next_chunk_index = next_motion_data_player.chunk_index;
-
-//     let current_poses = motion_poses.get_poses_from_chunk(current_chunk_index);
-//     let next_poses = motion_poses.get_poses_from_chunk(next_chunk_index);
-
-//     let current_chunk_offset = motion_poses.chunk_offset_from_time(current_motion_data_player.time);
-//     let next_chunk_offset = motion_poses.chunk_offset_from_time(next_motion_data_player.time);
-
-//     let (Some(start_pose), Some(end_pose)) = (
-//         current_poses.get(current_chunk_offset),
-//         next_poses.get(next_chunk_offset),
-//     ) else {
-//         return;
-//     };
-
-//     let interpolation_factor = motion_data_player_pair.interpolation_factor;
-
-//     // Calculate interpolated position and rotation from a joint.
-//     let calculate_trans_rot = |joint: &JointInfo| -> (Vec3, Quat) {
-//         let (start_pos, start_rot) = start_pose.get_pos_rot(joint);
-//         let (end_pos, end_rot) = end_pose.get_pos_rot(joint);
-
-//         let translation = Vec3::lerp(start_pos, end_pos, interpolation_factor);
-//         let rotation = Quat::slerp(start_rot, end_rot, interpolation_factor);
-
-//         (translation, rotation)
-//     };
-
-//     for (joint_map, entity) in q_scene.iter() {
-//         let root_joint = &motion_data.joints()[0];
-
-//         // if let Some(mut transform) = joint_map
-//         //     // Get root_joint transform.
-//         //     .get(root_joint.name())
-//         //     .and_then(|entity| q_transforms.get_mut(*entity).ok())
-//         // {
-//         //     let (translation, rotation) = calculate_trans_rot(root_joint);
-
-//         //     transform.translation.y = translation.y;
-//         //     transform.rotation = rotation;
-//         // }
-
-//         if let Ok(mut transform) = q_transforms.get_mut(entity) {
-//             println!("Original Position {:?}", transform);
-//             let (translation, rotation) = calculate_trans_rot(root_joint);
-
-//             // transform.translation *= 0.01;
-//             // transform.translation.y = translation.y;
-//             // transform.rotation = rotation;
-
-//             // Get current hip position
-//             let (start_pos, start_rot) = start_pose.get_pos_rot(root_joint);
-//             println!(
-//                 "Current Hip Translation: {:?}, Rotation: {}",
-//                 start_pos, start_rot
-//             );
-
-//             // Get next hip position
-//             let (next_pos, next_rot) = end_pose.get_pos_rot(root_joint);
-
-//             println!(
-//                 "Next Hip Translation: {:?}, Rotation: {}",
-//                 next_pos, next_rot
-//             );
-
-//             // Get different in position and rotation
-//             let diff_in_x_pos = next_pos.x - start_pos.x;
-//             let diff_in_z_pos = next_pos.z - start_pos.z;
-//             let diff_in_rot = next_rot.angle_between(start_rot);
-//             println!("Diff in Rotation: {}", diff_in_rot);
-
-//             println!("Position diff x: {}, z: {}", diff_in_x_pos, diff_in_z_pos);
-//             // Add to the original transform and rotation
-
-//             transform.translation.z += -0.004;
-//             // transform.translation.x += diff_in_x_pos * 0.01;
-//             // transform.translation.z += diff_in_z_pos * 0.01;
-//             // transform.translation.y = translation.y;
-//         }
-
-//         for joint in motion_data.joints().iter().skip(1) {
-//             if let Some(mut transform) = joint_map
-//                 // Get joint transform.
-//                 .get(joint.name())
-//                 .and_then(|entity| q_transforms.get_mut(*entity).ok())
-//             {
-//                 let (translation, rotation) = calculate_trans_rot(joint);
-
-//                 transform.translation = joint.offset() + translation;
-//                 transform.rotation = rotation;
-//             }
-//         }
-//     }
-// }
-
 fn motion_data_player(
     mut q_transforms: Query<&mut Transform>,
-    q_scene: Query<(&JointMap, Entity), With<MainScene>>,
+    mut q_scene: Query<
+        (&JointMap, &mut Transform2d, Entity),
+        (With<MainScene>, With<PlayerMarker>),
+    >,
     motion_data: MotionData,
     mut motion_player_pair: ResMut<MotionDataPlayerPair>,
     time: Res<Time>,
@@ -184,19 +79,8 @@ fn motion_data_player(
         Some((trans0.lerp(trans1, factor), rot0.slerp(rot1, factor)))
     };
 
-    for (joint_map, entity) in q_scene.iter() {
+    for (joint_map, mut transform2d, entity) in q_scene.iter_mut() {
         let root_joint = &motion_data.joints()[0];
-
-        if let Some(mut transform) = joint_map
-            .get(root_joint.name())
-            .and_then(|entity| q_transforms.get_mut(*entity).ok())
-        {
-            let Some((translation, rotation)) = interpolated_trans_rot(root_joint) else {
-                return;
-            };
-            transform.translation.y = translation.y;
-            transform.rotation = rotation;
-        }
 
         let calculate_offset = |motion_player_index: usize| -> Option<(Vec3, f32)> {
             let (prev_trans, prev_rot) = motion_player_pair.players[motion_player_index]
@@ -210,21 +94,37 @@ fn motion_data_player(
             ))
         };
 
-        if let Ok(mut transform) = q_transforms.get_mut(entity) {
-            let Some((trans_offset0, rot_offset0)) = calculate_offset(0) else {
+        let Some((trans_offset0, rot_offset0)) = calculate_offset(0) else {
+            return;
+        };
+        let Some((trans_offset1, rot_offset1)) = calculate_offset(1) else {
+            return;
+        };
+
+        // Interpolate between motion player 0 and motion player 1.
+        let factor = motion_player_pair.interpolation_factor;
+        let trans_offset = trans_offset0.lerp(trans_offset1, factor);
+        let rot_offset = rot_offset0.lerp(rot_offset1, factor);
+
+        // println!("{motion_player_pair:#?}");
+        // println!("trans offset: {trans_offset:?}");
+
+        // transform2d.translation += trans_offset.xz() * BVH_SCALE_RATIO;
+
+        // Interpolate between motion player 0 and motion player 1.
+        let factor = motion_player_pair.interpolation_factor;
+        let trans_offset = trans_offset0.lerp(trans_offset1, factor);
+        let rot_offset = rot_offset0.lerp(rot_offset1, factor);
+
+        if let Some(mut transform) = joint_map
+            .get(root_joint.name())
+            .and_then(|entity| q_transforms.get_mut(*entity).ok())
+        {
+            let Some((translation, rotation)) = interpolated_trans_rot(root_joint) else {
                 return;
             };
-            let Some((trans_offset1, rot_offset1)) = calculate_offset(1) else {
-                return;
-            };
-
-            // Interpolate between motion player 0 and motion player 1.
-            let factor = motion_player_pair.interpolation_factor;
-            let trans_offset = trans_offset0.lerp(trans_offset1, factor);
-            let rot_offset = rot_offset0.lerp(rot_offset1, factor);
-
-            transform.translation.x += trans_offset.x * 0.1;
-            transform.translation.z += trans_offset.z * 0.1;
+            transform.translation.y = translation.y;
+            transform.rotation = rotation;
         }
 
         for joint in motion_data.joints().iter().skip(1) {
