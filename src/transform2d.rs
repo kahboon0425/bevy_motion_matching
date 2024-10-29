@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-pub(super) struct Transform2dPlugin;
+pub struct Transform2dPlugin;
 
 impl Plugin for Transform2dPlugin {
     fn build(&self, app: &mut App) {

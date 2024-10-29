@@ -164,9 +164,9 @@ pub struct TrajectoryBundle {
 /// Configuration for all trajectories.
 #[derive(Resource)]
 pub struct TrajectoryConfig {
-    interval_time: f32,
-    predict_count: usize,
-    history_count: usize,
+    pub interval_time: f32,
+    pub predict_count: usize,
+    pub history_count: usize,
 }
 
 impl TrajectoryConfig {

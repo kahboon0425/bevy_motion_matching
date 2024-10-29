@@ -208,11 +208,12 @@ fn pan_orbit_camera(
         }
 
         let mut total_orbit = Vec2::ZERO;
-        if settings
+        if (settings
             .orbit_key
             .map(|key| kbd.pressed(key))
-            .unwrap_or(is_focus)
-            && left_clicked
+            .unwrap_or(false)
+            && left_clicked)
+            || is_focus
         {
             total_orbit -= total_motion * settings.orbit_sensitivity;
         }
