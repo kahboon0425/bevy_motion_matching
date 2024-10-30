@@ -38,7 +38,7 @@ fn main() -> AppExit {
     .insert_resource(TrajectoryConfig {
         interval_time: 0.1667,
         predict_count: 6,
-        history_count: 1,
+        history_count: 5,
     })
     .add_systems(Startup, setup)
     .add_systems(
@@ -46,11 +46,14 @@ fn main() -> AppExit {
         (
             trajectory_len,
             update_movement_direction,
-            predict_trajectory,
+            (predict_trajectory, trajectory_history),
         )
             .chain(),
     )
-    .add_systems(Update, (draw_trajectory_axes, draw_debug_axis))
+    .add_systems(
+        Update,
+        (movement_test, draw_trajectory_axes, draw_debug_axis),
+    )
     .add_systems(Last, (update_velocities, update_prev_transform2ds).chain());
 
     app.register_type::<Trajectory>()
@@ -73,6 +76,17 @@ fn main() -> AppExit {
 // - Inspect trajectories from existing bvh data.
 //
 // DONE: Figure out axis: Use gizmos to draw out the raw XYZ axis.
+
+// TODO: Remove this
+fn movement_test(
+    mut q_movements: Query<(&mut Transform2d, &MovementDirection)>,
+    movement_config: Res<MovementConfig>,
+    time: Res<Time>,
+) {
+    for (mut transform2d, direction) in q_movements.iter_mut() {
+        transform2d.translation += **direction * movement_config.walk_speed * time.delta_seconds();
+    }
+}
 
 fn predict_trajectory(
     mut q_trajectories: Query<(&mut Trajectory, &Transform2d, &Velocity, &MovementDirection)>,
@@ -100,10 +114,67 @@ fn predict_trajectory(
 }
 
 fn trajectory_history(
-    mut q_trajectories: Query<(&mut Trajectory, &Records<Transform2d>, &Records<Velocity>)>,
+    mut q_trajectories: Query<(
+        &mut Trajectory,
+        &Transform2d,
+        &Velocity,
+        &Records<Transform2d>,
+        &Records<Velocity>,
+    )>,
     trajectory_config: Res<TrajectoryConfig>,
 ) {
-    for (mut trajectory, transform_record, velocity_record) in q_trajectories.iter_mut() {}
+    for (mut trajectory, transform2d, velocity, transform_record, velocity_record) in
+        q_trajectories.iter_mut()
+    {
+        assert!(
+            transform_record.len() == velocity_record.len(),
+            "Records<Transform2d> must have the same length as Records<Velocity>."
+        );
+        let record_len = transform_record.len();
+
+        // Start and end point to interpolate from.
+        let mut trans_start = transform2d.translation;
+        let mut vel_start = **velocity;
+
+        let mut trans_end = transform_record[0].value.translation;
+        let mut vel_end = *velocity_record[0].value;
+
+        // Accumulate the record time.
+        let mut record_time = 0.0;
+        // Keep track of our last used record index
+        let mut record_index = 0;
+
+        for i in 1..=trajectory_config.history_count {
+            let target_time = i as f32 * trajectory_config.interval_time;
+
+            let range = record_index..record_len - 1;
+            for _ in range {
+                record_index += 1;
+                record_time += transform_record[record_index].delta_time;
+
+                println!("{record_index}");
+
+                trans_end = transform_record[record_index].value.translation;
+                vel_end = *velocity_record[record_index].value;
+
+                // Accumulated record time has exceed the target time.
+                // Break of before we update the start point.
+                if record_time > target_time {
+                    break;
+                }
+
+                trans_start = trans_end;
+                vel_start = vel_end;
+            }
+
+            // Lerp between start and end point.
+            let factor = (record_time - target_time) / trajectory_config.interval_time;
+            trajectory[trajectory_config.history_count - i] = TrajectoryPoint::new(
+                Vec2::lerp(trans_start, trans_end, factor),
+                Vec2::lerp(vel_start, vel_end, factor),
+            );
+        }
+    }
 }
 
 fn update_movement_direction(
@@ -158,7 +229,7 @@ fn draw_trajectory_axes(
                 velocity_magnitude * 0.1,
                 palette.purple.mix(
                     &palette.orange,
-                    velocity_magnitude / movement_config.walk_speed,
+                    velocity_magnitude / movement_config.run_speed,
                 ),
             );
         }
@@ -192,7 +263,8 @@ fn setup(
             material: materials.add(Color::WHITE),
             ..default()
         },
-        RecordsBundle::<Transform2d>::new(20),
+        RecordsBundle::<Transform2d>::new(100),
+        RecordsBundle::<Velocity>::new(100),
         TrajectoryBundle::default(),
     ));
 }
@@ -280,22 +352,8 @@ fn record_len<T: Recordable>(
 ) {
     for (len, mut records) in q_records.iter_mut() {
         let target_len = **len;
-        match records.len().cmp(&target_len) {
-            std::cmp::Ordering::Less => {
-                let push_count = target_len - records.len();
-                let back_trajectory = records.back().copied().unwrap_or_default();
-
-                for _ in 0..push_count {
-                    records.push_back(back_trajectory);
-                }
-            }
-            std::cmp::Ordering::Greater => {
-                let pop_count = records.len() - target_len;
-                for _ in 0..pop_count {
-                    records.pop_back();
-                }
-            }
-            std::cmp::Ordering::Equal => {}
+        if records.len() != target_len {
+            **records = VecDeque::from_iter(vec![default(); target_len]);
         }
     }
 }
