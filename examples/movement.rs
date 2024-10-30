@@ -116,7 +116,7 @@ fn update_movement_direction(
         .clamped_axis_pair(&PlayerAction::Walk)
         .map(|axis| axis.xy().normalize_or_zero())
         .unwrap_or_default();
-    action_axis.y = -action_axis.y;
+    action_axis.x = -action_axis.x;
 
     for mut movement_direction in q_movement_directions.iter_mut() {
         **movement_direction = Vec2::lerp(
@@ -141,15 +141,25 @@ fn trajectory_len(
     }
 }
 
-fn draw_trajectory_axes(q_trajectories: Query<&Trajectory>, mut axes: ResMut<DrawAxes>) {
+fn draw_trajectory_axes(
+    q_trajectories: Query<&Trajectory>,
+    mut axes: ResMut<DrawAxes>,
+    movement_config: Res<MovementConfig>,
+    palette: Res<ColorPalette>,
+) {
     for trajectory in q_trajectories.iter() {
         for point in trajectory.iter() {
             let angle = f32::atan2(point.velocity.x, point.velocity.y);
             let translation = Vec3::new(point.translation.x, 0.0, point.translation.y);
 
-            axes.draw(
+            let velocity_magnitude = point.velocity.length();
+            axes.draw_forward(
                 Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
-                0.1,
+                velocity_magnitude * 0.1,
+                palette.purple.mix(
+                    &palette.orange,
+                    velocity_magnitude / movement_config.walk_speed,
+                ),
             );
         }
     }
@@ -374,19 +384,22 @@ fn draw_axes(mut gizmos: Gizmos, axes: Res<DrawAxes>, palette: Res<ColorPalette>
         let start = axis.mat.transform_point3(Vec3::ZERO);
         gizmos.arrow(
             start,
-            start + axis.mat.transform_vector3(Vec3::X) * axis.size,
-            axis.color.unwrap_or(palette.red),
-        );
-        gizmos.arrow(
-            start,
-            start + axis.mat.transform_vector3(Vec3::Y) * axis.size,
-            axis.color.unwrap_or(palette.green),
-        );
-        gizmos.arrow(
-            start,
             start + axis.mat.transform_vector3(Vec3::Z) * axis.size,
             axis.color.unwrap_or(palette.blue),
         );
+
+        if axis.forward_only == false {
+            gizmos.arrow(
+                start,
+                start + axis.mat.transform_vector3(Vec3::X) * axis.size,
+                axis.color.unwrap_or(palette.red),
+            );
+            gizmos.arrow(
+                start,
+                start + axis.mat.transform_vector3(Vec3::Y) * axis.size,
+                axis.color.unwrap_or(palette.green),
+            );
+        }
     }
 }
 
@@ -402,6 +415,7 @@ impl DrawAxes {
             mat,
             size,
             color: None,
+            forward_only: false,
         });
     }
 
@@ -410,6 +424,16 @@ impl DrawAxes {
             mat,
             size,
             color: Some(color),
+            forward_only: false,
+        });
+    }
+
+    pub fn draw_forward(&mut self, mat: Mat4, size: f32, color: Color) {
+        self.push(DrawAxis {
+            mat,
+            size,
+            color: Some(color),
+            forward_only: true,
         });
     }
 }
@@ -420,6 +444,7 @@ pub struct DrawAxis {
     pub mat: Mat4,
     pub size: f32,
     pub color: Option<Color>,
+    pub forward_only: bool,
 }
 
 #[derive(Resource)]
