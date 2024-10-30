@@ -3,10 +3,12 @@ use bevy::prelude::*;
 pub mod action;
 pub mod bvh_manager;
 pub mod camera;
+pub mod draw_axes;
 pub mod motion_data;
 pub mod motion_matching;
 pub mod player;
 pub mod pose_matching;
+pub mod record;
 pub mod scene_loader;
 pub mod trajectory;
 pub mod transform2d;
@@ -23,6 +25,7 @@ impl Plugin for MotionMatchingAppPlugin {
                 mode: AssetMode::Processed,
                 ..default()
             }),
+            draw_axes::DrawAxesPlugin,
             transform2d::Transform2dPlugin,
             action::ActionPlugin,
             motion_data::MotionDataPlugin,

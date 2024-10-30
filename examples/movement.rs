@@ -1,12 +1,10 @@
-use std::collections::VecDeque;
-use std::fmt::Debug;
-use std::marker::PhantomData;
-
 use bevy::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_motion_matching::action::*;
 use bevy_motion_matching::camera::CameraPlugin;
+use bevy_motion_matching::draw_axes::*;
 use bevy_motion_matching::player::*;
+use bevy_motion_matching::record::*;
 use bevy_motion_matching::trajectory::*;
 use bevy_motion_matching::transform2d::*;
 use bevy_motion_matching::ui::MouseInUi;
@@ -98,11 +96,10 @@ fn predict_trajectory(
         let mut translation = transform2d.translation;
         let mut velocity = **velocity;
 
-        let velocity_addition =
-            **direction * movement_config.walk_speed * trajectory_config.interval_time;
+        let velocity_addition = **direction * movement_config.walk_speed;
 
         for i in 0..trajectory_config.predict_count {
-            velocity += velocity_addition;
+            velocity += velocity_addition * trajectory_config.interval_time;
             translation += velocity * trajectory_config.interval_time;
             // Accelerate to walk speed max.
             velocity = Vec2::clamp_length(velocity, 0.0, movement_config.walk_speed);
@@ -170,7 +167,6 @@ fn trajectory_history(
 
             // Lerp between start and end point.
             let factor = 1.0 - (record_time - target_time) / curr_delta_time;
-            println!("{factor}");
             trajectory[trajectory_config.history_count - i] = TrajectoryPoint::new(
                 Vec2::lerp(trans_start, trans_end, factor),
                 Vec2::lerp(vel_start, vel_end, factor),
@@ -242,6 +238,11 @@ fn update_velocities(
     mut q_velocities: Query<(&mut Velocity, &PrevTransform2d, &Transform2d)>,
     time: Res<Time>,
 ) {
+    // Prevent division by 0
+    if time.delta_seconds() < f32::EPSILON {
+        return;
+    }
+
     for (mut velocity, prev_transform2d, transform2d) in q_velocities.iter_mut() {
         **velocity =
             (transform2d.translation - prev_transform2d.translation) / time.delta_seconds();
@@ -314,236 +315,6 @@ impl TrajectoryPoint {
         Self {
             translation,
             velocity,
-        }
-    }
-}
-
-// ==================================================================================================================
-
-#[derive(Default)]
-pub struct RecordPlugin<T: Recordable>(PhantomData<T>);
-
-impl<T: Recordable> Plugin for RecordPlugin<T> {
-    fn build(&self, app: &mut App) {
-        app.add_systems(
-            PreUpdate,
-            (
-                record_len::<T>,
-                record::<T>,
-                // draw_transform2d_record_axes,
-            )
-                .chain(),
-        );
-    }
-}
-
-/// Push in a new [`Transform2dComp`] to the front of a [`Transform2dRecord`] while popping out an old one.
-fn record<T: Recordable>(mut q_records: Query<(&T, &mut Records<T>)>, time: Res<Time>) {
-    for (&value, mut record) in q_records.iter_mut() {
-        record.pop_back();
-        record.push_front(Record {
-            value,
-            delta_time: time.delta_seconds(),
-        });
-    }
-}
-
-/// Update size of [`Record`] if there are changes to [`RecordLen`].
-fn record_len<T: Recordable>(
-    mut q_records: Query<(&RecordLen<T>, &mut Records<T>), Changed<RecordLen<T>>>,
-) {
-    for (len, mut records) in q_records.iter_mut() {
-        let target_len = **len;
-        if records.len() != target_len {
-            **records = VecDeque::from_iter(vec![default(); target_len]);
-        }
-    }
-}
-
-// fn draw_transform2d_record_axes(
-//     q_transform2d_records: Query<&Records<Transform2d>>,
-//     mut axes: ResMut<DrawAxes>,
-//     palette: Res<ColorPalette>,
-// ) {
-//     for records in q_transform2d_records.iter() {
-//         for record in records.iter() {
-//             let transform2d = record.value;
-//             let angle = f32::atan2(transform2d.direction.x, transform2d.direction.y);
-//             let translation = Vec3::new(transform2d.translation.x, 0.0, transform2d.translation.y);
-
-//             axes.draw_with_color(
-//                 Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
-//                 0.1,
-//                 palette.orange,
-//             );
-//         }
-//     }
-// }
-
-#[derive(Bundle)]
-pub struct RecordsBundle<T: Recordable> {
-    pub records: Records<T>,
-    pub len: RecordLen<T>,
-}
-
-impl<T: Recordable> RecordsBundle<T> {
-    pub fn new(len: usize) -> Self {
-        Self {
-            records: Records::default(),
-            len: RecordLen::new(len),
-        }
-    }
-}
-
-/// A history record of the target [`Transform2dComp`] component.
-#[derive(Component, Default, Debug, Deref, DerefMut, Clone)]
-pub struct Records<T: Recordable>(VecDeque<Record<T>>);
-
-#[derive(Default, Debug, Clone, Copy)]
-pub struct Record<T: Recordable> {
-    /// The recorded value.
-    pub value: T,
-    /// The time between the previous frame and the frame where the transform is recorded.
-    pub delta_time: f32,
-}
-
-/// Determines the size of [`Transform2dRecord`].
-#[derive(Component, Default, Debug, Deref, DerefMut, Clone, Copy)]
-pub struct RecordLen<T: Recordable>(#[deref] usize, PhantomData<T>);
-
-impl<T: Recordable> RecordLen<T> {
-    fn new(len: usize) -> Self {
-        Self(len, PhantomData)
-    }
-}
-
-pub trait Recordable: Component + Default + Debug + Clone + Copy {}
-
-impl<T> Recordable for T where T: Component + Default + Debug + Clone + Copy {}
-
-// ==================================================================================================================
-
-pub struct DrawAxesPlugin;
-
-impl Plugin for DrawAxesPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<DrawAxes>()
-            .add_systems(First, clear_axes)
-            .add_systems(Last, draw_axes.run_if(resource_changed::<DrawAxes>));
-    }
-}
-
-fn clear_axes(mut axes: ResMut<DrawAxes>) {
-    if axes.is_empty() == false {
-        axes.clear();
-    }
-}
-
-fn draw_axes(mut gizmos: Gizmos, axes: Res<DrawAxes>, palette: Res<ColorPalette>) {
-    for axis in axes.iter() {
-        let start = axis.mat.transform_point3(Vec3::ZERO);
-        gizmos.arrow(
-            start,
-            start + axis.mat.transform_vector3(Vec3::Z) * axis.size,
-            axis.color.unwrap_or(palette.blue),
-        );
-
-        if axis.forward_only == false {
-            gizmos.arrow(
-                start,
-                start + axis.mat.transform_vector3(Vec3::X) * axis.size,
-                axis.color.unwrap_or(palette.red),
-            );
-            gizmos.arrow(
-                start,
-                start + axis.mat.transform_vector3(Vec3::Y) * axis.size,
-                axis.color.unwrap_or(palette.green),
-            );
-        }
-    }
-}
-
-/// Axes to draw.
-///
-/// Will be cleaned up every frame.
-#[derive(Resource, Default, Debug, Deref, DerefMut)]
-pub struct DrawAxes(Vec<DrawAxis>);
-
-impl DrawAxes {
-    pub fn draw(&mut self, mat: Mat4, size: f32) {
-        self.push(DrawAxis {
-            mat,
-            size,
-            color: None,
-            forward_only: false,
-        });
-    }
-
-    pub fn draw_with_color(&mut self, mat: Mat4, size: f32, color: Color) {
-        self.push(DrawAxis {
-            mat,
-            size,
-            color: Some(color),
-            forward_only: false,
-        });
-    }
-
-    pub fn draw_forward(&mut self, mat: Mat4, size: f32, color: Color) {
-        self.push(DrawAxis {
-            mat,
-            size,
-            color: Some(color),
-            forward_only: true,
-        });
-    }
-}
-
-/// Matrix and size of the axis to be drawn.
-#[derive(Default, Debug, Clone, Copy)]
-pub struct DrawAxis {
-    pub mat: Mat4,
-    pub size: f32,
-    pub color: Option<Color>,
-    pub forward_only: bool,
-}
-
-#[derive(Resource)]
-pub struct ColorPalette {
-    pub red: Color,
-    pub orange: Color,
-    pub yellow: Color,
-    pub green: Color,
-    pub blue: Color,
-    pub purple: Color,
-    pub base0: Color,
-    pub base1: Color,
-    pub base2: Color,
-    pub base3: Color,
-    pub base4: Color,
-    pub base5: Color,
-    pub base6: Color,
-    pub base7: Color,
-    pub base8: Color,
-}
-
-impl Default for ColorPalette {
-    fn default() -> Self {
-        Self {
-            red: Color::Srgba(Srgba::hex("#FF6188").unwrap()),
-            orange: Color::Srgba(Srgba::hex("#FC9867").unwrap()),
-            yellow: Color::Srgba(Srgba::hex("#FFD866").unwrap()),
-            green: Color::Srgba(Srgba::hex("#A9DC76").unwrap()),
-            blue: Color::Srgba(Srgba::hex("#78DCE8").unwrap()),
-            purple: Color::Srgba(Srgba::hex("#AB9DF2").unwrap()),
-            base0: Color::Srgba(Srgba::hex("#19181A").unwrap()),
-            base1: Color::Srgba(Srgba::hex("#221F22").unwrap()),
-            base2: Color::Srgba(Srgba::hex("#2D2A2E").unwrap()),
-            base3: Color::Srgba(Srgba::hex("#403E41").unwrap()),
-            base4: Color::Srgba(Srgba::hex("#5B595C").unwrap()),
-            base5: Color::Srgba(Srgba::hex("#727072").unwrap()),
-            base6: Color::Srgba(Srgba::hex("#939293").unwrap()),
-            base7: Color::Srgba(Srgba::hex("#C1C0C0").unwrap()),
-            base8: Color::Srgba(Srgba::hex("#FCFCFA").unwrap()),
         }
     }
 }
