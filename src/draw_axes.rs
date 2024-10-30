@@ -5,6 +5,7 @@ pub struct DrawAxesPlugin;
 impl Plugin for DrawAxesPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DrawAxes>()
+            .init_resource::<ColorPalette>()
             .add_systems(First, clear_axes)
             .add_systems(Last, draw_axes.run_if(resource_changed::<DrawAxes>));
     }

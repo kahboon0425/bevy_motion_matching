@@ -9,15 +9,7 @@ pub struct RecordPlugin<T: Recordable>(PhantomData<T>);
 
 impl<T: Recordable> Plugin for RecordPlugin<T> {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            PreUpdate,
-            (
-                record_len::<T>,
-                record::<T>,
-                // draw_transform2d_record_axes,
-            )
-                .chain(),
-        );
+        app.add_systems(PreUpdate, (record_len::<T>, record::<T>).chain());
     }
 }
 

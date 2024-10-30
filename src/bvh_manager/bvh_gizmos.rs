@@ -1,21 +1,13 @@
 use bevy::{color::palettes::css, prelude::*};
 use bevy_bvh_anim::prelude::*;
 
-use crate::{scene_loader::MainScene, ui::config::BvhTrailConfig};
+use crate::draw_axes::{ColorPalette, DrawAxes};
+use crate::motion_data::motion_data_asset::Pose;
+use crate::scene_loader::MainScene;
+use crate::ui::config::BvhTrailConfig;
+use crate::BVH_SCALE_RATIO;
 
 use super::bvh_player::SelectedBvhAsset;
-
-const AXIS_LENGTH: f32 = 0.04;
-const SPHERE_SIZE: f32 = 0.02;
-const RAINBOW: [Srgba; 7] = [
-    css::RED,
-    css::ORANGE,
-    css::YELLOW,
-    css::GREEN,
-    css::BLUE,
-    css::INDIGO,
-    css::PURPLE,
-];
 
 pub struct BvhGizmosPlugin;
 
@@ -31,6 +23,8 @@ fn armature_gizmos(
     q_children: Query<&Children>,
     q_transforms: Query<&GlobalTransform>,
     mut gizmos: Gizmos,
+    mut axes: ResMut<DrawAxes>,
+    palette: Res<ColorPalette>,
 ) {
     const SKIP_HIERARCHY: usize = 3;
 
@@ -41,18 +35,31 @@ fn armature_gizmos(
         q_children: &Query<&Children>,
         q_transforms: &Query<&GlobalTransform>,
         gizmos: &mut Gizmos,
+        axes: &mut DrawAxes,
+        palette: &ColorPalette,
     ) {
-        let (_, rotation, translation) = parent_transform.to_scale_rotation_translation();
-        gizmos.sphere(
-            translation,
-            rotation,
-            SPHERE_SIZE,
-            RAINBOW[index % RAINBOW.len()].with_alpha(0.4),
+        let gradient = [
+            &palette.red,
+            &palette.orange,
+            &palette.yellow,
+            &palette.green,
+            &palette.blue,
+            &palette.purple,
+        ];
+
+        gizmos.cuboid(
+            parent_transform
+                .compute_transform()
+                .with_scale(Vec3::splat(0.1)),
+            gradient[index % gradient.len()].with_alpha(0.4),
         );
 
         index += 1;
         if index > SKIP_HIERARCHY {
-            draw_axis(translation, rotation, gizmos);
+            axes.draw(
+                parent_transform.compute_matrix(),
+                1.0 / BVH_SCALE_RATIO * 0.04,
+            );
         }
 
         if let Ok(children) = q_children.get(parent) {
@@ -64,11 +71,20 @@ fn armature_gizmos(
                         gizmos.line(
                             parent_transform.translation(),
                             child_translation,
-                            css::LIGHT_CYAN,
+                            palette.base5,
                         );
                     }
 
-                    recursive_draw(index, child, transform, q_children, q_transforms, gizmos);
+                    recursive_draw(
+                        index,
+                        child,
+                        transform,
+                        q_children,
+                        q_transforms,
+                        gizmos,
+                        axes,
+                        palette,
+                    );
                 }
             }
         }
@@ -82,6 +98,8 @@ fn armature_gizmos(
             &q_children,
             &q_transforms,
             &mut gizmos,
+            &mut axes,
+            &palette,
         );
     }
 }
@@ -91,11 +109,16 @@ fn bvh_trail_gizmos(
     selected_bvh_asset: Res<SelectedBvhAsset>,
     bvh_assets: Res<Assets<BvhAsset>>,
     mut gizmos: Gizmos,
+    mut axes: ResMut<DrawAxes>,
+    palette: Res<ColorPalette>,
 ) {
     if config.draw == false {
         return;
     }
-    let step = BvhTrailConfig::MAX_RESOLUTION - config.resolution + 1;
+
+    if config.interval < BvhTrailConfig::MIN_INTERVAL {
+        return;
+    }
 
     let Some(bvh) = bvh_assets
         .get(selected_bvh_asset.0)
@@ -110,21 +133,41 @@ fn bvh_trail_gizmos(
             .collect::<Vec<_>>(),
     );
 
-    for frame in bvh.frames().step_by(step) {
-        joint_matrices.apply_frame(frame.as_slice());
+    let frame_time = bvh.frame_time().as_secs_f32();
+    let total_duration = frame_time * bvh.num_frames() as f32;
+
+    let mut time = 0.0;
+
+    while time < total_duration {
+        let index = (time / frame_time) as usize;
+
+        let Some(curr_frame) = bvh.frames().nth(index) else {
+            break;
+        };
+        let Some(next_frame) = bvh.frames().nth(index + 1) else {
+            break;
+        };
+
+        let leak = time - frame_time * index as f32;
+        let factor = leak / frame_time;
+        let curr_pose = Pose::from_frame(curr_frame);
+        let next_pose = Pose::from_frame(next_frame);
+        let pose = Pose::lerp(&curr_pose, &next_pose, factor);
+
+        joint_matrices.apply_frame(&pose);
 
         for world_matrix in joint_matrices.world_matrices() {
-            let (_, rotation, mut translation) = world_matrix.to_scale_rotation_translation();
-            // Constant scaling factor of the Bvh data.
-            translation *= 0.01;
-
-            gizmos.sphere(
-                translation,
-                rotation,
-                SPHERE_SIZE,
-                css::YELLOW.with_alpha(0.4),
+            let (_, rotation, translation) = world_matrix.to_scale_rotation_translation();
+            gizmos.cuboid(
+                Transform::from_translation(translation * BVH_SCALE_RATIO)
+                    .with_rotation(rotation)
+                    .with_scale(Vec3::splat(0.06)),
+                palette.blue.with_alpha(0.5),
             );
-            draw_axis(translation, rotation, &mut gizmos);
+            axes.draw(
+                world_matrix.mul_scalar(BVH_SCALE_RATIO),
+                1.0 / BVH_SCALE_RATIO * 0.04,
+            );
         }
 
         for joint in joint_matrices.joints() {
@@ -139,20 +182,12 @@ fn bvh_trail_gizmos(
 
             gizmos.line(
                 // Constant scaling factor of the Bvh data.
-                parent_translation * 0.01,
-                curr_translation * 0.01,
-                css::WHEAT,
+                parent_translation * BVH_SCALE_RATIO,
+                curr_translation * BVH_SCALE_RATIO,
+                palette.base6,
             );
         }
+
+        time += config.interval;
     }
-}
-
-fn draw_axis(translation: Vec3, rotation: Quat, gizmos: &mut Gizmos) {
-    let x_dir = rotation * Vec3::X;
-    let y_dir = rotation * Vec3::Y;
-    let z_dir = rotation * -Vec3::Z;
-
-    gizmos.line(translation, translation + x_dir * AXIS_LENGTH, css::RED);
-    gizmos.line(translation, translation + y_dir * AXIS_LENGTH, css::GREEN);
-    gizmos.line(translation, translation + z_dir * AXIS_LENGTH, css::BLUE);
 }

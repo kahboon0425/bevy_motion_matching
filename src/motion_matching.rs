@@ -6,10 +6,10 @@ use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
 use crate::motion_data::motion_data_player::MotionDataPlayerPair;
 use crate::motion_data::{MotionData, MotionDataHandle};
-use crate::player::{DesiredDirection, PlayerMarker};
+use crate::player::PlayerMarker;
 use crate::pose_matching::match_pose;
 use crate::scene_loader::MainScene;
-use crate::trajectory::{Trajectory, TrajectoryConfig};
+use crate::trajectory::{MovementDirection, Trajectory, TrajectoryConfig};
 use crate::BVH_SCALE_RATIO;
 
 pub struct MotionMatchingPlugin;
@@ -29,8 +29,19 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
     commands.insert_resource(MotionDataHandle(motion_data));
 }
 
+fn motion_matching(
+    q_trajectory: Query<&Trajectory>,
+    mut q_transforms: Query<&mut Transform>,
+    match_evr: EventReader<MotionMatch>,
+    motion_data: MotionData,
+) {
+}
+
+#[derive(Event, Debug)]
+pub struct MotionMatch;
+
 pub fn match_trajectory(
-    user_input_trajectory: Query<(&Trajectory, &Transform, &DesiredDirection), With<PlayerMarker>>,
+    user_input_trajectory: Query<(&Trajectory, &Transform, &MovementDirection), With<PlayerMarker>>,
     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
     mut main_character: Query<&JointMap, With<MainScene>>,
     time: Res<Time>,
@@ -40,7 +51,6 @@ pub fn match_trajectory(
     mut interpolation_time: Local<f32>,
     mut prev_direction: Local<Vec2>,
     mut motion_matching_result: ResMut<MotionMatchingResult>,
-    trajectory_config: Res<TrajectoryConfig>,
 ) {
     const TRAJECTORY_INTERVAL: f32 = 0.5;
     const MATCH_INTERVAL: f32 = 0.4;
@@ -48,17 +58,15 @@ pub fn match_trajectory(
 
     const MATCH_TRAJECTORY_COUNT: usize = 5;
 
-    let Ok((trajectory, transform, movement_direction)) = user_input_trajectory.get_single() else {
+    let Ok((trajectory, transform, direction)) = user_input_trajectory.get_single() else {
         return;
     };
 
     // if user input not changing, match every 0.4, if user input change, match
-    if Vec2::dot(**movement_direction, *prev_direction) < 0.5
-        && movement_direction.length_squared() > 0.1
-    {
+    if Vec2::dot(**direction, *prev_direction) < 0.5 && direction.length_squared() > 0.1 {
         *match_time = 0.0;
     }
-    *prev_direction = **movement_direction;
+    *prev_direction = **direction;
 
     if motion_player_pair.is_playing == false {
         return;

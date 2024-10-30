@@ -1,12 +1,10 @@
-use std::collections::VecDeque;
+use bevy::prelude::*;
 
-use bevy::{color::palettes::css, prelude::*};
-
-use crate::{
-    player::{DesiredDirection, MovementSpeed, PlayerMarker},
-    transform2d::Transform2d,
-    ui::config::DrawTrajectory,
-};
+use crate::draw_axes::{ColorPalette, DrawAxes};
+use crate::player::MovementConfig;
+use crate::record::Records;
+use crate::transform2d::Transform2d;
+use crate::MainSet;
 
 pub struct TrajectoryPlugin;
 
@@ -17,179 +15,219 @@ impl Plugin for TrajectoryPlugin {
             predict_count: 5,
             history_count: 1,
         })
-        .insert_resource(TrajectoryHistoryConfig { interval: 0.01667 })
         .add_systems(
             Update,
-            ((
-                change_trajectory_history_len.run_if(resource_changed::<TrajectoryHistoryConfig>),
-                store_trajectory_history,
-                compute_trajectory,
-                draw_trajectory,
-            )
-                .chain(),),
-        );
+            (trajectory_len, (predict_trajectory, trajectory_history))
+                .chain()
+                .in_set(MainSet::Trajectory),
+        )
+        .add_systems(Last, (update_velocities, update_prev_transform2ds).chain())
+        .add_systems(Update, draw_trajectory_axes);
+
+        app.register_type::<Trajectory>()
+            .register_type::<PrevTransform2d>()
+            .register_type::<Velocity>()
+            .register_type::<MovementDirection>();
     }
 }
 
-fn change_trajectory_history_len(
-    mut q_history: Query<&mut TrajectoryHistory, With<PlayerMarker>>,
-    config: Res<TrajectoryConfig>,
-    history_config: Res<TrajectoryHistoryConfig>,
+fn predict_trajectory(
+    mut q_trajectories: Query<(&mut Trajectory, &Transform2d, &Velocity, &MovementDirection)>,
+    trajectory_config: Res<TrajectoryConfig>,
+    movement_config: Res<MovementConfig>,
 ) {
-    let target_len = f32::ceil(config.total_history_time() / history_config.interval) as usize;
+    for (mut trajectory, transform2d, velocity, direction) in q_trajectories.iter_mut() {
+        // Predict trajectory.
+        let mut translation = transform2d.translation;
+        let mut velocity = **velocity;
 
-    for mut trajectory in q_history.iter_mut() {
-        match trajectory.histories.len().cmp(&target_len) {
-            std::cmp::Ordering::Less => {
-                let push_count = target_len - trajectory.histories.len();
-                let back_trajectory = trajectory.histories.back().copied().unwrap_or_default();
+        let velocity_addition = **direction * movement_config.walk_speed;
 
-                for _ in 0..push_count {
-                    trajectory.histories.push_back(back_trajectory);
-                }
-            }
-            std::cmp::Ordering::Greater => {
-                let pop_count = trajectory.histories.len() - target_len;
-                for _ in 0..pop_count {
-                    trajectory.histories.pop_back();
-                }
-            }
-            std::cmp::Ordering::Equal => {}
+        for i in 0..trajectory_config.predict_count {
+            velocity += velocity_addition * trajectory_config.interval_time;
+            translation += velocity * trajectory_config.interval_time;
+            // Accelerate to walk speed max.
+            velocity = Vec2::clamp_length(velocity, 0.0, movement_config.walk_speed);
+
+            trajectory[i + trajectory_config.history_count] = TrajectoryPoint {
+                translation,
+                velocity,
+            };
         }
     }
 }
 
-/// Update the trajectory every interval.
-fn store_trajectory_history(
-    mut q_history: Query<(&mut TrajectoryHistory, &Transform), With<PlayerMarker>>,
-    history_config: Res<TrajectoryHistoryConfig>,
+fn trajectory_history(
+    mut q_trajectories: Query<(
+        &mut Trajectory,
+        &Transform2d,
+        &Velocity,
+        &Records<Transform2d>,
+        &Records<Velocity>,
+    )>,
+    trajectory_config: Res<TrajectoryConfig>,
     time: Res<Time>,
-    mut time_passed: Local<f32>,
 ) {
-    *time_passed += time.delta_seconds();
+    for (mut trajectory, transform2d, velocity, transform_record, velocity_record) in
+        q_trajectories.iter_mut()
+    {
+        assert!(
+            transform_record.len() == velocity_record.len(),
+            "Records<Transform2d> must have the same length as Records<Velocity>."
+        );
+        let record_len = transform_record.len();
 
-    if *time_passed >= history_config.interval {
-        // Updates the histories and current trajectory
-        for (mut trajectory, transform) in q_history.iter_mut() {
-            trajectory.histories.pop_back();
-            trajectory.histories.push_front(transform.translation.xz());
-        }
+        // Start and end point to interpolate from.
+        let mut trans_start = transform2d.translation;
+        let mut vel_start = **velocity;
 
-        // Resets timer
-        *time_passed = 0.0;
-    }
-}
+        let mut trans_end = transform_record[0].value.translation;
+        let mut vel_end = *velocity_record[0].value;
 
-fn compute_trajectory(
-    mut q_trajectory: Query<
-        (
-            &mut Trajectory,
-            &TrajectoryHistory,
-            &DesiredDirection,
-            &MovementSpeed,
-        ),
-        With<PlayerMarker>,
-    >,
-    config: Res<TrajectoryConfig>,
-    history_config: Res<TrajectoryHistoryConfig>,
-) {
-    for (mut trajectory, trajectory_history, direction, speed) in q_trajectory.iter_mut() {
-        let traj_len = config.predict_count + config.history_count + 1;
-        if trajectory.len() != traj_len {
-            **trajectory = vec![default(); traj_len];
-        }
+        // Accumulate the record time.
+        let mut record_time = time.delta_seconds();
+        // Keep track of our last used record index
+        let mut record_index = 0;
+        let mut curr_delta_time = time.delta_seconds();
 
-        // Populate current & history
-        for c in 0..=config.history_count {
-            // Percentage factor to the history
-            let offset_factor = c as f32 / config.predict_count as f32;
-            // Time offset into the history
-            let time_offset = offset_factor * config.interval_time;
-            // Starting index offset
-            let index_offset_f = time_offset / history_config.interval;
-            let start_index_offset = index_offset_f as usize;
-            // Subtract 1 because we are going backwards (at least be 0)
-            let end_index_offset = usize::max(start_index_offset, 1) - 1;
-            let factor = index_offset_f - start_index_offset as f32;
+        for i in 1..=trajectory_config.history_count {
+            let target_time = i as f32 * trajectory_config.interval_time;
 
-            let start_translation = trajectory_history.histories[start_index_offset];
-            let end_translation = trajectory_history.histories[end_index_offset];
-            let translation = Vec2::lerp(start_translation, end_translation, factor);
+            let range = record_index..record_len - 1;
+            for _ in range {
+                trans_end = transform_record[record_index].value.translation;
+                vel_end = *velocity_record[record_index].value;
 
-            trajectory[config.predict_count - c].translation = translation;
-        }
-
-        // Populate prediction
-        let current_translation = trajectory[config.predict_count].translation;
-        for c in 1..=config.predict_count {
-            let prediction = direction.get() * speed.get() * c as f32 * config.interval_time;
-            trajectory[c + config.history_count].translation = current_translation + prediction;
-        }
-    }
-}
-
-fn draw_trajectory(
-    q_trajectory: Query<&Trajectory>,
-    mut gizmos: Gizmos,
-    show_arrow: Res<DrawTrajectory>,
-) {
-    if **show_arrow {
-        for trajectory in q_trajectory.iter() {
-            // Draw arrow gizmos of the smoothed out trajectory
-            let mut trajectory_iter = trajectory.iter();
-            let next = trajectory_iter.next();
-
-            if let Some(next) = next {
-                let mut start = next.translation;
-
-                for next in trajectory_iter {
-                    let end = next.translation;
-
-                    let arrow_start = Vec3::new(start.x, 0.0, start.y);
-                    let arrow_end = Vec3::new(end.x, 0.0, end.y);
-                    gizmos.arrow(arrow_start, arrow_end, css::RED);
-                    start = end;
+                // Accumulated record time has exceed the target time.
+                // Break of before we update the start point.
+                if record_time > target_time {
+                    break;
                 }
+
+                curr_delta_time = transform_record[record_index].delta_time;
+                record_time += curr_delta_time;
+                record_index += 1;
+
+                trans_start = trans_end;
+                vel_start = vel_end;
             }
+
+            // Lerp between start and end point.
+            let factor = 1.0 - (record_time - target_time) / curr_delta_time;
+            trajectory[trajectory_config.history_count - i] = TrajectoryPoint {
+                translation: Vec2::lerp(trans_start, trans_end, factor),
+                velocity: Vec2::lerp(vel_start, vel_end, factor),
+            };
         }
+    }
+}
+
+fn trajectory_len(
+    mut q_trajectories: Query<&mut Trajectory>,
+    trajectory_config: Res<TrajectoryConfig>,
+) {
+    // Add one for the current transform
+    let target_len = 1 + trajectory_config.history_count + trajectory_config.predict_count;
+
+    for mut trajectory in q_trajectories.iter_mut() {
+        if trajectory.len() != target_len {
+            **trajectory = vec![TrajectoryPoint::default(); target_len];
+        }
+    }
+}
+
+fn draw_trajectory_axes(
+    q_trajectories: Query<&Trajectory>,
+    mut axes: ResMut<DrawAxes>,
+    movement_config: Res<MovementConfig>,
+    palette: Res<ColorPalette>,
+) {
+    for trajectory in q_trajectories.iter() {
+        for point in trajectory.iter() {
+            let angle = f32::atan2(point.velocity.x, point.velocity.y);
+            let translation = Vec3::new(point.translation.x, 0.0, point.translation.y);
+
+            let velocity_magnitude = point.velocity.length();
+            axes.draw_forward(
+                Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
+                velocity_magnitude * 0.1,
+                palette.purple.mix(
+                    &palette.orange,
+                    velocity_magnitude / movement_config.run_speed,
+                ),
+            );
+        }
+    }
+}
+
+fn update_velocities(
+    mut q_velocities: Query<(&mut Velocity, &PrevTransform2d, &Transform2d)>,
+    time: Res<Time>,
+) {
+    // Prevent division by 0
+    if time.delta_seconds() < f32::EPSILON {
+        return;
+    }
+
+    for (mut velocity, prev_transform2d, transform2d) in q_velocities.iter_mut() {
+        **velocity =
+            (transform2d.translation - prev_transform2d.translation) / time.delta_seconds();
+    }
+}
+
+fn update_prev_transform2ds(mut q_transform2ds: Query<(&mut PrevTransform2d, &Transform2d)>) {
+    for (mut prev_transform2d, transform2d) in q_transform2ds.iter_mut() {
+        **prev_transform2d = *transform2d;
     }
 }
 
 #[derive(Bundle, Default)]
 pub struct TrajectoryBundle {
     pub trajectory: Trajectory,
-    pub history: TrajectoryHistory,
+    pub transform2d: Transform2d,
+    pub prev_transform2d: PrevTransform2d,
+    pub velocity: Velocity,
+    pub movement_direction: MovementDirection,
+}
+
+/// Trajectory containing prediction and history based on [`TrajectoryConfig`].
+#[derive(Component, Reflect, Default, Debug, Deref, DerefMut, Clone)]
+#[reflect(Component)]
+pub struct Trajectory(Vec<TrajectoryPoint>);
+
+#[derive(Component, Reflect, Default, Debug, Deref, DerefMut, Clone, Copy)]
+#[reflect(Component)]
+pub struct PrevTransform2d(Transform2d);
+
+#[derive(Component, Reflect, Default, Debug, Deref, DerefMut, Clone, Copy)]
+#[reflect(Component)]
+pub struct Velocity(Vec2);
+
+#[derive(Component, Reflect, Default, Debug, Deref, DerefMut, Clone, Copy)]
+#[reflect(Component)]
+pub struct MovementDirection(Vec2);
+
+/// A single point in the [`Trajectory`].
+#[derive(Reflect, Default, Debug, Clone, Copy)]
+pub struct TrajectoryPoint {
+    pub translation: Vec2,
+    pub velocity: Vec2,
+}
+
+impl TrajectoryPoint {
+    pub fn new(translation: Vec2, velocity: Vec2) -> Self {
+        Self {
+            translation,
+            velocity,
+        }
+    }
 }
 
 /// Configuration for all trajectories.
-#[derive(Resource)]
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
 pub struct TrajectoryConfig {
     pub interval_time: f32,
     pub predict_count: usize,
     pub history_count: usize,
 }
-
-impl TrajectoryConfig {
-    pub fn total_prediction_time(&self) -> f32 {
-        self.interval_time * self.predict_count as f32
-    }
-
-    pub fn total_history_time(&self) -> f32 {
-        self.interval_time * self.history_count as f32
-    }
-}
-
-#[derive(Resource)]
-pub struct TrajectoryHistoryConfig {
-    interval: f32,
-}
-
-/// Translations that stores the trajectory history.
-#[derive(Component, Default, Clone)]
-pub struct TrajectoryHistory {
-    histories: VecDeque<Vec2>,
-}
-
-/// Final trajectory following the [`TrajectoryConfig`] used for matching.
-#[derive(Component, Default, Clone, Deref, DerefMut)]
-pub struct Trajectory(Vec<Transform2d>);

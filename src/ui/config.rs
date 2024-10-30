@@ -106,8 +106,11 @@ fn bvh_trail_config(ui: &mut egui::Ui, world: &mut World) {
         ui.label("Bvh Trail");
         ui.checkbox(&mut config.draw, "Show");
         ui.add(
-            egui::Slider::new(&mut config.resolution, 1..=BvhTrailConfig::MAX_RESOLUTION)
-                .text("Resolution"),
+            egui::Slider::new(
+                &mut config.interval,
+                BvhTrailConfig::MIN_INTERVAL..=BvhTrailConfig::MAX_INTERVAL,
+            )
+            .text("Interval"),
         );
     })
 }
@@ -148,18 +151,19 @@ fn draw_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
 #[derive(Resource)]
 pub struct BvhTrailConfig {
     pub draw: bool,
-    pub resolution: usize,
+    pub interval: f32,
 }
 
 impl BvhTrailConfig {
-    pub const MAX_RESOLUTION: usize = 10;
+    pub const MAX_INTERVAL: f32 = 0.3333;
+    pub const MIN_INTERVAL: f32 = 0.1667;
 }
 
 impl Default for BvhTrailConfig {
     fn default() -> Self {
         Self {
             draw: true,
-            resolution: 4,
+            interval: 0.1667,
         }
     }
 }

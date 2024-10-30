@@ -74,6 +74,7 @@ impl Pose {
     }
 
     /// Get position and rotation.
+    #[must_use]
     pub fn get_pos_rot(&self, joint_info: &JointInfo) -> (Vec3, Quat) {
         let mut pos = Vec3::ZERO;
         let mut euler = Vec3::ZERO;
@@ -93,6 +94,17 @@ impl Pose {
             pos,
             Quat::from_euler(EulerRot::XYZ, euler.x, euler.y, euler.z),
         )
+    }
+
+    pub fn lerp(&self, rhs: &Self, factor: f32) -> Self {
+        let data = self
+            .0
+            .iter()
+            .enumerate()
+            .map(|(i, x)| f32::lerp(*x, rhs[i], factor))
+            .collect::<Vec<_>>();
+
+        Self(data)
     }
 }
 

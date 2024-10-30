@@ -27,11 +27,11 @@ impl Plugin for MotionMatchingAppPlugin {
             }),
             draw_axes::DrawAxesPlugin,
             transform2d::Transform2dPlugin,
+            trajectory::TrajectoryPlugin,
             action::ActionPlugin,
             motion_data::MotionDataPlugin,
             scene_loader::SceneLoaderPlugin,
             bvh_manager::BvhManagerPlugin,
-            trajectory::TrajectoryPlugin,
             camera::CameraPlugin,
             ui::UiPlugin,
             player::PlayerPlugin,
@@ -44,10 +44,18 @@ impl Plugin for MotionMatchingAppPlugin {
     }
 }
 
-#[derive(States, Default, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(States, Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GameMode {
     #[default]
     None,
     Config,
     Play,
+}
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MainSet {
+    Action,
+    Trajectory,
+    MotionMatching,
+    Animation,
 }
