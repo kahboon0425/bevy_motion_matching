@@ -1,10 +1,12 @@
-use bevy::{color::palettes::css, prelude::*};
+use bevy::prelude::*;
+use bevy_bvh_anim::bvh_anim::ChannelType;
 use bevy_bvh_anim::prelude::*;
 
 use crate::draw_axes::{ColorPalette, DrawAxes};
 use crate::motion_data::motion_data_asset::Pose;
+use crate::player::MovementConfig;
 use crate::scene_loader::MainScene;
-use crate::ui::config::BvhTrailConfig;
+use crate::ui::config::{BvhTrailConfig, DrawMainArmature};
 use crate::BVH_SCALE_RATIO;
 
 use super::bvh_player::SelectedBvhAsset;
@@ -25,7 +27,12 @@ fn armature_gizmos(
     mut gizmos: Gizmos,
     mut axes: ResMut<DrawAxes>,
     palette: Res<ColorPalette>,
+    draw: Res<DrawMainArmature>,
 ) {
+    if **draw == false {
+        return;
+    }
+
     const SKIP_HIERARCHY: usize = 3;
 
     fn recursive_draw(
@@ -71,7 +78,7 @@ fn armature_gizmos(
                         gizmos.line(
                             parent_transform.translation(),
                             child_translation,
-                            palette.base5,
+                            palette.base6,
                         );
                     }
 
@@ -111,8 +118,9 @@ fn bvh_trail_gizmos(
     mut gizmos: Gizmos,
     mut axes: ResMut<DrawAxes>,
     palette: Res<ColorPalette>,
+    movement_config: Res<MovementConfig>,
 ) {
-    if config.draw == false {
+    if config.draw_armatures == false && config.draw_trajectory == false {
         return;
     }
 
@@ -135,6 +143,8 @@ fn bvh_trail_gizmos(
 
     let frame_time = bvh.frame_time().as_secs_f32();
     let total_duration = frame_time * bvh.num_frames() as f32;
+    // SAFETY: All bvh should have a root joint!
+    let root_joint = bvh.root_joint().unwrap().data().clone();
 
     let mut time = 0.0;
 
@@ -156,36 +166,89 @@ fn bvh_trail_gizmos(
 
         joint_matrices.apply_frame(&pose);
 
-        for world_matrix in joint_matrices.world_matrices() {
-            let (_, rotation, translation) = world_matrix.to_scale_rotation_translation();
-            gizmos.cuboid(
-                Transform::from_translation(translation * BVH_SCALE_RATIO)
-                    .with_rotation(rotation)
-                    .with_scale(Vec3::splat(0.06)),
-                palette.blue.with_alpha(0.5),
-            );
-            axes.draw(
-                world_matrix.mul_scalar(BVH_SCALE_RATIO),
-                1.0 / BVH_SCALE_RATIO * 0.04,
+        // Draw trajectory.
+        if config.draw_trajectory {
+            let mut curr_translation = Vec2::ZERO;
+            let mut next_translation = Vec2::ZERO;
+
+            for channel in root_joint.channels() {
+                let (Some(&curr_val), Some(&next_val)) =
+                    (curr_frame.get(channel), next_frame.get(channel))
+                else {
+                    continue;
+                };
+
+                match channel.channel_type() {
+                    ChannelType::PositionX => {
+                        curr_translation.x = curr_val;
+                        next_translation.x = next_val;
+                    }
+                    ChannelType::PositionZ => {
+                        curr_translation.y = curr_val;
+                        next_translation.y = next_val;
+                    }
+                    _ => {}
+                }
+            }
+
+            curr_translation *= BVH_SCALE_RATIO;
+            next_translation *= BVH_SCALE_RATIO;
+
+            // Calculate velocity.
+            let velocity = (next_translation - curr_translation) / frame_time;
+            let angle = f32::atan2(velocity.x, velocity.y);
+            let velocity_magnitude = velocity.length();
+
+            let (.., mut translation) = joint_matrices
+                .root_joint_matrix()
+                .to_scale_rotation_translation();
+            translation *= BVH_SCALE_RATIO;
+            translation.y = 0.0;
+
+            // Draw trajectory arrow.
+            axes.draw_forward(
+                Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
+                velocity_magnitude * 0.1,
+                palette.purple.mix(
+                    &palette.orange,
+                    velocity_magnitude / movement_config.run_speed,
+                ),
             );
         }
 
-        for joint in joint_matrices.joints() {
-            let Some(parent_index) = joint.parent_index() else {
-                continue;
-            };
+        // Draw armatures.
+        if config.draw_armatures {
+            for world_matrix in joint_matrices.world_matrices() {
+                let (_, rotation, translation) = world_matrix.to_scale_rotation_translation();
+                gizmos.cuboid(
+                    Transform::from_translation(translation * BVH_SCALE_RATIO)
+                        .with_rotation(rotation)
+                        .with_scale(Vec3::splat(0.06)),
+                    palette.blue.with_alpha(0.4),
+                );
+                axes.draw(
+                    world_matrix.mul_scalar(BVH_SCALE_RATIO),
+                    1.0 / BVH_SCALE_RATIO * 0.04,
+                );
+            }
 
-            let (.., parent_translation) =
-                joint_matrices.world_matrices()[parent_index].to_scale_rotation_translation();
-            let (.., curr_translation) =
-                joint_matrices.world_matrices()[joint.index()].to_scale_rotation_translation();
+            for joint in joint_matrices.joints() {
+                let Some(parent_index) = joint.parent_index() else {
+                    continue;
+                };
 
-            gizmos.line(
-                // Constant scaling factor of the Bvh data.
-                parent_translation * BVH_SCALE_RATIO,
-                curr_translation * BVH_SCALE_RATIO,
-                palette.base6,
-            );
+                let (.., parent_translation) =
+                    joint_matrices.world_matrices()[parent_index].to_scale_rotation_translation();
+                let (.., curr_translation) =
+                    joint_matrices.world_matrices()[joint.index()].to_scale_rotation_translation();
+
+                gizmos.line(
+                    // Constant scaling factor of the Bvh data.
+                    parent_translation * BVH_SCALE_RATIO,
+                    curr_translation * BVH_SCALE_RATIO,
+                    palette.base4.with_alpha(0.6),
+                );
+            }
         }
 
         time += config.interval;

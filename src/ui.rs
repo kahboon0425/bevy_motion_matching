@@ -27,6 +27,7 @@ impl Plugin for UiPlugin {
 
         app.init_resource::<MouseInUi>()
             .init_resource::<config::BvhTrailConfig>()
+            .init_resource::<config::DrawMainArmature>()
             .init_resource::<config::DrawTrajectory>()
             .init_resource::<builder::BuildConfigs>()
             .add_systems(PreUpdate, reset_mouse_in_ui)

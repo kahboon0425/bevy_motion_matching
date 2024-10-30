@@ -17,8 +17,9 @@ pub fn config_panel(ui: &mut egui::Ui, world: &mut World) {
     bvh_playback(ui, world);
     bvh_trail_config(ui, world);
     show_character_checkbox(ui, world);
-    show_ground_checkbox(ui, world);
+    draw_main_armature_checkbox(ui, world);
     draw_trajectory_checkbox(ui, world);
+    show_ground_checkbox(ui, world);
 }
 
 fn bvh_playback(ui: &mut egui::Ui, world: &mut World) {
@@ -104,7 +105,8 @@ fn bvh_trail_config(ui: &mut egui::Ui, world: &mut World) {
     let mut config = world.resource_mut::<BvhTrailConfig>();
     groupbox(ui, |ui| {
         ui.label("Bvh Trail");
-        ui.checkbox(&mut config.draw, "Show");
+        ui.checkbox(&mut config.draw_armatures, "Armatures");
+        ui.checkbox(&mut config.draw_trajectory, "Trajectory");
         ui.add(
             egui::Slider::new(
                 &mut config.interval,
@@ -129,6 +131,16 @@ fn show_character_checkbox(ui: &mut egui::Ui, world: &mut World) {
     }
 }
 
+fn draw_main_armature_checkbox(ui: &mut egui::Ui, world: &mut World) {
+    let mut draw_main_armature = world.resource_mut::<DrawMainArmature>();
+    ui.checkbox(&mut draw_main_armature, "Show Main Armature");
+}
+
+fn draw_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
+    let mut draw_trajectory = world.resource_mut::<DrawTrajectory>();
+    ui.checkbox(&mut draw_trajectory, "Show Trajectory Arrows");
+}
+
 fn show_ground_checkbox(ui: &mut egui::Ui, world: &mut World) {
     let mut q_ground = world.query_filtered::<&mut Visibility, With<GroundPlane>>();
     let Ok(mut vis) = q_ground.get_single_mut(world) else {
@@ -143,14 +155,10 @@ fn show_ground_checkbox(ui: &mut egui::Ui, world: &mut World) {
     }
 }
 
-fn draw_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
-    let mut draw_trajectory = world.resource_mut::<DrawTrajectory>();
-    ui.checkbox(&mut draw_trajectory.0, "Show Trajectory Arrows");
-}
-
 #[derive(Resource)]
 pub struct BvhTrailConfig {
-    pub draw: bool,
+    pub draw_armatures: bool,
+    pub draw_trajectory: bool,
     pub interval: f32,
 }
 
@@ -162,13 +170,23 @@ impl BvhTrailConfig {
 impl Default for BvhTrailConfig {
     fn default() -> Self {
         Self {
-            draw: true,
+            draw_armatures: true,
+            draw_trajectory: true,
             interval: 0.1667,
         }
     }
 }
 
-#[derive(Resource, Deref)]
+#[derive(Resource, Deref, DerefMut)]
+pub struct DrawMainArmature(bool);
+
+impl Default for DrawMainArmature {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
+#[derive(Resource, Deref, DerefMut)]
 pub struct DrawTrajectory(bool);
 
 impl Default for DrawTrajectory {
