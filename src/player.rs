@@ -108,7 +108,6 @@ impl DesiredDirection {
 pub struct MovementConfig {
     pub walk_speed: f32,
     pub run_speed: f32,
-    pub rotation_speed: f32,
     pub lerp_factor: f32,
 }
 
@@ -117,7 +116,6 @@ impl Default for MovementConfig {
         Self {
             walk_speed: 2.0,
             run_speed: 4.0,
-            rotation_speed: 2.0,
             lerp_factor: 10.0,
         }
     }

@@ -54,6 +54,9 @@ leafwing-input-manager = "0.14"
 # debug editor (run with debug feature to enable it)
 bevy-inspector-egui = { version = "0.25", optional = true }
 
+[dev-dependencies]
+bevy-inspector-egui = { version = "0.25" }
+
 [lints]
 workspace = true
 

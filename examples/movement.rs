@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
-use std::marker::PhantomData;
 
 use bevy::prelude::*;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_motion_matching::action::*;
 use bevy_motion_matching::camera::CameraPlugin;
 use bevy_motion_matching::player::*;
@@ -15,42 +15,45 @@ fn main() -> AppExit {
 
     app.add_plugins((
         DefaultPlugins,
+        WorldInspectorPlugin::new(),
         CameraPlugin,
         Transform2dPlugin,
         ActionPlugin,
     ))
     .init_resource::<MouseInUi>();
 
-    app.add_plugins((
-        Transform2dRecordPlugin::<Transform2d>::default(),
-        Transform2dRecordPlugin::<Transform2dPrediction>::default(),
-    ))
-    .init_resource::<ColorPalette>()
-    .init_resource::<MovementConfig>()
-    .insert_resource(TrajectoryConfig {
-        interval_time: 0.1667,
-        predict_count: 5,
-        history_count: 1,
-    })
-    .add_systems(Startup, setup)
-    .add_systems(Update, draw_debug_axis)
-    .add_systems(Update, draw_trajectory);
+    app.add_plugins((DrawAxesPlugin, Transform2dRecordPlugin))
+        .init_resource::<ColorPalette>()
+        .insert_resource(MovementConfig {
+            walk_speed: 2.0,
+            run_speed: 4.0,
+            lerp_factor: 10.0,
+        })
+        .insert_resource(TrajectoryConfig {
+            interval_time: 0.1667,
+            predict_count: 6,
+            history_count: 1,
+        })
+        .add_systems(Startup, setup)
+        .add_systems(
+            Update,
+            (
+                trajectory_len,
+                update_movement_direction,
+                predict_trajectory,
+            )
+                .chain(),
+        )
+        .add_systems(Update, (draw_trajectory_axes, draw_debug_axis));
+
+    app.register_type::<Velocity>();
 
     app.run()
 }
 
-fn draw_trajectory() {}
-
-/// Debug XYZ axis in world space.
-fn draw_debug_axis(mut gizmos: Gizmos, palette: Res<ColorPalette>) {
-    gizmos.arrow(Vec3::ZERO, Vec3::X, palette.red);
-    gizmos.arrow(Vec3::ZERO, Vec3::Y, palette.green);
-    gizmos.arrow(Vec3::ZERO, Vec3::Z, palette.blue);
-}
-
 // TODO: Trajectory redo
 // - Record stored from start to end.
-// - Allows definition for the length of prediction and history.
+// - Allows definition for the length of prediction and history. (done)
 // - Prediction trajectory depends on the recorded prediction of the primary prediction point.
 //
 // TODO: New tooling
@@ -61,6 +64,95 @@ fn draw_debug_axis(mut gizmos: Gizmos, palette: Res<ColorPalette>) {
 //
 // DONE: Figure out axis: Use gizmos to draw out the raw XYZ axis.
 
+fn predict_trajectory(
+    mut q_trajectories: Query<(&mut Trajectory, &Transform2d, &Velocity, &MovementDirection)>,
+    trajectory_config: Res<TrajectoryConfig>,
+    movement_config: Res<MovementConfig>,
+) {
+    let Ok((mut trajectory, transform2d, velocity, direction)) = q_trajectories.get_single_mut()
+    else {
+        return;
+    };
+
+    // Predict trajectory.
+    let mut translation = transform2d.translation;
+    let mut velocity = **velocity;
+
+    let velocity_addition =
+        **direction * movement_config.walk_speed * trajectory_config.interval_time;
+
+    for i in 0..trajectory_config.predict_count {
+        velocity += velocity_addition;
+        translation += velocity * trajectory_config.interval_time;
+        // Accelerate to walk speed max.
+        velocity = Vec2::clamp_length(velocity, 0.0, movement_config.walk_speed);
+
+        trajectory.points[i + trajectory_config.history_count] =
+            TrajectoryPoint::new(translation, velocity);
+
+        println!("{i}: {translation}, {velocity}");
+    }
+}
+
+fn update_movement_direction(
+    mut q_movement_directions: Query<&mut MovementDirection>,
+    movement_config: Res<MovementConfig>,
+    action: Res<ActionState<PlayerAction>>,
+    time: Res<Time>,
+) {
+    let Ok(mut movement_direction) = q_movement_directions.get_single_mut() else {
+        return;
+    };
+
+    let mut action_axis = action
+        .clamped_axis_pair(&PlayerAction::Walk)
+        .map(|axis| axis.xy().normalize_or_zero())
+        .unwrap_or_default();
+    action_axis.y = -action_axis.y;
+
+    **movement_direction = Vec2::lerp(
+        **movement_direction,
+        action_axis,
+        f32::min(1.0, movement_config.lerp_factor * time.delta_seconds()),
+    );
+}
+
+fn trajectory_len(
+    mut q_trajectories: Query<&mut Trajectory>,
+    trajectory_config: Res<TrajectoryConfig>,
+) {
+    let Ok(mut trajectory) = q_trajectories.get_single_mut() else {
+        return;
+    };
+
+    // Add one for the current transform
+    let target_len = 1 + trajectory_config.history_count + trajectory_config.predict_count;
+
+    if trajectory.points.len() != target_len {
+        trajectory.points = vec![TrajectoryPoint::default(); target_len];
+    }
+}
+
+fn draw_trajectory_axes(q_trajectories: Query<&Trajectory>, mut axes: ResMut<DrawAxes>) {
+    let Ok(trajectory) = q_trajectories.get_single() else {
+        return;
+    };
+
+    for point in trajectory.points.iter() {
+        let angle = f32::atan2(point.velocity.x, point.velocity.y);
+        let translation = Vec3::new(point.translation.x, 0.0, point.translation.y);
+
+        axes.draw(
+            Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
+            0.1,
+        );
+    }
+}
+
+#[derive(Component, Reflect, Default, Debug, Deref, DerefMut, Clone, Copy)]
+#[reflect(Component)]
+pub struct Velocity(Vec2);
+
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -68,40 +160,70 @@ fn setup(
 ) {
     commands.spawn((
         MaterialMeshBundle {
-            mesh: meshes.add(Cuboid::from_size(Vec3::splat(1.0))),
+            mesh: meshes.add(Cuboid::from_size(Vec3::splat(0.1))),
             material: materials.add(Color::WHITE),
             ..default()
         },
-        Transform2dRecordsBundle::<Transform2d>::new(20),
-        Transform2dRecordsBundle::<Transform2dPrediction>::new(20),
+        Transform2d::default(),
+        Transform2dRecordsBundle::new(20),
+        Trajectory::default(),
+        Velocity::default(),
+        MovementDirection::default(),
     ));
 }
 
-/// The predicted [`Transform2d`] based on [`PlayerAction`].
-#[derive(Component, Clone, Copy, Default, Debug, Deref, DerefMut)]
-pub struct Transform2dPrediction(Transform2d);
+/// Debug XYZ axis in world space.
+fn draw_debug_axis(mut axes: ResMut<DrawAxes>) {
+    axes.draw(Mat4::IDENTITY, 1.0);
+}
 
-impl Transform2dComp for Transform2dPrediction {
-    fn transform2d(&self) -> Transform2d {
-        **self
+/// Trajectory containing prediction and history based on [`TrajectoryConfig`].
+#[derive(Component, Default, Debug)]
+pub struct Trajectory {
+    points: Vec<TrajectoryPoint>,
+    // prediction_time: f32,
+}
+
+/// A single point in the [`Trajectory`].
+#[derive(Default, Debug, Clone, Copy)]
+pub struct TrajectoryPoint {
+    translation: Vec2,
+    velocity: Vec2,
+}
+
+impl TrajectoryPoint {
+    pub fn new(translation: Vec2, velocity: Vec2) -> Self {
+        Self {
+            translation,
+            velocity,
+        }
     }
 }
 
-#[derive(Default)]
-pub struct Transform2dRecordPlugin<T: Transform2dComp>(PhantomData<T>);
+#[derive(Component, Default, Debug, Deref, DerefMut, Clone, Copy)]
+pub struct MovementDirection(Vec2);
 
-impl<T: Transform2dComp> Plugin for Transform2dRecordPlugin<T> {
+// ==================================================================================================================
+
+pub struct Transform2dRecordPlugin;
+
+impl Plugin for Transform2dRecordPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PreUpdate,
-            (transform2d_record_size::<T>, transform2d_record::<T>).chain(),
+            (
+                transform2d_record_len,
+                transform2d_record,
+                draw_transform2d_record_axes,
+            )
+                .chain(),
         );
     }
 }
 
 /// Push in a new [`Transform2dComp`] to the front of a [`Transform2dRecord`] while popping out an old one.
-fn transform2d_record<T: Transform2dComp>(
-    mut q_transform2d_records: Query<(&T, &mut Transform2dRecords<T>)>,
+fn transform2d_record(
+    mut q_transform2d_records: Query<(&Transform2d, &mut Transform2dRecords)>,
     time: Res<Time>,
 ) {
     for (&transform2d, mut record) in q_transform2d_records.iter_mut() {
@@ -114,10 +236,10 @@ fn transform2d_record<T: Transform2dComp>(
 }
 
 /// Update size of [`Transform2dRecord`] if there are changes to [`Transform2dRecordSize`].
-fn transform2d_record_size<T: Transform2dComp>(
+fn transform2d_record_len(
     mut q_transform2d_records: Query<
-        (&Transform2dRecordLen<T>, &mut Transform2dRecords<T>),
-        Changed<Transform2dRecordLen<T>>,
+        (&Transform2dRecordLen, &mut Transform2dRecords),
+        Changed<Transform2dRecordLen>,
     >,
 ) {
     for (len, mut records) in q_transform2d_records.iter_mut() {
@@ -142,53 +264,124 @@ fn transform2d_record_size<T: Transform2dComp>(
     }
 }
 
-#[derive(Bundle)]
-pub struct Transform2dRecordsBundle<T: Transform2dComp> {
-    pub transform2d: T,
-    pub records: Transform2dRecords<T>,
-    pub len: Transform2dRecordLen<T>,
+fn draw_transform2d_record_axes(
+    q_transform2d_records: Query<&Transform2dRecords>,
+    mut axes: ResMut<DrawAxes>,
+    palette: Res<ColorPalette>,
+) {
+    for records in q_transform2d_records.iter() {
+        for record in records.iter() {
+            let transform2d = record.transform2d;
+            let angle = f32::atan2(transform2d.direction.x, transform2d.direction.y);
+            let translation = Vec3::new(transform2d.translation.x, 0.0, transform2d.translation.y);
+
+            axes.draw_with_color(
+                Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
+                0.1,
+                palette.orange,
+            );
+        }
+    }
 }
 
-impl<T: Transform2dComp> Transform2dRecordsBundle<T> {
+#[derive(Bundle)]
+pub struct Transform2dRecordsBundle {
+    pub records: Transform2dRecords,
+    pub len: Transform2dRecordLen,
+}
+
+impl Transform2dRecordsBundle {
     pub fn new(len: usize) -> Self {
         Self {
-            transform2d: T::default(),
             records: Transform2dRecords::default(),
-            len: Transform2dRecordLen::new(len),
+            len: Transform2dRecordLen(len),
         }
     }
 }
 
 /// A history record of the target [`Transform2dComp`] component.
 #[derive(Component, Default, Debug, Deref, DerefMut, Clone)]
-pub struct Transform2dRecords<T: Transform2dComp>(VecDeque<Transform2dRecord<T>>);
+pub struct Transform2dRecords(VecDeque<Transform2dRecord>);
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct Transform2dRecord<T: Transform2dComp> {
+pub struct Transform2dRecord {
     /// The recorded transform data.
-    pub transform2d: T,
+    pub transform2d: Transform2d,
     /// The time between the previous frame and the frame where the transform is recorded.
     pub delta_time: f32,
 }
 
 /// Determines the size of [`Transform2dRecord`].
 #[derive(Component, Clone, Copy, Default, Debug, Deref, DerefMut)]
-pub struct Transform2dRecordLen<T: Transform2dComp>(#[deref] usize, PhantomData<T>);
+pub struct Transform2dRecordLen(usize);
 
-impl<T: Transform2dComp> Transform2dRecordLen<T> {
-    pub fn new(len: usize) -> Self {
-        Self(len, PhantomData)
+pub struct DrawAxesPlugin;
+
+impl Plugin for DrawAxesPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<DrawAxes>()
+            .add_systems(First, clear_axes)
+            .add_systems(Last, draw_axes.run_if(resource_changed::<DrawAxes>));
     }
 }
 
-pub trait Transform2dComp: Component + Default + Copy + Clone {
-    fn transform2d(&self) -> Transform2d;
+fn clear_axes(mut axes: ResMut<DrawAxes>) {
+    if axes.is_empty() == false {
+        axes.clear();
+    }
 }
 
-impl Transform2dComp for Transform2d {
-    fn transform2d(&self) -> Transform2d {
-        *self
+fn draw_axes(mut gizmos: Gizmos, axes: Res<DrawAxes>, palette: Res<ColorPalette>) {
+    for axis in axes.iter() {
+        let start = axis.mat.transform_point3(Vec3::ZERO);
+        gizmos.arrow(
+            start,
+            start + axis.mat.transform_vector3(Vec3::X) * axis.size,
+            axis.color.unwrap_or(palette.red),
+        );
+        gizmos.arrow(
+            start,
+            start + axis.mat.transform_vector3(Vec3::Y) * axis.size,
+            axis.color.unwrap_or(palette.green),
+        );
+        gizmos.arrow(
+            start,
+            start + axis.mat.transform_vector3(Vec3::Z) * axis.size,
+            axis.color.unwrap_or(palette.blue),
+        );
     }
+}
+
+/// Axes to draw.
+///
+/// Will be cleaned up every frame.
+#[derive(Resource, Default, Debug, Deref, DerefMut)]
+pub struct DrawAxes(Vec<DrawAxis>);
+
+impl DrawAxes {
+    pub fn draw(&mut self, mat: Mat4, size: f32) {
+        self.push(DrawAxis {
+            mat,
+            size,
+            color: None,
+        });
+    }
+
+    pub fn draw_with_color(&mut self, mat: Mat4, size: f32, color: Color) {
+        self.push(DrawAxis {
+            mat,
+            size,
+            color: Some(color),
+        });
+    }
+}
+
+/// Matrix and size of the axis to be drawn.
+#[derive(Default, Debug, Clone, Copy)]
+pub struct DrawAxis {
+    pub mat: Mat4,
+    pub size: f32,
+    pub color: Option<Color>,
 }
 
 #[derive(Resource)]

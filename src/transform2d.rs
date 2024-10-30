@@ -29,7 +29,7 @@ fn apply_transform2d(
 #[reflect(Component)]
 pub struct Transform2d {
     pub translation: Vec2,
-    direction: Vec2,
+    pub direction: Vec2,
 }
 
 impl Default for Transform2d {
