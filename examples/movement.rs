@@ -1,4 +1,6 @@
 use std::collections::VecDeque;
+use std::fmt::Debug;
+use std::marker::PhantomData;
 
 use bevy::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
@@ -22,30 +24,34 @@ fn main() -> AppExit {
     ))
     .init_resource::<MouseInUi>();
 
-    app.add_plugins((DrawAxesPlugin, Transform2dRecordPlugin))
-        .init_resource::<ColorPalette>()
-        .insert_resource(MovementConfig {
-            walk_speed: 2.0,
-            run_speed: 4.0,
-            lerp_factor: 10.0,
-        })
-        .insert_resource(TrajectoryConfig {
-            interval_time: 0.1667,
-            predict_count: 6,
-            history_count: 1,
-        })
-        .add_systems(Startup, setup)
-        .add_systems(
-            Update,
-            (
-                trajectory_len,
-                update_movement_direction,
-                predict_trajectory,
-            )
-                .chain(),
+    app.add_plugins((
+        DrawAxesPlugin,
+        RecordPlugin::<Transform2d>::default(),
+        RecordPlugin::<Velocity>::default(),
+    ))
+    .init_resource::<ColorPalette>()
+    .insert_resource(MovementConfig {
+        walk_speed: 2.0,
+        run_speed: 4.0,
+        lerp_factor: 10.0,
+    })
+    .insert_resource(TrajectoryConfig {
+        interval_time: 0.1667,
+        predict_count: 6,
+        history_count: 1,
+    })
+    .add_systems(Startup, setup)
+    .add_systems(
+        Update,
+        (
+            trajectory_len,
+            update_movement_direction,
+            predict_trajectory,
         )
-        .add_systems(Update, (draw_trajectory_axes, draw_debug_axis))
-        .add_systems(Last, (update_velocities, update_prev_transform2ds).chain());
+            .chain(),
+    )
+    .add_systems(Update, (draw_trajectory_axes, draw_debug_axis))
+    .add_systems(Last, (update_velocities, update_prev_transform2ds).chain());
 
     app.register_type::<Trajectory>()
         .register_type::<PrevTransform2d>()
@@ -73,27 +79,31 @@ fn predict_trajectory(
     trajectory_config: Res<TrajectoryConfig>,
     movement_config: Res<MovementConfig>,
 ) {
-    let Ok((mut trajectory, transform2d, velocity, direction)) = q_trajectories.get_single_mut()
-    else {
-        return;
-    };
+    for (mut trajectory, transform2d, velocity, direction) in q_trajectories.iter_mut() {
+        // Predict trajectory.
+        let mut translation = transform2d.translation;
+        let mut velocity = **velocity;
 
-    // Predict trajectory.
-    let mut translation = transform2d.translation;
-    let mut velocity = **velocity;
+        let velocity_addition =
+            **direction * movement_config.walk_speed * trajectory_config.interval_time;
 
-    let velocity_addition =
-        **direction * movement_config.walk_speed * trajectory_config.interval_time;
+        for i in 0..trajectory_config.predict_count {
+            velocity += velocity_addition;
+            translation += velocity * trajectory_config.interval_time;
+            // Accelerate to walk speed max.
+            velocity = Vec2::clamp_length(velocity, 0.0, movement_config.walk_speed);
 
-    for i in 0..trajectory_config.predict_count {
-        velocity += velocity_addition;
-        translation += velocity * trajectory_config.interval_time;
-        // Accelerate to walk speed max.
-        velocity = Vec2::clamp_length(velocity, 0.0, movement_config.walk_speed);
-
-        trajectory[i + trajectory_config.history_count] =
-            TrajectoryPoint::new(translation, velocity);
+            trajectory[i + trajectory_config.history_count] =
+                TrajectoryPoint::new(translation, velocity);
+        }
     }
+}
+
+fn trajectory_history(
+    mut q_trajectories: Query<(&mut Trajectory, &Records<Transform2d>, &Records<Velocity>)>,
+    trajectory_config: Res<TrajectoryConfig>,
+) {
+    for (mut trajectory, transform_record, velocity_record) in q_trajectories.iter_mut() {}
 }
 
 fn update_movement_direction(
@@ -102,52 +112,46 @@ fn update_movement_direction(
     action: Res<ActionState<PlayerAction>>,
     time: Res<Time>,
 ) {
-    let Ok(mut movement_direction) = q_movement_directions.get_single_mut() else {
-        return;
-    };
-
     let mut action_axis = action
         .clamped_axis_pair(&PlayerAction::Walk)
         .map(|axis| axis.xy().normalize_or_zero())
         .unwrap_or_default();
     action_axis.y = -action_axis.y;
 
-    **movement_direction = Vec2::lerp(
-        **movement_direction,
-        action_axis,
-        f32::min(1.0, movement_config.lerp_factor * time.delta_seconds()),
-    );
+    for mut movement_direction in q_movement_directions.iter_mut() {
+        **movement_direction = Vec2::lerp(
+            **movement_direction,
+            action_axis,
+            f32::min(1.0, movement_config.lerp_factor * time.delta_seconds()),
+        );
+    }
 }
 
 fn trajectory_len(
     mut q_trajectories: Query<&mut Trajectory>,
     trajectory_config: Res<TrajectoryConfig>,
 ) {
-    let Ok(mut trajectory) = q_trajectories.get_single_mut() else {
-        return;
-    };
-
     // Add one for the current transform
     let target_len = 1 + trajectory_config.history_count + trajectory_config.predict_count;
 
-    if trajectory.len() != target_len {
-        **trajectory = vec![TrajectoryPoint::default(); target_len];
+    for mut trajectory in q_trajectories.iter_mut() {
+        if trajectory.len() != target_len {
+            **trajectory = vec![TrajectoryPoint::default(); target_len];
+        }
     }
 }
 
 fn draw_trajectory_axes(q_trajectories: Query<&Trajectory>, mut axes: ResMut<DrawAxes>) {
-    let Ok(trajectory) = q_trajectories.get_single() else {
-        return;
-    };
+    for trajectory in q_trajectories.iter() {
+        for point in trajectory.iter() {
+            let angle = f32::atan2(point.velocity.x, point.velocity.y);
+            let translation = Vec3::new(point.translation.x, 0.0, point.translation.y);
 
-    for point in trajectory.iter() {
-        let angle = f32::atan2(point.velocity.x, point.velocity.y);
-        let translation = Vec3::new(point.translation.x, 0.0, point.translation.y);
-
-        axes.draw(
-            Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
-            0.1,
-        );
+            axes.draw(
+                Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
+                0.1,
+            );
+        }
     }
 }
 
@@ -178,7 +182,7 @@ fn setup(
             material: materials.add(Color::WHITE),
             ..default()
         },
-        Transform2dRecordsBundle::new(20),
+        RecordsBundle::<Transform2d>::new(20),
         TrajectoryBundle::default(),
     ));
 }
@@ -232,16 +236,17 @@ impl TrajectoryPoint {
 
 // ==================================================================================================================
 
-pub struct Transform2dRecordPlugin;
+#[derive(Default)]
+pub struct RecordPlugin<T: Recordable>(PhantomData<T>);
 
-impl Plugin for Transform2dRecordPlugin {
+impl<T: Recordable> Plugin for RecordPlugin<T> {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PreUpdate,
             (
-                transform2d_record_len,
-                transform2d_record,
-                draw_transform2d_record_axes,
+                record_len::<T>,
+                record::<T>,
+                // draw_transform2d_record_axes,
             )
                 .chain(),
         );
@@ -249,27 +254,21 @@ impl Plugin for Transform2dRecordPlugin {
 }
 
 /// Push in a new [`Transform2dComp`] to the front of a [`Transform2dRecord`] while popping out an old one.
-fn transform2d_record(
-    mut q_transform2d_records: Query<(&Transform2d, &mut Transform2dRecords)>,
-    time: Res<Time>,
-) {
-    for (&transform2d, mut record) in q_transform2d_records.iter_mut() {
+fn record<T: Recordable>(mut q_records: Query<(&T, &mut Records<T>)>, time: Res<Time>) {
+    for (&value, mut record) in q_records.iter_mut() {
         record.pop_back();
-        record.push_front(Transform2dRecord {
-            transform2d,
+        record.push_front(Record {
+            value,
             delta_time: time.delta_seconds(),
         });
     }
 }
 
-/// Update size of [`Transform2dRecord`] if there are changes to [`Transform2dRecordSize`].
-fn transform2d_record_len(
-    mut q_transform2d_records: Query<
-        (&Transform2dRecordLen, &mut Transform2dRecords),
-        Changed<Transform2dRecordLen>,
-    >,
+/// Update size of [`Record`] if there are changes to [`RecordLen`].
+fn record_len<T: Recordable>(
+    mut q_records: Query<(&RecordLen<T>, &mut Records<T>), Changed<RecordLen<T>>>,
 ) {
-    for (len, mut records) in q_transform2d_records.iter_mut() {
+    for (len, mut records) in q_records.iter_mut() {
         let target_len = **len;
         match records.len().cmp(&target_len) {
             std::cmp::Ordering::Less => {
@@ -291,56 +290,68 @@ fn transform2d_record_len(
     }
 }
 
-fn draw_transform2d_record_axes(
-    q_transform2d_records: Query<&Transform2dRecords>,
-    mut axes: ResMut<DrawAxes>,
-    palette: Res<ColorPalette>,
-) {
-    for records in q_transform2d_records.iter() {
-        for record in records.iter() {
-            let transform2d = record.transform2d;
-            let angle = f32::atan2(transform2d.direction.x, transform2d.direction.y);
-            let translation = Vec3::new(transform2d.translation.x, 0.0, transform2d.translation.y);
+// fn draw_transform2d_record_axes(
+//     q_transform2d_records: Query<&Records<Transform2d>>,
+//     mut axes: ResMut<DrawAxes>,
+//     palette: Res<ColorPalette>,
+// ) {
+//     for records in q_transform2d_records.iter() {
+//         for record in records.iter() {
+//             let transform2d = record.value;
+//             let angle = f32::atan2(transform2d.direction.x, transform2d.direction.y);
+//             let translation = Vec3::new(transform2d.translation.x, 0.0, transform2d.translation.y);
 
-            axes.draw_with_color(
-                Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
-                0.1,
-                palette.orange,
-            );
-        }
-    }
-}
+//             axes.draw_with_color(
+//                 Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
+//                 0.1,
+//                 palette.orange,
+//             );
+//         }
+//     }
+// }
 
 #[derive(Bundle)]
-pub struct Transform2dRecordsBundle {
-    pub records: Transform2dRecords,
-    pub len: Transform2dRecordLen,
+pub struct RecordsBundle<T: Recordable> {
+    pub records: Records<T>,
+    pub len: RecordLen<T>,
 }
 
-impl Transform2dRecordsBundle {
+impl<T: Recordable> RecordsBundle<T> {
     pub fn new(len: usize) -> Self {
         Self {
-            records: Transform2dRecords::default(),
-            len: Transform2dRecordLen(len),
+            records: Records::default(),
+            len: RecordLen::new(len),
         }
     }
 }
 
 /// A history record of the target [`Transform2dComp`] component.
 #[derive(Component, Default, Debug, Deref, DerefMut, Clone)]
-pub struct Transform2dRecords(VecDeque<Transform2dRecord>);
+pub struct Records<T: Recordable>(VecDeque<Record<T>>);
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct Transform2dRecord {
-    /// The recorded transform data.
-    pub transform2d: Transform2d,
+pub struct Record<T: Recordable> {
+    /// The recorded value.
+    pub value: T,
     /// The time between the previous frame and the frame where the transform is recorded.
     pub delta_time: f32,
 }
 
 /// Determines the size of [`Transform2dRecord`].
-#[derive(Component, Clone, Copy, Default, Debug, Deref, DerefMut)]
-pub struct Transform2dRecordLen(usize);
+#[derive(Component, Default, Debug, Deref, DerefMut, Clone, Copy)]
+pub struct RecordLen<T: Recordable>(#[deref] usize, PhantomData<T>);
+
+impl<T: Recordable> RecordLen<T> {
+    fn new(len: usize) -> Self {
+        Self(len, PhantomData)
+    }
+}
+
+pub trait Recordable: Component + Default + Debug + Clone + Copy {}
+
+impl<T> Recordable for T where T: Component + Default + Debug + Clone + Copy {}
+
+// ==================================================================================================================
 
 pub struct DrawAxesPlugin;
 
