@@ -122,6 +122,7 @@ fn trajectory_history(
         &Records<Velocity>,
     )>,
     trajectory_config: Res<TrajectoryConfig>,
+    time: Res<Time>,
 ) {
     for (mut trajectory, transform2d, velocity, transform_record, velocity_record) in
         q_trajectories.iter_mut()
@@ -140,20 +141,16 @@ fn trajectory_history(
         let mut vel_end = *velocity_record[0].value;
 
         // Accumulate the record time.
-        let mut record_time = 0.0;
+        let mut record_time = time.delta_seconds();
         // Keep track of our last used record index
         let mut record_index = 0;
+        let mut curr_delta_time = time.delta_seconds();
 
         for i in 1..=trajectory_config.history_count {
             let target_time = i as f32 * trajectory_config.interval_time;
 
             let range = record_index..record_len - 1;
             for _ in range {
-                record_index += 1;
-                record_time += transform_record[record_index].delta_time;
-
-                println!("{record_index}");
-
                 trans_end = transform_record[record_index].value.translation;
                 vel_end = *velocity_record[record_index].value;
 
@@ -163,12 +160,17 @@ fn trajectory_history(
                     break;
                 }
 
+                curr_delta_time = transform_record[record_index].delta_time;
+                record_time += curr_delta_time;
+                record_index += 1;
+
                 trans_start = trans_end;
                 vel_start = vel_end;
             }
 
             // Lerp between start and end point.
-            let factor = (record_time - target_time) / trajectory_config.interval_time;
+            let factor = 1.0 - (record_time - target_time) / curr_delta_time;
+            println!("{factor}");
             trajectory[trajectory_config.history_count - i] = TrajectoryPoint::new(
                 Vec2::lerp(trans_start, trans_end, factor),
                 Vec2::lerp(vel_start, vel_end, factor),
