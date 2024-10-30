@@ -44,9 +44,13 @@ fn main() -> AppExit {
             )
                 .chain(),
         )
-        .add_systems(Update, (draw_trajectory_axes, draw_debug_axis));
+        .add_systems(Update, (draw_trajectory_axes, draw_debug_axis))
+        .add_systems(Last, (update_velocities, update_prev_transform2ds).chain());
 
-    app.register_type::<Velocity>();
+    app.register_type::<Trajectory>()
+        .register_type::<PrevTransform2d>()
+        .register_type::<Velocity>()
+        .register_type::<MovementDirection>();
 
     app.run()
 }
@@ -87,10 +91,8 @@ fn predict_trajectory(
         // Accelerate to walk speed max.
         velocity = Vec2::clamp_length(velocity, 0.0, movement_config.walk_speed);
 
-        trajectory.points[i + trajectory_config.history_count] =
+        trajectory[i + trajectory_config.history_count] =
             TrajectoryPoint::new(translation, velocity);
-
-        println!("{i}: {translation}, {velocity}");
     }
 }
 
@@ -128,8 +130,8 @@ fn trajectory_len(
     // Add one for the current transform
     let target_len = 1 + trajectory_config.history_count + trajectory_config.predict_count;
 
-    if trajectory.points.len() != target_len {
-        trajectory.points = vec![TrajectoryPoint::default(); target_len];
+    if trajectory.len() != target_len {
+        **trajectory = vec![TrajectoryPoint::default(); target_len];
     }
 }
 
@@ -138,7 +140,7 @@ fn draw_trajectory_axes(q_trajectories: Query<&Trajectory>, mut axes: ResMut<Dra
         return;
     };
 
-    for point in trajectory.points.iter() {
+    for point in trajectory.iter() {
         let angle = f32::atan2(point.velocity.x, point.velocity.y);
         let translation = Vec3::new(point.translation.x, 0.0, point.translation.y);
 
@@ -149,9 +151,21 @@ fn draw_trajectory_axes(q_trajectories: Query<&Trajectory>, mut axes: ResMut<Dra
     }
 }
 
-#[derive(Component, Reflect, Default, Debug, Deref, DerefMut, Clone, Copy)]
-#[reflect(Component)]
-pub struct Velocity(Vec2);
+fn update_velocities(
+    mut q_velocities: Query<(&mut Velocity, &PrevTransform2d, &Transform2d)>,
+    time: Res<Time>,
+) {
+    for (mut velocity, prev_transform2d, transform2d) in q_velocities.iter_mut() {
+        **velocity =
+            (transform2d.translation - prev_transform2d.translation) / time.delta_seconds();
+    }
+}
+
+fn update_prev_transform2ds(mut q_transform2ds: Query<(&mut PrevTransform2d, &Transform2d)>) {
+    for (mut prev_transform2d, transform2d) in q_transform2ds.iter_mut() {
+        **prev_transform2d = *transform2d;
+    }
+}
 
 fn setup(
     mut commands: Commands,
@@ -164,11 +178,8 @@ fn setup(
             material: materials.add(Color::WHITE),
             ..default()
         },
-        Transform2d::default(),
         Transform2dRecordsBundle::new(20),
-        Trajectory::default(),
-        Velocity::default(),
-        MovementDirection::default(),
+        TrajectoryBundle::default(),
     ));
 }
 
@@ -177,15 +188,34 @@ fn draw_debug_axis(mut axes: ResMut<DrawAxes>) {
     axes.draw(Mat4::IDENTITY, 1.0);
 }
 
-/// Trajectory containing prediction and history based on [`TrajectoryConfig`].
-#[derive(Component, Default, Debug)]
-pub struct Trajectory {
-    points: Vec<TrajectoryPoint>,
-    // prediction_time: f32,
+#[derive(Bundle, Default)]
+pub struct TrajectoryBundle {
+    pub trajectory: Trajectory,
+    pub transform2d: Transform2d,
+    pub prev_transform2d: PrevTransform2d,
+    pub velocity: Velocity,
+    pub movement_direction: MovementDirection,
 }
 
+/// Trajectory containing prediction and history based on [`TrajectoryConfig`].
+#[derive(Component, Reflect, Default, Debug, Deref, DerefMut)]
+#[reflect(Component)]
+pub struct Trajectory(Vec<TrajectoryPoint>);
+
+#[derive(Component, Reflect, Default, Debug, Deref, DerefMut, Clone, Copy)]
+#[reflect(Component)]
+pub struct PrevTransform2d(Transform2d);
+
+#[derive(Component, Reflect, Default, Debug, Deref, DerefMut, Clone, Copy)]
+#[reflect(Component)]
+pub struct Velocity(Vec2);
+
+#[derive(Component, Reflect, Default, Debug, Deref, DerefMut, Clone, Copy)]
+#[reflect(Component)]
+pub struct MovementDirection(Vec2);
+
 /// A single point in the [`Trajectory`].
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Reflect, Default, Debug, Clone, Copy)]
 pub struct TrajectoryPoint {
     translation: Vec2,
     velocity: Vec2,
@@ -199,9 +229,6 @@ impl TrajectoryPoint {
         }
     }
 }
-
-#[derive(Component, Default, Debug, Deref, DerefMut, Clone, Copy)]
-pub struct MovementDirection(Vec2);
 
 // ==================================================================================================================
 
