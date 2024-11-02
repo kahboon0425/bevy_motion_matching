@@ -96,7 +96,6 @@ fn build_motion_data_asset_button(ui: &mut egui::Ui, world: &mut World) {
                 .filter_map(|id| bvh_assets.get(*id)),
         );
 
-        // TODO(perf): Serialize into binary instead
         let convert_to_json = serde_json::to_string(&motion_data_asset).unwrap();
 
         let mut asset_file = std::fs::OpenOptions::new()

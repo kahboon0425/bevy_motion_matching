@@ -19,6 +19,10 @@ pub mod joint_traits;
 
 pub trait FrameExt {
     fn get_pos_rot(&self, joint_data: &JointData) -> (Vec3, Quat);
+
+    fn get_pos(&self, joint_data: &JointData) -> Vec3;
+
+    fn get_rot(&self, joint_data: &JointData) -> Quat;
 }
 
 impl FrameExt for Frame {
@@ -33,9 +37,9 @@ impl FrameExt for Frame {
             };
 
             match channel.channel_type() {
-                ChannelType::RotationX => euler.x = data,
-                ChannelType::RotationY => euler.y = data,
-                ChannelType::RotationZ => euler.z = data,
+                ChannelType::RotationX => euler.x = data.to_radians(),
+                ChannelType::RotationY => euler.y = data.to_radians(),
+                ChannelType::RotationZ => euler.z = data.to_radians(),
                 ChannelType::PositionX => pos.x = data,
                 ChannelType::PositionY => pos.y = data,
                 ChannelType::PositionZ => pos.z = data,
@@ -46,5 +50,45 @@ impl FrameExt for Frame {
             pos,
             Quat::from_euler(EulerRot::XYZ, euler.x, euler.y, euler.z),
         )
+    }
+
+    #[must_use]
+    fn get_pos(&self, joint_data: &JointData) -> Vec3 {
+        let mut pos = Vec3::ZERO;
+
+        for channel in joint_data.channels() {
+            let Some(&data) = self.get(channel) else {
+                continue;
+            };
+
+            match channel.channel_type() {
+                ChannelType::PositionX => pos.x = data,
+                ChannelType::PositionY => pos.y = data,
+                ChannelType::PositionZ => pos.z = data,
+                _ => {}
+            }
+        }
+
+        pos
+    }
+
+    #[must_use]
+    fn get_rot(&self, joint_data: &JointData) -> Quat {
+        let mut euler = Vec3::ZERO;
+
+        for channel in joint_data.channels() {
+            let Some(&data) = self.get(channel) else {
+                continue;
+            };
+
+            match channel.channel_type() {
+                ChannelType::RotationX => euler.x = data.to_radians(),
+                ChannelType::RotationY => euler.y = data.to_radians(),
+                ChannelType::RotationZ => euler.z = data.to_radians(),
+                _ => {}
+            }
+        }
+
+        Quat::from_euler(EulerRot::XYZ, euler.x, euler.y, euler.z)
     }
 }

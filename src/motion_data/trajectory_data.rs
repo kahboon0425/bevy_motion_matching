@@ -42,8 +42,8 @@ impl TrajectoryData {
             self.config.point_len
         );
 
-        self.points.append(trajectory);
         self.offsets.push_chunk(trajectory.len());
+        self.points.append(trajectory);
     }
 
     /// Calculate the time value from a chunk offset index.

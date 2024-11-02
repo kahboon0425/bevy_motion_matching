@@ -88,10 +88,10 @@ impl MotionDataAsset {
 
             let mut prev_time = 0.0;
 
-            let (first_pos, first_rot) = bvh.frames().next().unwrap().get_pos_rot(root_joint);
-            let first_mat = Mat4::from_rotation_translation(first_rot, first_pos);
-            let mut prev_mat = first_mat;
-            let mut prev_world_mat = first_mat;
+            let first_pos = bvh.frames().next().unwrap().get_pos(root_joint);
+
+            let mut prev_pos = first_pos;
+            let mut prev_world_pos = first_pos;
 
             // SAFETY: It's ok to go over, we have made sure that the bvh is loopable.
             for p in 0..point_len.max(traj_config.point_len) {
@@ -124,34 +124,33 @@ impl MotionDataAsset {
                 let rot = Quat::slerp(start_rot, end_rot, factor);
                 let velocity = ((end_pos - start_pos) / frame_time).xz();
 
-                let curr_mat = Mat4::from_rotation_translation(rot, pos);
+                let pos_offset = match time < prev_time {
+                    // From previous pos to current pos.
+                    false => pos - prev_pos,
+                    // Has looped over
+                    true => {
+                        // Get last frame
+                        let last_pos = bvh.frames().last().unwrap().get_pos(root_joint);
 
-                // Has looped over
-                let mat_offset = if time < prev_time {
-                    // Get last frame
-                    let (last_pos, last_rot) = bvh.frames().last().unwrap().get_pos_rot(root_joint);
-                    let last_mat = Mat4::from_rotation_translation(last_rot, last_pos);
+                        // From previous pos to the last pos.
+                        let prev_last_pos = last_pos - prev_pos;
+                        // From first pos to curr pos.
+                        let first_curr_pos = pos - first_pos;
 
-                    // From previous matrix to the last matrix.
-                    let prev_last_mat = Mat4::mul_mat4(&last_mat, &prev_mat.inverse());
-                    // From last matrix to curr matrix.
-                    let last_curr_mat = Mat4::mul_mat4(&curr_mat, &first_mat.inverse());
-
-                    Mat4::mul_mat4(&prev_last_mat, &last_curr_mat)
-                } else {
-                    Mat4::mul_mat4(&curr_mat, &prev_mat.inverse())
+                        prev_last_pos + first_curr_pos
+                    }
                 };
 
-                // World matrix may go out of bounds of the original bvh data.
-                let curr_world_mat = Mat4::mul_mat4(&prev_world_mat, &mat_offset);
+                // World pos may go out of bounds of the original bvh data.
+                let world_pos = prev_world_pos + pos_offset;
                 trajectory_chunk.push(TrajectoryDataPoint {
-                    matrix: curr_world_mat,
+                    matrix: Mat4::from_rotation_translation(rot, world_pos),
                     velocity,
                 });
 
                 prev_time = time;
-                prev_mat = curr_mat;
-                prev_world_mat = curr_world_mat;
+                prev_pos = pos;
+                prev_world_pos = world_pos;
             }
 
             self.trajectory_data
