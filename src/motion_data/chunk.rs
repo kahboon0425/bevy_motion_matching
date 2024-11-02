@@ -39,14 +39,17 @@ impl ChunkOffsets {
         self.0.len().saturating_sub(1)
     }
 
+    /// Push a new chunk with a given chunk length.
     pub fn push_chunk(&mut self, chunk_len: usize) {
         self.0.push(self.0[self.num_chunks()] + chunk_len);
     }
 
+    /// Get start and end index of the chunk.
     pub fn get_chunk(&self, index: usize) -> Option<(usize, usize)> {
         Some((*self.0.get(index)?, *self.0.get(index + 1)?))
     }
 
+    /// Unsafe version of the [`Self::get_chunk`] method.
     pub fn get_chunk_unchecked(&self, index: usize) -> (usize, usize) {
         (self.0[index], self.0[index + 1])
     }

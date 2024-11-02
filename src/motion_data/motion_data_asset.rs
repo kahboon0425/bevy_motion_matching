@@ -20,8 +20,6 @@ impl Plugin for MotionDataAssetPlugin {
     }
 }
 
-// TODO: Private data structures inside the asset to ensure data integrity.
-
 /// A memory and storage efficient storage of [`JointInfo`] and multiple motion data ([`TrajectoryData`] & [`Poses`]).
 #[derive(Asset, TypePath, Serialize, Deserialize, Debug)]
 pub struct MotionDataAsset {

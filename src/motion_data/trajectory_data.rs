@@ -1,6 +1,4 @@
 use bevy::prelude::*;
-use bevy_bvh_anim::bvh_anim::ChannelType;
-use bevy_bvh_anim::prelude::Bvh;
 use serde::{Deserialize, Serialize};
 
 use super::chunk::{ChunkIterator, ChunkOffsets};
@@ -16,7 +14,7 @@ pub struct TrajectoryData {
     ///
     /// \[0, 3, 5, 7\] contains chunk [0, 3), [3, 5), [5, 7)
     offsets: ChunkOffsets,
-    /// Duration between each trajectory matrix in seconds.
+    /// Trajectory data configuration.
     config: TrajectoryDataConfig,
 }
 
