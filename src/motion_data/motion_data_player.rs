@@ -3,11 +3,12 @@
 use crate::player::PlayerMarker;
 use crate::scene_loader::MainScene;
 use crate::transform2d::Transform2d;
-use crate::BVH_SCALE_RATIO;
 use crate::{bvh_manager::bvh_player::JointMap, GameMode};
 use bevy::prelude::*;
 
-use super::motion_data_asset::{JointInfo, Poses};
+use super::chunk::ChunkIterator;
+use super::joint_info::JointInfo;
+use super::pose_data::PoseData;
 use super::{MotionData, MotionDataHandle};
 
 pub(super) struct MotionDataPlayerPlugin;
@@ -63,7 +64,7 @@ fn motion_data_player(
         return;
     };
 
-    let motion_poses = &motion_data.poses;
+    let motion_poses = &motion_data.pose_data;
 
     let interpolated_trans_rot = |joint: &JointInfo| -> Option<(Vec3, Quat)> {
         // Motion player 0
@@ -163,7 +164,7 @@ pub struct MotionDataPlayer {
 impl MotionDataPlayer {
     pub fn current_trans_rot(
         &self,
-        motion_poses: &Poses,
+        motion_poses: &PoseData,
         joint: &JointInfo,
     ) -> Option<(Vec3, Quat)> {
         self.calculate_trans_rot_impl(motion_poses, joint, self.time)
@@ -171,7 +172,7 @@ impl MotionDataPlayer {
 
     pub fn previous_trans_rot(
         &self,
-        motion_poses: &Poses,
+        motion_poses: &PoseData,
         joint: &JointInfo,
     ) -> Option<(Vec3, Quat)> {
         self.calculate_trans_rot_impl(motion_poses, joint, self.prev_time)
@@ -179,11 +180,11 @@ impl MotionDataPlayer {
 
     fn calculate_trans_rot_impl(
         &self,
-        motion_poses: &Poses,
+        motion_poses: &PoseData,
         joint: &JointInfo,
         time: f32,
     ) -> Option<(Vec3, Quat)> {
-        let poses = motion_poses.get_poses_from_chunk(self.chunk_index);
+        let poses = motion_poses.get_chunk(self.chunk_index)?;
         let chunk_offset = motion_poses.chunk_offset_from_time(time);
 
         // Get start and end poses for interpolation.

@@ -3,6 +3,7 @@ use std::time::Instant;
 use bevy::prelude::*;
 
 use crate::bvh_manager::bvh_player::JointMap;
+use crate::motion_data::chunk::ChunkIterator;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
 use crate::motion_data::motion_data_player::MotionDataPlayerPair;
 use crate::motion_data::{MotionData, MotionDataHandle};
@@ -34,7 +35,24 @@ fn motion_matching(
     mut q_transforms: Query<&mut Transform>,
     match_evr: EventReader<MotionMatch>,
     motion_data: MotionData,
+    trajectory_config: Res<TrajectoryConfig>,
 ) {
+    let Some(motion_data) = motion_data.get() else {
+        return;
+    };
+
+    // for trajectory in q_trajectory.iter() {
+    //     for chunk in motion_data.pose_data.iter_chunk() {
+    //         // let poses = motion_data.pose_data.get_poses_chunk(c);
+
+    //         if chunk.total_time() < trajectory_config.total_time() {
+    //             continue;
+    //         }
+
+    //         let mut time = 0.0;
+    //         // for
+    //     }
+    // }
 }
 
 #[derive(Event, Debug)]
@@ -155,7 +173,7 @@ pub fn match_trajectory(
                 motion_player_pair.jump_to_pose(
                     best_trajectory.chunk_index,
                     motion_asset
-                        .trajectories
+                        .trajectory_data
                         .time_from_chunk_offset(best_trajectory.chunk_offset + 3),
                     player_index,
                 );
@@ -217,7 +235,7 @@ pub fn find_nearest_trajectories<const N: usize>(
     let mut nearest_trajectories_stack = [None::<NearestTrajectory>; N];
     let threshold = 10.0;
 
-    let trajectories = &motion_data.trajectories;
+    let trajectories = &motion_data.trajectory_data;
     for (chunk_index, chunk) in trajectories.iter_chunk().enumerate() {
         let chunk_count = chunk.len();
         if chunk_count < 7 {
@@ -229,7 +247,7 @@ pub fn find_nearest_trajectories<const N: usize>(
             let trajectory = &chunk[chunk_offset..chunk_offset + 7];
 
             // Center point of trajectory
-            let inv_matrix = trajectory[3].inverse();
+            let inv_matrix = trajectory[3].matrix.inverse();
 
             let player_local_translations = player_trajectory
                 .iter()
@@ -246,7 +264,7 @@ pub fn find_nearest_trajectories<const N: usize>(
             let data_local_translations = trajectory
                 .iter()
                 .map(|trajectory| {
-                    inv_matrix.transform_point3(trajectory.to_scale_rotation_translation().2)
+                    inv_matrix.transform_point3(trajectory.matrix.to_scale_rotation_translation().2)
                 })
                 // Rescale?
                 .map(|v| v.xz() * BVH_SCALE_RATIO)

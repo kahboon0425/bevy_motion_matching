@@ -109,7 +109,7 @@ fn bvh_player(
     let Some(bvh) = bvh_assets.get(selected_bvh_asset.0) else {
         return;
     };
-    let bvh = bvh.get();
+    let bvh = &**bvh;
 
     let (current_frame_index, interpolation_factor) = get_pose(*local_time, bvh);
     let next_frame_index = usize::clamp(current_frame_index + 1, 0, bvh.frames().len() - 1);

@@ -151,10 +151,9 @@ fn draw_trajectory_axes(
             axes.draw_forward(
                 Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
                 velocity_magnitude * 0.1,
-                palette.purple.mix(
-                    &palette.orange,
-                    velocity_magnitude / movement_config.run_speed,
-                ),
+                palette
+                    .green
+                    .mix(&palette.red, velocity_magnitude / movement_config.run_speed),
             );
         }
     }
@@ -230,4 +229,26 @@ pub struct TrajectoryConfig {
     pub interval_time: f32,
     pub predict_count: usize,
     pub history_count: usize,
+}
+
+impl TrajectoryConfig {
+    #[inline]
+    pub fn predict_time(&self) -> f32 {
+        self.interval_time * self.predict_count as f32
+    }
+
+    #[inline]
+    pub fn history_time(&self) -> f32 {
+        self.interval_time * self.history_count as f32
+    }
+
+    #[inline]
+    pub fn total_count(&self) -> usize {
+        self.predict_count + self.history_count
+    }
+
+    #[inline]
+    pub fn total_time(&self) -> f32 {
+        self.interval_time * self.total_count() as f32
+    }
 }

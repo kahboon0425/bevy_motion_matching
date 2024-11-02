@@ -1,8 +1,10 @@
 use bevy::ecs::system::SystemState;
 use bevy::prelude::*;
-use bevy_egui::egui::{self, Color32};
+use bevy_egui::egui;
+use bevy_egui::egui::Color32;
 
 use crate::bvh_manager::bvh_player::BvhPlayer;
+use crate::motion_data::chunk::ChunkIterator;
 use crate::motion_data::motion_data_player::MotionDataPlayerPair;
 use crate::motion_data::MotionData;
 use crate::motion_matching::MotionMatchingResult;
@@ -44,18 +46,24 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     groupbox(ui, |ui| {
         ui.label(format!(
             "Chunk Count: {}",
-            motion_asset.trajectories.chunk_count()
+            motion_asset.trajectory_data.offsets().num_chunks()
         ));
         ui.label(format!(
             "Trajectory Count: {}",
-            motion_asset.trajectories.matrices().len()
+            motion_asset.trajectory_data.items().len()
         ));
         ui.label(format!(
             "Trajectory Interval: {}",
-            motion_asset.trajectories.interval()
+            motion_asset.trajectory_data.config().interval_time
         ));
-        ui.label(format!("Pose Count: {}", motion_asset.poses.poses().len()));
-        ui.label(format!("Pose Interval: {}", motion_asset.poses.interval()));
+        ui.label(format!(
+            "Pose Count: {}",
+            motion_asset.pose_data.items().len()
+        ));
+        ui.label(format!(
+            "Pose Interval: {}",
+            motion_asset.pose_data.interval()
+        ));
     });
 
     ui.add_space(10.0);

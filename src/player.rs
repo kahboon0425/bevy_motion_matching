@@ -5,7 +5,7 @@ use crate::action::PlayerAction;
 use crate::trajectory::MovementDirection;
 use crate::MainSet;
 
-pub(super) struct PlayerPlugin;
+pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {

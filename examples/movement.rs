@@ -18,13 +18,13 @@ fn main() -> AppExit {
         CameraPlugin,
         Transform2dPlugin,
         ActionPlugin,
-        TrajectoryPlugin,
         DrawAxesPlugin,
+        TrajectoryPlugin,
+        PlayerPlugin,
     ))
     .init_resource::<MouseInUi>();
 
     app.add_plugins((
-        DrawAxesPlugin,
         RecordPlugin::<Transform2d>::default(),
         RecordPlugin::<Velocity>::default(),
     ))
@@ -32,6 +32,11 @@ fn main() -> AppExit {
         walk_speed: 2.0,
         run_speed: 4.0,
         lerp_factor: 10.0,
+    })
+    .insert_resource(TrajectoryConfig {
+        interval_time: 0.1667,
+        predict_count: 10,
+        history_count: 14,
     })
     .add_systems(Startup, setup)
     .add_systems(Update, (movement_test, draw_debug_axis));
@@ -48,7 +53,7 @@ fn main() -> AppExit {
 // - Json file for storing motion matching settings.
 //   - Trajectory interval
 //   - Trajectory length
-// - Inspect trajectories from existing bvh data.
+// - Inspect trajectories from existing bvh data. (done)
 //
 // DONE: Figure out axis: Use gizmos to draw out the raw XYZ axis.
 

@@ -3,7 +3,7 @@ use bevy_bvh_anim::bvh_anim::ChannelType;
 use bevy_bvh_anim::prelude::*;
 
 use crate::draw_axes::{ColorPalette, DrawAxes};
-use crate::motion_data::motion_data_asset::Pose;
+use crate::motion_data::pose_data::Pose;
 use crate::player::MovementConfig;
 use crate::scene_loader::MainScene;
 use crate::ui::config::{BvhTrailConfig, DrawMainArmature};
@@ -128,10 +128,7 @@ fn bvh_trail_gizmos(
         return;
     }
 
-    let Some(bvh) = bvh_assets
-        .get(selected_bvh_asset.0)
-        .map(|asset| asset.get())
-    else {
+    let Some(bvh) = bvh_assets.get(selected_bvh_asset.0).map(|asset| &**asset) else {
         return;
     };
 

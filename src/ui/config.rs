@@ -59,7 +59,7 @@ fn bvh_playback(ui: &mut egui::Ui, world: &mut World) {
                         };
                         if ui.selectable_label(false, bvh_name.to_string()).clicked() {
                             selected_bvh_asset.0 = id;
-                            if let Some(bvh) = bvh_assets.get(id).map(|asset| asset.get()) {
+                            if let Some(bvh) = bvh_assets.get(id).map(|asset| &**asset) {
                                 bvh_player.duration =
                                     bvh.frame_time().as_secs_f32() * bvh.num_frames() as f32;
                             }

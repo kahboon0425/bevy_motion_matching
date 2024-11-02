@@ -8,6 +8,8 @@ use bevy_egui::egui;
 
 use crate::bvh_manager::bvh_library::BvhLibrary;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
+use crate::motion_data::trajectory_data::TrajectoryDataConfig;
+use crate::trajectory::TrajectoryConfig;
 
 use super::scrollbox;
 
@@ -62,33 +64,37 @@ fn motion_data_asset_buider_menu(ui: &mut egui::Ui, world: &mut World) {
 }
 
 fn build_motion_data_asset_button(ui: &mut egui::Ui, world: &mut World) {
-    let mut params =
-        SystemState::<(Res<BvhLibrary>, Res<Assets<BvhAsset>>, Res<BuildConfigs>)>::new(world);
-    let (bvh_library, bvh_assets, build_config) = params.get(world);
+    let mut params = SystemState::<(
+        Res<BvhLibrary>,
+        Res<Assets<BvhAsset>>,
+        Res<BuildConfigs>,
+        Res<TrajectoryConfig>,
+    )>::new(world);
+    let (bvh_library, bvh_assets, build_config, trajectory_config) = params.get(world);
 
     if ui.button("Build").clicked() {
-        // TODO: Add this into BuildConfig?
-        const TRAJECTORY_INTERVAL: f32 = 0.1667;
-
         let Some(bvh_map) = bvh_library
             .get_map()
             .and_then(|handle| bvh_assets.get(handle))
-            .map(|asset| asset.get())
+            .map(|asset| &**asset)
         else {
             return;
         };
 
-        let mut motion_data_asset = MotionDataAsset::new(bvh_map, TRAJECTORY_INTERVAL);
+        let mut motion_data_asset = MotionDataAsset::new(
+            bvh_map,
+            TrajectoryDataConfig {
+                interval_time: trajectory_config.interval_time,
+                point_len: trajectory_config.total_count() + 1,
+            },
+        );
 
-        for id in build_config.bvh_assets.iter() {
-            let Some(bvh) = bvh_assets.get(*id) else {
-                return;
-            };
-
-            // TODO: Allow for config, set to true for testing purposes
-            motion_data_asset.append_frames(bvh.get(), bvh.loopable());
-            // motion_data_asset.append_frames(bvh, xx);
-        }
+        motion_data_asset.append_bvhs(
+            build_config
+                .bvh_assets
+                .iter()
+                .filter_map(|id| bvh_assets.get(*id)),
+        );
 
         // TODO(perf): Serialize into binary instead
         let convert_to_json = serde_json::to_string(&motion_data_asset).unwrap();

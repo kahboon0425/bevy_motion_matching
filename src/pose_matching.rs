@@ -3,6 +3,7 @@ use bevy_bvh_anim::bvh_anim::ChannelType;
 use bevy_bvh_anim::joint_traits::JointChannelTrait;
 
 use crate::bvh_manager::bvh_player::JointMap;
+use crate::motion_data::chunk::ChunkIterator;
 use crate::motion_data::motion_data_asset::MotionDataAsset;
 use crate::motion_matching::NearestTrajectory;
 use crate::player::PlayerMarker;
@@ -22,7 +23,7 @@ pub fn match_pose(
 ) -> (f32, Vec<f32>) {
     let chunk_index = nearest_trajectory.chunk_index;
     let chunk_offset = nearest_trajectory.chunk_offset;
-    let poses = motion_data.poses.get_poses_from_chunk(chunk_index);
+    let poses = motion_data.pose_data.get_chunk_unchecked(chunk_index);
     let pose = poses.get(chunk_offset).unwrap();
 
     let mut total_distance = 0.0;

@@ -1,8 +1,12 @@
 use bevy::prelude::*;
 use motion_data_asset::MotionDataAsset;
 
+pub mod chunk;
+pub mod joint_info;
 pub mod motion_data_asset;
 pub mod motion_data_player;
+pub mod pose_data;
+pub mod trajectory_data;
 
 pub struct MotionDataPlugin;
 
