@@ -68,18 +68,18 @@ impl MotionDataAsset {
             }
 
             let bvh_duration = num_frames as f32 * frame_time;
-            let point_len = (bvh_duration / traj_config.interval_time) as usize + 1;
+            let num_points = (bvh_duration / traj_config.interval_time) as usize + 1;
 
-            if point_len < 1 {
+            if num_points < 1 {
                 warn!("There is no trajectory point at all to use. Skipping...");
                 continue;
             }
 
-            if bvh.loopable() == false && point_len < traj_config.point_len {
+            if bvh.loopable() == false && num_points < traj_config.num_points {
                 warn!(
                     r#"Does not meet the minimum required trajectory point length: >={}. Skipping...
                     (Tip: Set it to loopable if it's loopable to avoid this warning.)"#,
-                    traj_config.point_len
+                    traj_config.num_points
                 );
                 continue;
             }
@@ -92,7 +92,7 @@ impl MotionDataAsset {
             let mut prev_world_pos = first_pos;
 
             // SAFETY: It's ok to go over, we have made sure that the bvh is loopable.
-            for p in 0..point_len.max(traj_config.point_len) {
+            for p in 0..num_points.max(traj_config.num_points) {
                 let mut target_time = traj_config.interval_time * p as f32;
 
                 if bvh.loopable() {

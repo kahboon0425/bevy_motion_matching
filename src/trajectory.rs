@@ -227,30 +227,43 @@ impl TrajectoryPoint {
 #[derive(Resource, Reflect)]
 #[reflect(Resource)]
 pub struct TrajectoryConfig {
+    /// Time between each trajectory point.
     pub interval_time: f32,
+    /// Number of prediction points.
     pub predict_count: usize,
+    /// Number of history points.
     pub history_count: usize,
 }
 
 impl TrajectoryConfig {
+    /// Duration of the prediction part of the trajectory.
     #[inline]
     pub fn predict_time(&self) -> f32 {
         self.interval_time * self.predict_count as f32
     }
 
+    /// Duration of the history part of the trajectory.
     #[inline]
     pub fn history_time(&self) -> f32 {
         self.interval_time * self.history_count as f32
     }
 
+    /// Number of trajectory segments in a trajectory.
     #[inline]
-    pub fn total_count(&self) -> usize {
+    pub fn num_segments(&self) -> usize {
         self.predict_count + self.history_count
     }
 
+    /// Number of trajectory points in a trajectory.
+    #[inline]
+    pub fn num_points(&self) -> usize {
+        self.num_segments() + 1
+    }
+
+    /// Total duration of the entire trajectory.
     #[inline]
     pub fn total_time(&self) -> f32 {
-        self.interval_time * self.total_count() as f32
+        self.interval_time * self.num_segments() as f32
     }
 }
 

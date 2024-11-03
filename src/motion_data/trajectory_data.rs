@@ -35,9 +35,9 @@ impl TrajectoryData {
     /// Append the trajectory points as a chunk while emptying the parsed in data points.
     pub(super) fn append_trajectory_chunk(&mut self, trajectory: &mut Vec<TrajectoryDataPoint>) {
         assert!(
-            trajectory.len() >= self.config.point_len,
+            trajectory.len() >= self.config.num_points,
             "A trajectory must have at least the configured length: >={}",
-            self.config.point_len
+            self.config.num_points
         );
 
         self.offsets.push_chunk(trajectory.len());
@@ -102,5 +102,5 @@ pub struct TrajectoryDataConfig {
     /// Interval time between each data point.
     pub interval_time: f32,
     /// Number of data points per trajectory.
-    pub point_len: usize,
+    pub num_points: usize,
 }

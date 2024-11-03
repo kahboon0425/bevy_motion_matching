@@ -85,7 +85,7 @@ fn build_motion_data_asset_button(ui: &mut egui::Ui, world: &mut World) {
             bvh_map,
             TrajectoryDataConfig {
                 interval_time: trajectory_config.interval_time,
-                point_len: trajectory_config.total_count() + 1,
+                num_points: trajectory_config.num_points(),
             },
         );
 

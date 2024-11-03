@@ -10,7 +10,7 @@ use crate::motion_data::{MotionData, MotionDataHandle};
 use crate::player::PlayerMarker;
 use crate::pose_matching::match_pose;
 use crate::scene_loader::MainScene;
-use crate::trajectory::{MovementDirection, Trajectory, TrajectoryConfig};
+use crate::trajectory::{MovementDirection, Trajectory, TrajectoryConfig, TrajectoryPoint};
 use crate::BVH_SCALE_RATIO;
 
 pub struct MotionMatchingPlugin;
@@ -31,8 +31,7 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
 }
 
 fn motion_matching(
-    q_trajectory: Query<&Trajectory>,
-    mut q_transforms: Query<&mut Transform>,
+    q_trajectory: Query<(&Trajectory, &Transform)>,
     match_evr: EventReader<MotionMatch>,
     motion_data: MotionData,
     trajectory_config: Res<TrajectoryConfig>,
@@ -41,18 +40,46 @@ fn motion_matching(
         return;
     };
 
-    // for trajectory in q_trajectory.iter() {
-    //     for chunk in motion_data.pose_data.iter_chunk() {
-    //         // let poses = motion_data.pose_data.get_poses_chunk(c);
+    let num_segments = trajectory_config.num_segments();
+    let num_points = trajectory_config.num_points();
 
-    //         if chunk.total_time() < trajectory_config.total_time() {
-    //             continue;
-    //         }
+    for (trajectory, transform) in q_trajectory.iter() {
+        let runtime_inv_matrix = transform.compute_matrix().inverse();
+        let runtime_trajectory = trajectory
+            .iter()
+            .map(|&(mut point)| {
+                point.translation = runtime_inv_matrix
+                    .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
+                    .xz();
+                point
+            })
+            .collect::<Vec<_>>();
 
-    //         let mut time = 0.0;
-    //         // for
-    //     }
-    // }
+        for chunk in motion_data.trajectory_data.iter_chunk() {
+            // Number of trajectory in this chunk.
+            let num_trajectories = chunk.len() - num_segments;
+
+            for chunk_offset in 0..num_trajectories {
+                let trajectory_data = &chunk[chunk_offset..chunk_offset + num_points];
+
+                // Center point of trajectory
+                let data_inv_matrix = trajectory_data[trajectory_config.history_count]
+                    .matrix
+                    .inverse();
+                let data_trajectory = trajectory_data
+                    .iter()
+                    .map(|point| {
+                        let (.., translation) = point.matrix.to_scale_rotation_translation();
+                        TrajectoryPoint {
+                            translation: data_inv_matrix.transform_point3(translation).xz()
+                                * BVH_SCALE_RATIO,
+                            velocity: point.velocity,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+            }
+        }
+    }
 }
 
 #[derive(Event, Debug)]
@@ -237,6 +264,19 @@ pub fn find_nearest_trajectories<const N: usize>(
     let threshold = 10.0;
 
     let trajectories = &motion_data.trajectory_data;
+
+    let player_local_translations = player_trajectory
+        .iter()
+        .map(|player_trajectory| {
+            player_inv_matrix.transform_point3(Vec3::new(
+                player_trajectory.translation.x,
+                0.0,
+                player_trajectory.translation.y,
+            ))
+        })
+        .map(|v| v.xz())
+        .collect::<Vec<_>>();
+
     for (chunk_index, chunk) in trajectories.iter_chunk().enumerate() {
         let chunk_count = chunk.len();
         if chunk_count < 7 {
@@ -249,18 +289,6 @@ pub fn find_nearest_trajectories<const N: usize>(
 
             // Center point of trajectory
             let inv_matrix = trajectory[3].matrix.inverse();
-
-            let player_local_translations = player_trajectory
-                .iter()
-                .map(|player_trajectory| {
-                    player_inv_matrix.transform_point3(Vec3::new(
-                        player_trajectory.translation.x,
-                        0.0,
-                        player_trajectory.translation.y,
-                    ))
-                })
-                .map(|v| v.xz())
-                .collect::<Vec<_>>();
 
             let data_local_translations = trajectory
                 .iter()
