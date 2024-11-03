@@ -15,6 +15,7 @@ impl Plugin for TrajectoryPlugin {
             predict_count: 5,
             history_count: 1,
         })
+        .init_resource::<TrajectoryPlot>()
         .add_systems(
             Update,
             (trajectory_len, (predict_trajectory, trajectory_history))
@@ -22,7 +23,7 @@ impl Plugin for TrajectoryPlugin {
                 .in_set(MainSet::Trajectory),
         )
         .add_systems(Last, (update_velocities, update_prev_transform2ds).chain())
-        .add_systems(Update, draw_trajectory_axes);
+        .add_systems(Update, (draw_trajectory_axes, draw_trajectory_plot));
 
         app.register_type::<Trajectory>()
             .register_type::<PrevTransform2d>()
@@ -250,5 +251,46 @@ impl TrajectoryConfig {
     #[inline]
     pub fn total_time(&self) -> f32 {
         self.interval_time * self.total_count() as f32
+    }
+}
+
+#[derive(Resource, Debug, Default)]
+pub struct TrajectoryPlot {
+    pub trajectories_points: Vec<[f64; 2]>,
+}
+
+pub fn draw_trajectory_plot(
+    mut trajectories_point: ResMut<TrajectoryPlot>,
+    user_input_trajectory: Query<(&Trajectory, &Transform), With<PlayerMarker>>,
+) {
+    for (trajectory, transform) in user_input_trajectory.iter() {
+        let player_inv_matrix = transform.compute_matrix().inverse();
+
+        let player_local_translations: Vec<_> = trajectory
+            .values
+            .iter()
+            .map(|player_trajectory| {
+                player_inv_matrix.transform_point3(Vec3::new(
+                    player_trajectory.x,
+                    0.0,
+                    player_trajectory.y,
+                ))
+            })
+            .map(|v| v.xz())
+            .collect();
+
+        if let Some(mut start) = player_local_translations.get(0) {
+            trajectories_point.trajectories_points.clear();
+            for next in &player_local_translations[1..] {
+                trajectories_point
+                    .trajectories_points
+                    .push([start.x as f64, start.y as f64]);
+                start = next;
+            }
+
+            trajectories_point
+                .trajectories_points
+                .push([start.x as f64, start.y as f64]);
+        }
     }
 }

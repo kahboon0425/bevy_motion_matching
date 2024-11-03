@@ -120,6 +120,7 @@ pub fn match_trajectory(
                 trajectory,
                 transform,
             );
+
             info!(
                 "{MATCH_TRAJECTORY_COUNT} nearest trajectories:\n{:?}",
                 nearest_trajectories
