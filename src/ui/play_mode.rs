@@ -6,13 +6,11 @@ use egui_plot::{Line, Plot, PlotPoints};
 
 use crate::bvh_manager::bvh_player::BvhPlayer;
 use crate::motion_data::chunk::ChunkIterator;
-use crate::motion_data::motion_data_asset::JointInfo;
 use crate::motion_data::motion_data_player::MotionDataPlayerPair;
 use crate::motion_data::MotionData;
 use crate::motion_matching::MotionMatchingResult;
 use crate::trajectory::TrajectoryPlot;
 use crate::GameMode;
-use crate::{bvh_manager::bvh_player::BvhPlayer, trajectory::Trajectory};
 
 use super::groupbox;
 use egui_extras::{Column, TableBuilder};
@@ -95,21 +93,23 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     groupbox(ui, |ui| {
         ui.label("Trajectories Matching Visualization");
 
-        let motion_trajs = &motion_asset.trajectories;
+        let motion_trajs = &motion_asset.trajectory_data;
 
         let chunk_index = motion_matching_result.best_pose_result.chunk_index;
         let chunk_offset = motion_matching_result.best_pose_result.chunk_offset;
 
-        let trajs = motion_trajs.get_chunk(chunk_index);
+        let Some(trajs) = motion_trajs.get_chunk(chunk_index) else {
+            return;
+        };
         let trajectory = &trajs[chunk_offset..chunk_offset + 7];
 
         // Center point of trajectory
-        let inv_matrix = trajectory[3].inverse();
+        let inv_matrix = trajectory[3].matrix.inverse();
 
         let best_trajectory_points = trajectory
             .iter()
             .map(|trajectory| {
-                inv_matrix.transform_point3(trajectory.to_scale_rotation_translation().2)
+                inv_matrix.transform_point3(trajectory.matrix.to_scale_rotation_translation().2)
             })
             // Rescale?
             .map(|v| (v.xz() * 0.01).as_dvec2().to_array())

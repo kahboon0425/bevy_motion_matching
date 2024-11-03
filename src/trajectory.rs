@@ -261,25 +261,24 @@ pub struct TrajectoryPlot {
 
 pub fn draw_trajectory_plot(
     mut trajectories_point: ResMut<TrajectoryPlot>,
-    user_input_trajectory: Query<(&Trajectory, &Transform), With<PlayerMarker>>,
+    user_input_trajectory: Query<(&Trajectory, &Transform)>,
 ) {
     for (trajectory, transform) in user_input_trajectory.iter() {
         let player_inv_matrix = transform.compute_matrix().inverse();
 
         let player_local_translations: Vec<_> = trajectory
-            .values
             .iter()
-            .map(|player_trajectory| {
+            .map(|point| {
                 player_inv_matrix.transform_point3(Vec3::new(
-                    player_trajectory.x,
+                    point.translation.x,
                     0.0,
-                    player_trajectory.y,
+                    point.translation.y,
                 ))
             })
             .map(|v| v.xz())
             .collect();
 
-        if let Some(mut start) = player_local_translations.get(0) {
+        if let Some(mut start) = player_local_translations.first() {
             trajectories_point.trajectories_points.clear();
             for next in &player_local_translations[1..] {
                 trajectories_point
