@@ -2,7 +2,9 @@ use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 use crate::action::PlayerAction;
+use crate::draw_axes::{ColorPalette, DrawAxes};
 use crate::trajectory::MovementDirection;
+use crate::transform2d::Transform2d;
 use crate::MainSet;
 
 pub struct PlayerPlugin;
@@ -10,7 +12,8 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MovementConfig>()
-            .add_systems(PreUpdate, movement_direction.in_set(MainSet::Action));
+            .add_systems(PreUpdate, movement_direction.in_set(MainSet::Action))
+            .add_systems(Update, draw_player_direction);
     }
 }
 
@@ -31,6 +34,23 @@ fn movement_direction(
             **movement_direction,
             action_axis,
             f32::min(1.0, movement_config.lerp_factor * time.delta_seconds()),
+        );
+    }
+}
+
+fn draw_player_direction(
+    q_transform2ds: Query<&Transform2d, With<PlayerMarker>>,
+    mut draw_axes: ResMut<DrawAxes>,
+    palette: Res<ColorPalette>,
+) {
+    for transform2d in q_transform2ds.iter() {
+        draw_axes.draw_forward(
+            Mat4::from_rotation_translation(
+                Quat::from_rotation_y(transform2d.angle),
+                transform2d.translation3d(),
+            ),
+            0.4,
+            palette.green,
         );
     }
 }
