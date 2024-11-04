@@ -18,7 +18,10 @@ impl Plugin for TrajectoryPlugin {
         .init_resource::<TrajectoryPlot>()
         .add_systems(
             Update,
-            (trajectory_len, (predict_trajectory, trajectory_history))
+            (
+                resize_trajectory.run_if(resource_changed::<TrajectoryConfig>),
+                (predict_trajectory, current_trajectory, history_trajectory),
+            )
                 .chain()
                 .in_set(MainSet::Trajectory),
         )
@@ -37,6 +40,8 @@ fn predict_trajectory(
     trajectory_config: Res<TrajectoryConfig>,
     movement_config: Res<MovementConfig>,
 ) {
+    const DAMPING: f32 = 0.9;
+
     for (mut trajectory, transform2d, velocity, direction) in q_trajectories.iter_mut() {
         // Predict trajectory.
         let mut translation = transform2d.translation;
@@ -49,8 +54,9 @@ fn predict_trajectory(
             translation += velocity * trajectory_config.interval_time;
             // Accelerate to walk speed max.
             velocity = Vec2::clamp_length(velocity, 0.0, movement_config.walk_speed);
+            velocity *= DAMPING;
 
-            trajectory[i + trajectory_config.history_count] = TrajectoryPoint {
+            trajectory[i + trajectory_config.history_count + 1] = TrajectoryPoint {
                 translation,
                 velocity,
             };
@@ -58,7 +64,19 @@ fn predict_trajectory(
     }
 }
 
-fn trajectory_history(
+fn current_trajectory(
+    mut q_trajectories: Query<(&mut Trajectory, &Transform2d, &Velocity)>,
+    trajectory_config: Res<TrajectoryConfig>,
+) {
+    for (mut trajectory, transform2d, velocity) in q_trajectories.iter_mut() {
+        trajectory[trajectory_config.history_count] = TrajectoryPoint {
+            translation: transform2d.translation,
+            velocity: **velocity,
+        };
+    }
+}
+
+fn history_trajectory(
     mut q_trajectories: Query<(
         &mut Trajectory,
         &Transform2d,
@@ -123,16 +141,15 @@ fn trajectory_history(
     }
 }
 
-fn trajectory_len(
+fn resize_trajectory(
     mut q_trajectories: Query<&mut Trajectory>,
     trajectory_config: Res<TrajectoryConfig>,
 ) {
-    // Add one for the current transform
-    let target_len = 1 + trajectory_config.history_count + trajectory_config.predict_count;
+    let num_points = trajectory_config.num_points();
 
     for mut trajectory in q_trajectories.iter_mut() {
-        if trajectory.len() != target_len {
-            **trajectory = vec![TrajectoryPoint::default(); target_len];
+        if trajectory.len() != num_points {
+            trajectory.resize(num_points, TrajectoryPoint::default());
         }
     }
 }

@@ -4,6 +4,8 @@ use bevy::render::texture::{
     ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
 
+use crate::draw_axes::ColorPalette;
+use crate::motion::motion_player::MotionPlayerBundle;
 use crate::player::PlayerBundle;
 use crate::trajectory::TrajectoryBundle;
 
@@ -25,7 +27,11 @@ fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     info!("Loaded scene: {:?}", scene);
     commands
         .spawn((MainScene, SceneBundle { scene, ..default() }))
-        .insert((PlayerBundle::default(), TrajectoryBundle::default()));
+        .insert((
+            PlayerBundle::default(),
+            TrajectoryBundle::default(),
+            MotionPlayerBundle::default(),
+        ));
 }
 
 fn spawn_light(mut commands: Commands) {
@@ -50,6 +56,7 @@ fn spawn_ground(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
+    palette: Res<ColorPalette>,
 ) {
     let size = 25.0;
     let mut plane_mesh = Plane3d::default().mesh().size(size, size).build();
@@ -66,7 +73,7 @@ fn spawn_ground(
         PbrBundle {
             mesh: meshes.add(plane_mesh),
             material: materials.add(StandardMaterial {
-                base_color: Color::WHITE,
+                base_color: palette.base2,
                 base_color_texture: Some(asset_server.load_with_settings(
                     "textures/Grid.png",
                     |s: &mut _| {

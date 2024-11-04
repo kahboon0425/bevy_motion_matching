@@ -5,9 +5,9 @@ use bevy_egui::egui::Color32;
 use egui_plot::{Line, Plot, PlotPoints};
 
 use crate::bvh_manager::bvh_player::BvhPlayer;
-use crate::motion_data::chunk::ChunkIterator;
-use crate::motion_data::motion_data_player::MotionDataPlayerPair;
-use crate::motion_data::MotionData;
+use crate::motion::chunk::ChunkIterator;
+use crate::motion::motion_player::MotionPlayer;
+use crate::motion::MotionData;
 use crate::motion_matching::MotionMatchingResult;
 use crate::trajectory::TrajectoryPlot;
 use crate::GameMode;
@@ -24,22 +24,13 @@ pub fn play_mode_panel(ui: &mut egui::Ui, world: &mut World) {
 fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     let mut params = SystemState::<(
         MotionData,
-        ResMut<MotionDataPlayerPair>,
-        ResMut<BvhPlayer>,
         Res<State<GameMode>>,
         ResMut<NextState<GameMode>>,
         Res<MotionMatchingResult>,
         Res<TrajectoryPlot>,
     )>::new(world);
-    let (
-        motion_data,
-        mut motion_player,
-        mut bvh_player,
-        game_mode,
-        mut next_game_mode,
-        motion_matching_result,
-        trajectory_points,
-    ) = params.get_mut(world);
+    let (motion_data, game_mode, mut next_game_mode, motion_matching_result, trajectory_points) =
+        params.get_mut(world);
 
     let Some(motion_asset) = motion_data.get() else {
         return;
@@ -66,7 +57,7 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         ));
         ui.label(format!(
             "Pose Interval: {}",
-            motion_asset.pose_data.interval()
+            motion_asset.pose_data.interval_time()
         ));
     });
 
@@ -80,12 +71,6 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         match **game_mode {
             GameMode::Play => next_game_mode.set(GameMode::None),
             _ => next_game_mode.set(GameMode::Play),
-        }
-
-        motion_player.is_playing = !motion_player.is_playing;
-        // Stop the bvh preview player.
-        if motion_player.is_playing {
-            bvh_player.is_playing = false;
         }
     }
 

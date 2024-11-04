@@ -7,8 +7,8 @@ use bevy_bvh_anim::prelude::*;
 use bevy_egui::egui;
 
 use crate::bvh_manager::bvh_library::BvhLibrary;
-use crate::motion_data::motion_data_asset::MotionDataAsset;
-use crate::motion_data::trajectory_data::TrajectoryDataConfig;
+use crate::motion::motion_asset::MotionAsset;
+use crate::motion::trajectory_data::TrajectoryDataConfig;
 use crate::trajectory::TrajectoryConfig;
 
 use super::scrollbox;
@@ -81,7 +81,7 @@ fn build_motion_data_asset_button(ui: &mut egui::Ui, world: &mut World) {
             return;
         };
 
-        let mut motion_data_asset = MotionDataAsset::new(
+        let mut motion_data_asset = MotionAsset::new(
             bvh_map,
             TrajectoryDataConfig {
                 interval_time: trajectory_config.interval_time,

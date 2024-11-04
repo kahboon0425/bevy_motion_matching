@@ -18,7 +18,7 @@ impl Plugin for PlayerPlugin {
 }
 
 fn movement_direction(
-    mut q_movement_directions: Query<&mut MovementDirection>,
+    mut q_movement_directions: Query<(&mut MovementDirection, &Transform2d)>,
     movement_config: Res<MovementConfig>,
     action: Res<ActionState<PlayerAction>>,
     time: Res<Time>,
@@ -29,10 +29,14 @@ fn movement_direction(
         .unwrap_or_default();
     action_axis.x = -action_axis.x;
 
-    for mut movement_direction in q_movement_directions.iter_mut() {
+    for (mut movement_direction, transform2d) in q_movement_directions.iter_mut() {
+        let mut target_direction = Vec2::ZERO;
+        target_direction += transform2d.forward() * action_axis.y;
+        target_direction += transform2d.right() * action_axis.x;
+
         **movement_direction = Vec2::lerp(
             **movement_direction,
-            action_axis,
+            target_direction,
             f32::min(1.0, movement_config.lerp_factor * time.delta_seconds()),
         );
     }
@@ -49,7 +53,7 @@ fn draw_player_direction(
                 Quat::from_rotation_y(transform2d.angle),
                 transform2d.translation3d(),
             ),
-            0.4,
+            0.5,
             palette.green,
         );
     }

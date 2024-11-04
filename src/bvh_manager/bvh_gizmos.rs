@@ -3,7 +3,7 @@ use bevy_bvh_anim::bvh_anim::ChannelType;
 use bevy_bvh_anim::prelude::*;
 
 use crate::draw_axes::{ColorPalette, DrawAxes};
-use crate::motion_data::pose_data::Pose;
+use crate::motion::pose_data::Pose;
 use crate::player::MovementConfig;
 use crate::scene_loader::MainScene;
 use crate::ui::config::{BvhTrailConfig, DrawMainArmature};
@@ -15,8 +15,10 @@ pub struct BvhGizmosPlugin;
 
 impl Plugin for BvhGizmosPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, armature_gizmos)
-            .add_systems(Update, bvh_trail_gizmos);
+        app.add_systems(
+            PostUpdate,
+            (armature_gizmos, bvh_trail_gizmos).after(TransformSystem::TransformPropagate),
+        );
     }
 }
 
@@ -58,7 +60,7 @@ fn armature_gizmos(
             parent_transform
                 .compute_transform()
                 .with_scale(Vec3::splat(0.1)),
-            gradient[index % gradient.len()].with_alpha(0.4),
+            gradient[index % gradient.len()].with_alpha(0.8),
         );
 
         index += 1;
@@ -221,7 +223,7 @@ fn bvh_trail_gizmos(
                     Transform::from_translation(translation * BVH_SCALE_RATIO)
                         .with_rotation(rotation)
                         .with_scale(Vec3::splat(0.06)),
-                    palette.blue.with_alpha(0.4),
+                    palette.blue.with_alpha(0.8),
                 );
                 axes.draw(
                     world_matrix.mul_scalar(BVH_SCALE_RATIO),
@@ -243,7 +245,7 @@ fn bvh_trail_gizmos(
                     // Constant scaling factor of the Bvh data.
                     parent_translation * BVH_SCALE_RATIO,
                     curr_translation * BVH_SCALE_RATIO,
-                    palette.base4.with_alpha(0.6),
+                    palette.base4.with_alpha(0.8),
                 );
             }
         }

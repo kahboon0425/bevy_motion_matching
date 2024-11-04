@@ -6,7 +6,7 @@ use bevy_egui::egui;
 use crate::bvh_manager::bvh_library::BvhLibrary;
 use crate::bvh_manager::bvh_player::{BvhPlayer, SelectedBvhAsset};
 use crate::scene_loader::{GroundPlane, MainScene};
-use crate::GameMode;
+use crate::{GameMode, LARGE_EPSILON};
 
 use super::groupbox;
 
@@ -85,7 +85,7 @@ fn bvh_playback(ui: &mut egui::Ui, world: &mut World) {
             let playback_duration = bvh_player.duration;
             ui.add(egui::Slider::new(
                 &mut bvh_player.current_time,
-                0.0..=playback_duration - f32::EPSILON,
+                0.0..=playback_duration - LARGE_EPSILON,
             ));
         });
     });

@@ -20,37 +20,37 @@ fn apply_transform2d(
         transform.translation.x = transform2d.translation.x;
         transform.translation.z = transform2d.translation.y;
 
-        transform.rotation =
-            Quat::from_rotation_y(f32::atan2(transform2d.direction.x, transform2d.direction.y));
+        transform.rotation = Quat::from_rotation_y(transform2d.angle);
     }
 }
 
-#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[derive(Component, Reflect, Default, Debug, Clone, Copy)]
 #[reflect(Component)]
 pub struct Transform2d {
     pub translation: Vec2,
-    pub direction: Vec2,
-}
-
-impl Default for Transform2d {
-    fn default() -> Self {
-        Self {
-            translation: Vec2::ZERO,
-            direction: Vec2::Y,
-        }
-    }
+    pub angle: f32,
 }
 
 impl Transform2d {
     pub fn set_direction(&mut self, direction: Vec2) {
-        self.direction = direction.normalize_or_zero();
+        self.angle = f32::atan2(direction.x, direction.y);
+    }
+
+    pub fn translation3d(&self) -> Vec3 {
+        Vec3::new(self.translation.x, 0.0, self.translation.y)
+    }
+
+    pub fn direction3d(&self) -> Vec3 {
+        let forward = self.forward();
+        Vec3::new(forward.x, 0.0, forward.y)
     }
 
     pub fn forward(&self) -> Vec2 {
-        self.direction
+        Vec2::new(f32::sin(self.angle), f32::cos(self.angle))
     }
 
     pub fn right(&self) -> Vec2 {
-        Vec2::new(self.direction.y, -self.direction.x)
+        let forward = self.forward();
+        Vec2::new(forward.y, -forward.x)
     }
 }

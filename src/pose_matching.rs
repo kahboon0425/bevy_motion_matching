@@ -3,8 +3,8 @@ use bevy_bvh_anim::bvh_anim::ChannelType;
 use bevy_bvh_anim::joint_traits::JointChannelTrait;
 
 use crate::bvh_manager::bvh_player::JointMap;
-use crate::motion_data::chunk::ChunkIterator;
-use crate::motion_data::motion_data_asset::MotionDataAsset;
+use crate::motion::chunk::ChunkIterator;
+use crate::motion::motion_asset::MotionAsset;
 use crate::motion_matching::NearestTrajectory;
 use crate::player::PlayerMarker;
 use crate::scene_loader::MainScene;
@@ -17,7 +17,7 @@ impl Plugin for PoseMatchingPlugin {
 
 pub fn match_pose(
     nearest_trajectory: &NearestTrajectory,
-    motion_data: &MotionDataAsset,
+    motion_data: &MotionAsset,
     q_transforms: &mut Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
     main_character: &mut Query<&JointMap, With<MainScene>>,
 ) -> (f32, Vec<f32>) {

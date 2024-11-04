@@ -11,18 +11,18 @@ use super::joint_info::JointInfo;
 use super::pose_data::PoseData;
 use super::trajectory_data::{TrajectoryData, TrajectoryDataConfig, TrajectoryDataPoint};
 
-pub(super) struct MotionDataAssetPlugin;
+pub(super) struct MotionAssetPlugin;
 
-impl Plugin for MotionDataAssetPlugin {
+impl Plugin for MotionAssetPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset::<MotionDataAsset>()
-            .init_asset_loader::<MotionDataAssetLoader>();
+        app.init_asset::<MotionAsset>()
+            .init_asset_loader::<MotionAssetLoader>();
     }
 }
 
 /// A memory and storage efficient storage of [`JointInfo`] and multiple motion data ([`TrajectoryData`] & [`Poses`]).
 #[derive(Asset, TypePath, Serialize, Deserialize, Debug)]
-pub struct MotionDataAsset {
+pub struct MotionAsset {
     /// Joint data.
     joints: Vec<JointInfo>,
     /// Trajectory data for trajectory matching.
@@ -31,7 +31,7 @@ pub struct MotionDataAsset {
     pub pose_data: PoseData,
 }
 
-impl MotionDataAsset {
+impl MotionAsset {
     pub fn new(bvh: &Bvh, config: TrajectoryDataConfig) -> Self {
         Self {
             joints: bvh
@@ -45,7 +45,7 @@ impl MotionDataAsset {
 
     pub fn append_bvhs<'a>(&mut self, bvhs: impl Iterator<Item = &'a BvhAsset>) {
         let traj_config = *self.trajectory_data.config();
-        let pose_interval = self.pose_data.interval();
+        let pose_interval = self.pose_data.interval_time();
 
         let mut trajectory_chunk = Vec::<TrajectoryDataPoint>::new();
 
@@ -67,7 +67,8 @@ impl MotionDataAsset {
                 continue;
             }
 
-            let bvh_duration = num_frames as f32 * frame_time;
+            // 2 frames is a segment, so we need to deduct by 1.
+            let bvh_duration = (num_frames.saturating_sub(1)) as f32 * frame_time;
             let num_points = (bvh_duration / traj_config.interval_time) as usize + 1;
 
             if num_points < 1 {
@@ -108,7 +109,9 @@ impl MotionDataAsset {
                 let end = start + 1;
 
                 // Time distance between start frame and current trajectory's time stamp.
-                let factor = time - start as f32 * frame_time;
+                let leak = time - start as f32 * frame_time;
+                // Interpolation factor between start and end frame.
+                let factor = leak / frame_time;
 
                 // SAFETY: Calculation above should made sure that both
                 // start & end frame index is within the bounds of frame count.
@@ -158,7 +161,7 @@ impl MotionDataAsset {
     }
 }
 
-impl MotionDataAsset {
+impl MotionAsset {
     pub fn joints(&self) -> &[JointInfo] {
         &self.joints
     }
@@ -169,10 +172,10 @@ impl MotionDataAsset {
 }
 
 #[derive(Default)]
-struct MotionDataAssetLoader;
+struct MotionAssetLoader;
 
-impl AssetLoader for MotionDataAssetLoader {
-    type Asset = MotionDataAsset;
+impl AssetLoader for MotionAssetLoader {
+    type Asset = MotionAsset;
     type Settings = ();
     type Error = MotionDataLoaderError;
 
@@ -185,7 +188,7 @@ impl AssetLoader for MotionDataAssetLoader {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
 
-        let motion_data = serde_json::from_slice::<MotionDataAsset>(&bytes)?;
+        let motion_data = serde_json::from_slice::<MotionAsset>(&bytes)?;
 
         Ok(motion_data)
     }

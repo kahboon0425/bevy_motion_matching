@@ -4,7 +4,7 @@ pub mod action;
 pub mod bvh_manager;
 pub mod camera;
 pub mod draw_axes;
-pub mod motion_data;
+pub mod motion;
 pub mod motion_matching;
 pub mod player;
 pub mod pose_matching;
@@ -15,6 +15,7 @@ pub mod transform2d;
 pub mod ui;
 
 pub const BVH_SCALE_RATIO: f32 = 0.01;
+pub const LARGE_EPSILON: f32 = 0.0001;
 
 pub struct MotionMatchingAppPlugin;
 
@@ -29,7 +30,7 @@ impl Plugin for MotionMatchingAppPlugin {
             transform2d::Transform2dPlugin,
             trajectory::TrajectoryPlugin,
             action::ActionPlugin,
-            motion_data::MotionDataPlugin,
+            motion::MotionPlugin,
             scene_loader::SceneLoaderPlugin,
             bvh_manager::BvhManagerPlugin,
             camera::CameraPlugin,
