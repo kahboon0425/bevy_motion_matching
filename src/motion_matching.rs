@@ -100,6 +100,12 @@ fn prediction_match(mut match_evr: EventReader<PredictionMatch>) {
     match_evr.clear();
 }
 
+// TODO: IMPLEMENT
+fn _trajectory_distance(traj0: &[TrajectoryPoint], traj1: &[TrajectoryPoint]) -> f32 {
+    assert_eq!(traj0.len(), traj1.len());
+    0.0
+}
+
 #[derive(Event, Debug)]
 pub struct TrajectoryMatch;
 
@@ -362,6 +368,7 @@ pub fn find_nearest_trajectories<const N: usize>(
     nearest_trajectories_stack
 }
 
+// TODO: Replace this
 pub fn trajectory_distance(traj0: &[Vec2], traj1: &[Vec2]) -> f32 {
     // println!("{traj0:?}");
     // println!("{traj1:?}");
@@ -371,9 +378,7 @@ pub fn trajectory_distance(traj0: &[Vec2], traj1: &[Vec2]) -> f32 {
         let offset0 = traj0[i] - traj0[i - 1];
         let offset1 = traj1[i] - traj1[i - 1];
 
-        // TOOD: Use distance without squared instead?
-        // (squared is faster, might be better for optimization purposes)
-        distance += Vec2::distance_squared(offset1, offset0);
+        distance += Vec2::distance(offset1, offset0);
     }
 
     distance

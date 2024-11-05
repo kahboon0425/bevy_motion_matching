@@ -89,8 +89,6 @@ fn apply_root_transform(
     mut q_transforms: Query<&mut Transform>,
     input: Res<ButtonInput<KeyCode>>,
 ) {
-    let debug = input.pressed(KeyCode::KeyP);
-
     let Some(root_joint) = motion_data
         .get()
         // SAFETY: We assume there is a root joint.
@@ -126,28 +124,13 @@ fn apply_root_transform(
                 offset_pos = Quat::from_rotation_y(root_transform2d.angle).mul_vec3(offset_pos);
 
                 let translation = root_transform2d.translation + offset_pos.xz();
-                let angle = if debug {
-                    0.0
-                } else {
-                    Quat::from_rotation_y(root_transform2d.angle + offset_forward_angle)
-                        .to_scaled_axis()
-                        .y
-                };
-                // let angle = 0.0;
-                // let angle = Quat::from_rotation_y(root_transform2d.angle + offset_forward_angle)
-                //     .to_scaled_axis()
-                //     .y;
+                let angle = Quat::from_rotation_y(root_transform2d.angle + offset_forward_angle)
+                    .to_scaled_axis()
+                    .y;
 
                 let local_y_pos = traj_pos.y;
-                let local_xz_rot = if debug {
-                    traj_rot
-                } else {
-                    (Quat::from_rotation_y(offset_forward_angle).inverse() * offset_rot).normalize()
-                };
-                // let local_xz_rot = traj_rot;
-                // let local_xz_rot = (Quat::from_rotation_y(offset_forward_angle).inverse()
-                //     * offset_rot)
-                //     .normalize();
+                let local_xz_rot =
+                    (Quat::from_rotation_y(offset_forward_angle).inverse() * traj_rot).normalize();
 
                 final_root_config[i] = Some(RootConfig {
                     world_transform2d: Transform2d { translation, angle },
