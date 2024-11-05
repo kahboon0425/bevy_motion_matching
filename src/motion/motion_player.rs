@@ -70,7 +70,7 @@ fn test(
             jump_evw.send(JumpToPose(
                 MotionPose {
                     chunk_index: 0,
-                    time: 0.0,
+                    time: 2.0,
                 },
                 entity,
             ));

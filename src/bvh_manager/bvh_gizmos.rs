@@ -60,7 +60,7 @@ fn armature_gizmos(
             parent_transform
                 .compute_transform()
                 .with_scale(Vec3::splat(0.1)),
-            gradient[index % gradient.len()].with_alpha(0.8),
+            (gradient[index % gradient.len()].to_linear() * 14.0).with_alpha(0.6),
         );
 
         index += 1;
