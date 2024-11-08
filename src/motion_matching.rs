@@ -1,10 +1,13 @@
-use bevy::math::NormedVectorSpace;
 use bevy::prelude::*;
 
+use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion::chunk::ChunkIterator;
 use crate::motion::motion_asset::MotionAsset;
-use crate::motion::motion_player::MotionPose;
+use crate::motion::motion_player::{JumpToPose, MotionPose, TrajectoryPosePair};
 use crate::motion::{MotionData, MotionHandle};
+use crate::player::PlayerMarker;
+use crate::pose_matching::match_pose;
+use crate::scene_loader::MainScene;
 use crate::trajectory::{Trajectory, TrajectoryConfig, TrajectoryPoint};
 use crate::{GameMode, BVH_SCALE_RATIO};
 
@@ -15,8 +18,10 @@ impl Plugin for MotionMatchingPlugin {
         app.init_resource::<MotionMatchingResult>()
             .add_event::<TrajectoryMatch>()
             .add_event::<PredictionMatch>()
+            .add_event::<NearestTrajectories>()
             .add_systems(Startup, load_motion_data)
             // .add_systems(Update, match_trajectory)
+            .add_systems(Update, pose_match.run_if(in_state(GameMode::Play)))
             .add_systems(Update, trajectory_match.run_if(in_state(GameMode::Play)));
     }
 }
@@ -37,8 +42,14 @@ fn trajectory_match(
     mut match_evr: EventReader<TrajectoryMatch>,
     trajectory_config: Res<TrajectoryConfig>,
     mut motion_matching_result: ResMut<MotionMatchingResult>,
-    // mut nearest_trajectories_writer: EventWriter<NearestTrajectories>,
+    // mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
+    // mut main_character: Query<&JointMap, With<MainScene>>,
+    mut nearest_trajectories_writer: EventWriter<NearestTrajectories>,
+    mut match_time: Local<f32>,
+    time: Res<Time>,
 ) {
+    const MATCH_INTERVAL: f32 = 0.4;
+    *match_time -= time.delta_seconds();
     // if match_evr.is_empty() {
     //     return;
     // }
@@ -53,84 +64,149 @@ fn trajectory_match(
     let num_segments = trajectory_config.num_segments();
     let num_points = trajectory_config.num_points();
 
-    for (trajectory, transform) in q_trajectory.iter() {
-        let entity_inv_matrix = transform.compute_matrix().inverse();
-        let entity_trajectory = trajectory
-            .iter()
-            .map(|&(mut point)| {
-                point.translation = entity_inv_matrix
-                    .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
-                    .xz();
-                point
-            })
-            .collect::<Vec<_>>();
+    if *match_time <= 0.0 {
+        *match_time = MATCH_INTERVAL;
+        for (trajectory, transform) in q_trajectory.iter() {
+            let entity_inv_matrix = transform.compute_matrix().inverse();
+            let entity_trajectory = trajectory
+                .iter()
+                .map(|&(mut point)| {
+                    point.translation = entity_inv_matrix
+                        .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
+                        .xz();
+                    point
+                })
+                .collect::<Vec<_>>();
 
-        // println!("{:#?}", entity_trajectory);
+            // println!("{:#?}", entity_trajectory);
 
-        // let mut best_match_distance = f32::MAX;
-        // let mut best_match_trajectory = None;
+            // let mut best_match_distance = f32::MAX;
+            // let mut best_match_trajectory = None;
 
-        let mut stack_count = 0;
-        for (chunk_index, chunk) in motion_data.trajectory_data.iter_chunk().enumerate() {
-            // Number of trajectory in this chunk.
-            let num_trajectories = chunk.len() - num_segments;
+            let mut stack_count = 0;
+            for (chunk_index, chunk) in motion_data.trajectory_data.iter_chunk().enumerate() {
+                // Number of trajectory in this chunk.
+                let num_trajectories = chunk.len() - num_segments;
 
-            for chunk_offset in 0..num_trajectories {
-                let trajectory_data = &chunk[chunk_offset..chunk_offset + num_points];
+                for chunk_offset in 0..num_trajectories {
+                    let trajectory_data = &chunk[chunk_offset..chunk_offset + num_points];
 
-                // Center point of trajectory
-                let data_inv_matrix = trajectory_data[trajectory_config.history_count]
-                    .matrix
-                    .inverse();
-                let data_trajectory = trajectory_data
-                    .iter()
-                    .map(|point| {
-                        let (.., translation) = point.matrix.to_scale_rotation_translation();
-                        TrajectoryPoint {
-                            translation: data_inv_matrix.transform_point3(translation).xz()
-                                * BVH_SCALE_RATIO,
-                            velocity: point.velocity * BVH_SCALE_RATIO,
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                // println!("{:#?}", data_trajectory);
+                    // Center point of trajectory
+                    let data_inv_matrix = trajectory_data[trajectory_config.history_count]
+                        .matrix
+                        .inverse();
+                    let data_trajectory = trajectory_data
+                        .iter()
+                        .map(|point| {
+                            let (.., translation) = point.matrix.to_scale_rotation_translation();
+                            TrajectoryPoint {
+                                translation: data_inv_matrix.transform_point3(translation).xz()
+                                    * BVH_SCALE_RATIO,
+                                velocity: point.velocity * BVH_SCALE_RATIO,
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    // println!("{:#?}", data_trajectory);
 
-                let distance = calc_trajectory_distance(&entity_trajectory, &data_trajectory);
-                // println!("Distance {}: {}", chunk_offset, distance);
+                    let distance = calc_trajectory_distance(&entity_trajectory, &data_trajectory);
+                    // println!("Distance {}: {}", chunk_offset, distance);
 
-                // motion_matching_result.nearest_trajectories = distance;
+                    // motion_matching_result.nearest_trajectories = distance;
 
-                if stack_count < N {
-                    // Stack not yet full, push into it
-                    nearest_trajectories_stack[stack_count] = Some(NearestTrajectory {
-                        distance,
-                        chunk_index,
-                        chunk_offset,
-                    });
-                } else if let Some(max_trajectory) = nearest_trajectories_stack[N - 1] {
-                    if distance < max_trajectory.distance {
-                        nearest_trajectories_stack[N - 1] = Some(NearestTrajectory {
+                    if stack_count < N {
+                        // Stack not yet full, push into it
+                        nearest_trajectories_stack[stack_count] = Some(NearestTrajectory {
                             distance,
                             chunk_index,
                             chunk_offset,
-                        })
+                        });
+                    } else if let Some(max_trajectory) = nearest_trajectories_stack[N - 1] {
+                        if distance < max_trajectory.distance {
+                            nearest_trajectories_stack[N - 1] = Some(NearestTrajectory {
+                                distance,
+                                chunk_index,
+                                chunk_offset,
+                            })
+                        }
+                    }
+
+                    stack_count = usize::min(stack_count + 1, N);
+
+                    // Sort so that trajectories with the largest distance
+                    // is placed as the final element in the stack
+                    nearest_trajectories_stack.sort_by(|t0, t1| match (t0, t1) {
+                        (None, None) => std::cmp::Ordering::Equal,
+                        (None, Some(_)) => std::cmp::Ordering::Greater,
+                        (Some(_), None) => std::cmp::Ordering::Less,
+                        (Some(t0), Some(t1)) => t0.distance.total_cmp(&t1.distance),
+                    });
+                }
+            }
+
+            motion_matching_result.nearest_trajectories = nearest_trajectories_stack;
+            nearest_trajectories_writer.send(NearestTrajectories(nearest_trajectories_stack));
+        }
+    }
+}
+
+fn pose_match(
+    motion_data: MotionData,
+    mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
+    q_players: Query<(&JointMap, Entity), With<TrajectoryPosePair>>,
+    mut nearest_trajectories_reader: EventReader<NearestTrajectories>,
+    mut motion_matching_result: ResMut<MotionMatchingResult>,
+    // q_entities: Query<Entity, With<TrajectoryPosePair>>,
+    mut jump_evw: EventWriter<JumpToPose>,
+) {
+    let Some(motion_data) = motion_data.get() else {
+        return;
+    };
+    let mut smallest_pose_distance = f32::MAX;
+    let mut best_trajectory_index = 0;
+
+    if nearest_trajectories_reader.is_empty() {
+        return;
+    }
+
+    for (joint_map, entity) in q_players.iter() {
+        for nearest_trajectories in nearest_trajectories_reader.read() {
+            println!("Nearest Traj No: {:?}", nearest_trajectories.len());
+            for (i, nearest_traj) in nearest_trajectories.iter().enumerate() {
+                if let Some(trajectory) = nearest_traj {
+                    let pose_distance =
+                        match_pose(trajectory, motion_data, &mut q_transforms, joint_map);
+
+                    motion_matching_result.pose_matching_result[i] = pose_distance;
+
+                    if pose_distance < smallest_pose_distance {
+                        smallest_pose_distance = pose_distance;
+                        best_trajectory_index = i;
+                        // println!("Chunk Index: {}", best_trajectory_index);
                     }
                 }
 
-                stack_count = usize::min(stack_count + 1, N);
+                if let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] {
+                    motion_matching_result.best_pose_result.chunk_index =
+                        best_trajectory.chunk_index;
+                    motion_matching_result.best_pose_result.chunk_offset =
+                        best_trajectory.chunk_offset;
+                    motion_matching_result.best_pose_result.trajectory_distance =
+                        best_trajectory.distance;
+                    motion_matching_result.best_pose_result.pose_distance = smallest_pose_distance;
 
-                // Sort so that trajectories with the largest distance
-                // is placed as the final element in the stack
-                nearest_trajectories_stack.sort_by(|t0, t1| match (t0, t1) {
-                    (None, None) => std::cmp::Ordering::Equal,
-                    (None, Some(_)) => std::cmp::Ordering::Greater,
-                    (Some(_), None) => std::cmp::Ordering::Less,
-                    (Some(t0), Some(t1)) => t0.distance.total_cmp(&t1.distance),
-                });
+                    println!("Entity {entity}");
+                    jump_evw.send(JumpToPose(
+                        MotionPose {
+                            chunk_index: best_trajectory.chunk_index,
+                            time: motion_data
+                                .trajectory_data
+                                .time_from_chunk_offset(best_trajectory.chunk_offset),
+                        },
+                        entity,
+                    ));
+                }
             }
         }
-
-        motion_matching_result.nearest_trajectories = nearest_trajectories_stack;
     }
 }
 
@@ -322,8 +398,8 @@ pub struct NearestTrajectory {
     pub chunk_offset: usize,
 }
 
-// #[derive(Event, Debug, Deref, DerefMut)]
-// pub struct NearestTrajectories([Option<NearestTrajectory>; 5]);
+#[derive(Event, Debug, Deref, DerefMut)]
+pub struct NearestTrajectories([Option<NearestTrajectory>; 5]);
 
 /// /// Find `N` number of nearest trajectories.
 ///

@@ -65,17 +65,17 @@ fn test(
         time.set_relative_speed(1.0);
     }
 
-    if input.just_pressed(KeyCode::Space) {
-        for entity in q_entities.iter() {
-            jump_evw.send(JumpToPose(
-                MotionPose {
-                    chunk_index: 0,
-                    time: 2.0,
-                },
-                entity,
-            ));
-        }
-    }
+    // if input.just_pressed(KeyCode::Space) {
+    //     for entity in q_entities.iter() {
+    //         jump_evw.send(JumpToPose(
+    //             MotionPose {
+    //                 chunk_index: 0,
+    //                 time: 2.0,
+    //             },
+    //             entity,
+    //         ));
+    //     }
+    // }
 }
 
 fn apply_root_transform(
