@@ -230,8 +230,8 @@ fn pose_match(
 fn prediction_match(
     motion_data: MotionData,
     q_trajectory: Query<(&Trajectory, &Transform)>,
-    mut match_evr: EventWriter<TrajectoryMatch>,
     trajectory_config: Res<TrajectoryConfig>,
+    mut match_evr: EventWriter<TrajectoryMatch>,
     mut jump_evr: EventReader<JumpToPose>,
 ) {
     let threshold = 0.02;
