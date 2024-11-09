@@ -22,9 +22,11 @@ impl Plugin for MotionMatchingPlugin {
         .add_event::<PredictionMatch>()
         .add_event::<NearestTrajectories>()
         .add_systems(Startup, load_motion_data)
+        .add_systems(Update, test)
         .add_systems(
             Update,
-            (test, trajectory_match, pose_match)
+            (prediction_match, trajectory_match, pose_match)
+                .chain()
                 .in_set(MainSet::MotionMatching)
                 .run_if(in_state(GameMode::Play)),
         );
@@ -225,11 +227,91 @@ fn pose_match(
 /// Match only the prediction trajectory on the current playing trajectory.
 ///
 /// Performs a match [`PredictionMatch`] event.
-fn prediction_match(mut match_evr: EventReader<PredictionMatch>) {
-    // if match_evr.is_empty() {
-    //     return;
-    // }
-    // match_evr.clear();
+fn prediction_match(
+    motion_data: MotionData,
+    q_trajectory: Query<(&Trajectory, &Transform)>,
+    mut match_evr: EventWriter<TrajectoryMatch>,
+    trajectory_config: Res<TrajectoryConfig>,
+    mut jump_evr: EventReader<JumpToPose>,
+) {
+    let threshold = 0.02;
+
+    let Some(motion_data) = motion_data.get() else {
+        return;
+    };
+
+    let num_segments = trajectory_config.num_predict_segments();
+    let num_points = trajectory_config.num_predict_points();
+
+    for (trajectory, transform) in q_trajectory.iter() {
+        let entity_inv_matrix = transform.compute_matrix().inverse();
+        let entity_trajectory = trajectory
+            .iter()
+            .skip(trajectory_config.history_count)
+            .map(|&(mut point)| {
+                point.translation = entity_inv_matrix
+                    .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
+                    .xz();
+                point
+            })
+            .collect::<Vec<_>>();
+
+        for jump_to_pose in jump_evr.read() {
+            let curr_chunk_index = jump_to_pose.chunk_index;
+            let curr_time = jump_to_pose.time;
+            // println!("Time {}", curr_time);
+            let chunk_offset = motion_data
+                .trajectory_data
+                .chunk_offset_from_time(curr_time);
+            // println!("Chunk Offset: {}", chunk_offset);
+
+            let current_chunk = motion_data.trajectory_data.get_chunk(curr_chunk_index);
+            // println!("Current Chunk: {:?}", current_chunk);
+
+            if let Some(chunk) = current_chunk {
+                let num_trajectories =
+                    calculate_trajectory_count(chunk.len(), chunk_offset, num_segments);
+                // println!("Number of traj: {}", num_trajectories);
+
+                if num_trajectories <= num_segments {
+                    match_evr.send(TrajectoryMatch);
+                    return;
+                } else {
+                    let trajectory_data = &chunk[chunk_offset..chunk_offset + num_points];
+
+                    // Center point of trajectory
+                    let data_inv_matrix = trajectory_data[0].matrix.inverse();
+                    let data_trajectory = trajectory_data
+                        .iter()
+                        .map(|point| {
+                            let (.., translation) = point.matrix.to_scale_rotation_translation();
+                            TrajectoryPoint {
+                                translation: data_inv_matrix.transform_point3(translation).xz()
+                                    * BVH_SCALE_RATIO,
+                                velocity: point.velocity * BVH_SCALE_RATIO,
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    let distance = entity_trajectory.distance(&data_trajectory);
+                    println!("Distance: {}", distance);
+                    if distance >= threshold {
+                        println!("{}", "Sending");
+                        match_evr.send(TrajectoryMatch);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn calculate_trajectory_count(chunk_len: usize, offset: usize, num_segments: usize) -> usize {
+    let length_from_offset = chunk_len.saturating_sub(offset);
+    println!("Chunk len from curr chunk offset: {}", length_from_offset);
+    if length_from_offset <= num_segments {
+        0
+    } else {
+        length_from_offset - num_segments
+    }
 }
 
 #[derive(Event, Debug)]
