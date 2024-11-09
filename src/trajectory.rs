@@ -277,6 +277,16 @@ impl TrajectoryConfig {
         self.num_segments() + 1
     }
 
+    #[inline]
+    pub fn num_predict_segments(&self) -> usize {
+        self.predict_count
+    }
+
+    #[inline]
+    pub fn num_predict_points(&self) -> usize {
+        self.num_predict_segments() + 1
+    }
+
     /// Total duration of the entire trajectory.
     #[inline]
     pub fn total_time(&self) -> f32 {
