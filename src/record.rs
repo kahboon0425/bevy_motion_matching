@@ -4,12 +4,19 @@ use std::marker::PhantomData;
 
 use bevy::prelude::*;
 
+use crate::MainSet;
+
 #[derive(Default)]
 pub struct RecordPlugin<T: Recordable>(PhantomData<T>);
 
 impl<T: Recordable> Plugin for RecordPlugin<T> {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreUpdate, (record_len::<T>, record::<T>).chain());
+        app.add_systems(
+            Update,
+            (record_len::<T>, record::<T>)
+                .chain()
+                .in_set(MainSet::Record),
+        );
     }
 }
 

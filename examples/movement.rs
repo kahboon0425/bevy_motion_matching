@@ -79,9 +79,7 @@ fn setup(
             material: materials.add(Color::WHITE),
             ..default()
         },
-        RecordsBundle::<Transform2d>::new(100),
-        RecordsBundle::<Velocity>::new(100),
-        TrajectoryBundle::default(),
+        TrajectoryBundle::new(100),
     ));
 }
 

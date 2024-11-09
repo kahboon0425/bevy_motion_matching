@@ -11,9 +11,17 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<MovementConfig>()
-            .add_systems(PreUpdate, movement_direction.in_set(MainSet::Action))
-            .add_systems(Update, draw_player_direction);
+        app.insert_resource(MovementConfig {
+            walk_speed: 4.0,
+            run_speed: 6.0,
+            lerp_factor: 10.0,
+        })
+        .add_systems(
+            Update,
+            (movement_direction, draw_player_direction)
+                .chain()
+                .in_set(MainSet::Action),
+        );
     }
 }
 
@@ -82,14 +90,4 @@ pub struct MovementConfig {
     pub walk_speed: f32,
     pub run_speed: f32,
     pub lerp_factor: f32,
-}
-
-impl Default for MovementConfig {
-    fn default() -> Self {
-        Self {
-            walk_speed: 2.0,
-            run_speed: 4.0,
-            lerp_factor: 10.0,
-        }
-    }
 }

@@ -1,4 +1,6 @@
 use bevy::prelude::*;
+use trajectory::Velocity;
+use transform2d::Transform2d;
 
 pub mod action;
 pub mod bvh_manager;
@@ -21,6 +23,18 @@ pub struct MotionMatchingAppPlugin;
 
 impl Plugin for MotionMatchingAppPlugin {
     fn build(&self, app: &mut App) {
+        app.configure_sets(
+            Update,
+            (
+                MainSet::Action,
+                MainSet::Record,
+                MainSet::Trajectory,
+                MainSet::MotionMatching,
+                MainSet::Animation,
+            )
+                .chain(),
+        );
+
         app.add_plugins((
             DefaultPlugins.set(AssetPlugin {
                 mode: AssetMode::Processed,
@@ -28,6 +42,8 @@ impl Plugin for MotionMatchingAppPlugin {
             }),
             draw_axes::DrawAxesPlugin,
             transform2d::Transform2dPlugin,
+            record::RecordPlugin::<Transform2d>::default(),
+            record::RecordPlugin::<Velocity>::default(),
             trajectory::TrajectoryPlugin,
             action::ActionPlugin,
             motion::MotionPlugin,
@@ -56,6 +72,7 @@ pub enum GameMode {
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MainSet {
     Action,
+    Record,
     Trajectory,
     MotionMatching,
     Animation,
