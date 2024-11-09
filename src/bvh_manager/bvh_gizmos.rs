@@ -1,3 +1,5 @@
+use std::arch::x86_64::_SIDD_UNIT_MASK;
+
 use bevy::prelude::*;
 use bevy_bvh_anim::bvh_anim::ChannelType;
 use bevy_bvh_anim::prelude::*;
@@ -114,7 +116,7 @@ fn armature_gizmos(
 }
 
 fn bvh_trail_gizmos(
-    config: Res<BvhTrailConfig>,
+    mut config: ResMut<BvhTrailConfig>,
     selected_bvh_asset: Res<SelectedBvhAsset>,
     bvh_assets: Res<Assets<BvhAsset>>,
     mut gizmos: Gizmos,
@@ -122,6 +124,8 @@ fn bvh_trail_gizmos(
     palette: Res<ColorPalette>,
     movement_config: Res<MovementConfig>,
 ) {
+    let mut cumulative_velocity = Vec2::ZERO;
+    let mut frame_count = 0;
     if config.draw_armatures == false && config.draw_trajectory == false {
         return;
     }
@@ -195,6 +199,9 @@ fn bvh_trail_gizmos(
 
             // Calculate velocity.
             let velocity = (next_translation - curr_translation) / frame_time;
+            cumulative_velocity += velocity;
+            frame_count += 1;
+
             let angle = f32::atan2(velocity.x, velocity.y);
             let velocity_magnitude = velocity.length();
 
@@ -252,4 +259,11 @@ fn bvh_trail_gizmos(
 
         time += config.interval;
     }
+
+    let average_velocity = if frame_count > 0 {
+        cumulative_velocity / frame_count as f32
+    } else {
+        Vec2::ZERO
+    };
+    config.average_velocity = average_velocity;
 }

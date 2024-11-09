@@ -114,6 +114,7 @@ fn bvh_trail_config(ui: &mut egui::Ui, world: &mut World) {
             )
             .text("Interval"),
         );
+        ui.label(format!("Average Velocity: {}", config.average_velocity));
     })
 }
 
@@ -160,6 +161,7 @@ pub struct BvhTrailConfig {
     pub draw_armatures: bool,
     pub draw_trajectory: bool,
     pub interval: f32,
+    pub average_velocity: Vec2,
 }
 
 impl BvhTrailConfig {
@@ -173,6 +175,7 @@ impl Default for BvhTrailConfig {
             draw_armatures: true,
             draw_trajectory: true,
             interval: 0.1667,
+            average_velocity: Vec2::ZERO,
         }
     }
 }
