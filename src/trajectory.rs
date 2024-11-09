@@ -285,9 +285,6 @@ impl TrajectoryDistance for [TrajectoryPoint] {
             let offset0 = self[i].translation - self[i - 1].translation;
             let offset1 = rhs[i].translation - rhs[i - 1].translation;
 
-            println!("{} - {}", self[i].translation, self[i - 1].translation);
-            // println!("dist({offset0}, {offset1})");
-
             offset_distance += Vec2::distance(offset1, offset0);
         }
 
@@ -301,8 +298,7 @@ impl TrajectoryDistance for [TrajectoryPoint] {
         offset_distance /= len.saturating_sub(1) as f32;
         velocity_distance /= len as f32;
 
-        offset_distance
-        // offset_distance + velocity_distance
+        offset_distance + velocity_distance
     }
 }
 
