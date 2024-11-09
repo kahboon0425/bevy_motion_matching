@@ -49,13 +49,13 @@ impl Plugin for MotionPlayerPlugin {
     }
 }
 
-/// Reset root and joint transforms to T-Pose.
-fn init_pose() {}
+// /// Reset root and joint transforms to T-Pose.
+// fn init_pose() {}
 
 fn test(
-    q_entities: Query<Entity, With<TrajectoryPosePair>>,
+    // q_entities: Query<Entity, With<TrajectoryPosePair>>,
+    // mut jump_evw: EventWriter<JumpToPose>,
     input: Res<ButtonInput<KeyCode>>,
-    mut jump_evw: EventWriter<JumpToPose>,
     mut time: ResMut<Time<Virtual>>,
 ) {
     if input.pressed(KeyCode::ControlLeft) {
@@ -68,13 +68,13 @@ fn test(
 
     // if input.just_pressed(KeyCode::Space) {
     //     for entity in q_entities.iter() {
-    //         jump_evw.send(JumpToPose(
-    //             MotionPose {
+    //         jump_evw.send(JumpToPose {
+    //             motion_pose: MotionPose {
     //                 chunk_index: 0,
-    //                 time: 2.0,
+    //                 time: 3.0,
     //             },
     //             entity,
-    //         ));
+    //         });
     //     }
     // }
 }
@@ -88,7 +88,6 @@ fn apply_root_transform(
         &mut Transform2d,
     )>,
     mut q_transforms: Query<&mut Transform>,
-    input: Res<ButtonInput<KeyCode>>,
 ) {
     let Some(root_joint) = motion_data
         .get()
@@ -112,13 +111,21 @@ fn apply_root_transform(
             if let Some(traj_pose) = &traj_pose_pair[i] {
                 let root_transform2d = traj_pose.entity_root_transform2d;
 
-                let (traj_root_pos, traj_root_rot) = traj_pose.traj_root_pos_rot;
-                let (traj_pos, traj_rot) = traj_pose.pose.get_pos_rot(root_joint);
+                let traj_inv_matrix = traj_pose.traj_root_matrix.inverse();
 
-                // Offset from trajectory root to current trajcetory.
-                let mut offset_pos = (traj_pos - traj_root_pos) * BVH_SCALE_RATIO;
-                // traj_root_rot * offset_rot = traj_rot.
-                let offset_rot = (traj_root_rot.inverse() * traj_rot).normalize();
+                let pose_matrix = traj_pose.pose.get_matrix(root_joint);
+                let (_, pose_rot, pose_pos) = pose_matrix.to_scale_rotation_translation();
+
+                // Offset from trajectory root to current pose.
+                let offset_matrix = traj_inv_matrix * pose_matrix;
+                let (_, offset_rot, mut offset_pos) = offset_matrix.to_scale_rotation_translation();
+                offset_pos *= BVH_SCALE_RATIO;
+
+                // Current pose forward direction.
+                let pose_forward = pose_matrix.transform_vector3(Vec3::Z).xz().normalize();
+                let pose_forward_angle = f32::atan2(pose_forward.x, pose_forward.y);
+
+                // Offset forward direction.
                 let offset_forward = offset_rot.mul_vec3(Vec3::Z).xz().normalize();
                 let offset_forward_angle = f32::atan2(offset_forward.x, offset_forward.y);
 
@@ -129,9 +136,9 @@ fn apply_root_transform(
                     .to_scaled_axis()
                     .y;
 
-                let local_y_pos = traj_pos.y;
+                let local_y_pos = pose_pos.y;
                 let local_xz_rot =
-                    (Quat::from_rotation_y(offset_forward_angle).inverse() * traj_rot).normalize();
+                    (Quat::from_rotation_y(pose_forward_angle).inverse() * pose_rot).normalize();
 
                 final_root_config[i] = Some(RootConfig {
                     world_transform2d: Transform2d { translation, angle },
@@ -206,22 +213,22 @@ fn jump_to_pose(
         return;
     };
 
-    for JumpToPose(motion_pose, entity) in jump_evr.read() {
+    for jump_to_pose in jump_evr.read() {
         let Ok((mut motion_player, mut traj_pose_pair, transform2d)) =
-            q_motion_players.get_mut(*entity)
+            q_motion_players.get_mut(jump_to_pose.entity)
         else {
             continue;
         };
 
         motion_player.switch_target_index();
-        let Some(pose) = motion_pose.get_pose(pose_data) else {
+        let Some(pose) = jump_to_pose.get_pose(pose_data) else {
             continue;
         };
 
         let index = motion_player.target_frame_index;
         traj_pose_pair[index] = Some(TrajectoryPose {
-            motion_pose: *motion_pose,
-            traj_root_pos_rot: pose.get_pos_rot(root_joint),
+            motion_pose: **jump_to_pose,
+            traj_root_matrix: pose.get_matrix(root_joint),
             entity_root_transform2d: *transform2d,
             pose,
             elapsed_time: 0.0,
@@ -315,8 +322,12 @@ pub enum MotionPlayerSet {
     Interpolate,
 }
 
-#[derive(Event, Debug)]
-pub struct JumpToPose(pub MotionPose, pub Entity);
+#[derive(Event, Debug, Deref, DerefMut)]
+pub struct JumpToPose {
+    #[deref]
+    pub motion_pose: MotionPose,
+    pub entity: Entity,
+}
 
 #[derive(Bundle, Default)]
 pub struct MotionPlayerBundle {
@@ -424,7 +435,7 @@ impl MotionPose {
 pub struct TrajectoryPose {
     motion_pose: MotionPose,
     /// The matrix of the pose's root joint where the trajectory starts.
-    traj_root_pos_rot: (Vec3, Quat),
+    traj_root_matrix: Mat4,
     /// The matrix of the entity's root joint where the trajectory starts.
     entity_root_transform2d: Transform2d,
     pose: Pose,

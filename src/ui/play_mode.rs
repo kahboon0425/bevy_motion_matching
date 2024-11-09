@@ -2,15 +2,13 @@ use bevy::ecs::system::SystemState;
 use bevy::prelude::*;
 use bevy_egui::egui;
 use bevy_egui::egui::Color32;
-use egui_plot::{Line, Plot, PlotPoints};
+use egui_plot::{Arrows, Legend, Line, Plot, PlotPoints};
 
-use crate::bvh_manager::bvh_player::BvhPlayer;
-use crate::motion::chunk::ChunkIterator;
-use crate::motion::motion_player::MotionPlayer;
 use crate::motion::MotionData;
-use crate::motion_matching::MotionMatchingResult;
+use crate::motion_matching::MatchTrajectory;
 use crate::trajectory::TrajectoryPlot;
-use crate::GameMode;
+use crate::{motion::chunk::ChunkIterator, trajectory::TrajectoryConfig};
+use crate::{GameMode, BVH_SCALE_RATIO};
 
 use super::groupbox;
 use egui_extras::{Column, TableBuilder};
@@ -24,13 +22,21 @@ pub fn play_mode_panel(ui: &mut egui::Ui, world: &mut World) {
 fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     let mut params = SystemState::<(
         MotionData,
-        Res<State<GameMode>>,
         ResMut<NextState<GameMode>>,
+        Res<State<GameMode>>,
         Res<MotionMatchingResult>,
         Res<TrajectoryPlot>,
+        Res<TrajectoryConfig>,
     )>::new(world);
-    let (motion_data, game_mode, mut next_game_mode, motion_matching_result, trajectory_points) =
-        params.get_mut(world);
+
+    let (
+        motion_data,
+        mut next_game_mode,
+        game_mode,
+        motion_matching_result,
+        traj_plot,
+        traj_config,
+    ) = params.get_mut(world);
 
     let Some(motion_asset) = motion_data.get() else {
         return;
@@ -76,56 +82,73 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
 
     ui.add_space(10.0);
     groupbox(ui, |ui| {
-        ui.label("Trajectories Matching Visualization");
+        ui.label("Trajectory Matching Visualization");
 
         let motion_trajs = &motion_asset.trajectory_data;
 
-        let chunk_index = motion_matching_result.best_pose_result.chunk_index;
-        let chunk_offset = motion_matching_result.best_pose_result.chunk_offset;
-
-        let Some(trajs) = motion_trajs.get_chunk(chunk_index) else {
+        let Some(selected_traj) = motion_matching_result
+            .trajectories_poses
+            .get(motion_matching_result.selected_trajectory)
+            .map(|(traj, _)| traj)
+        else {
             return;
         };
-        let trajectory = &trajs[chunk_offset..chunk_offset + 7];
+
+        let Some(trajs) = motion_trajs.get_chunk(selected_traj.chunk_index) else {
+            return;
+        };
+
+        let chunk_offset = selected_traj.chunk_offset;
+        let data_traj = &trajs[chunk_offset..chunk_offset + traj_config.num_points()];
 
         // Center point of trajectory
-        let inv_matrix = trajectory[3].matrix.inverse();
+        let data_inv_matrix = data_traj[traj_config.history_count].matrix.inverse();
 
-        let best_trajectory_points = trajectory
+        let data_traj = data_traj
             .iter()
-            .map(|trajectory| {
-                inv_matrix.transform_point3(trajectory.matrix.to_scale_rotation_translation().2)
+            .map(|traj| {
+                data_inv_matrix.transform_point3(traj.matrix.to_scale_rotation_translation().2)
             })
             // Rescale?
-            .map(|v| (v.xz() * 0.01).as_dvec2().to_array())
+            .map(|v| (v.xz() * BVH_SCALE_RATIO).as_dvec2().to_array())
             .collect::<Vec<_>>();
 
-        let plot_points =
-            PlotPoints::from_iter(trajectory_points.trajectories_points.iter().cloned());
+        // Asset data's trajectory.
+        let data_traj_arrows = Arrows::new(
+            PlotPoints::from_iter(data_traj[..data_traj.len() - 2].iter().cloned()),
+            PlotPoints::from_iter(data_traj[1..].iter().cloned()),
+        )
+        .color(Color32::LIGHT_YELLOW)
+        .name("Data Trajectory (Matched)");
 
-        let trajectory_line = Line::new(plot_points)
-            .color(Color32::from_rgb(255, 0, 0))
-            .name("Trajectory");
+        // Entity's trajectory.
+        let traj_arrows = Arrows::new(
+            PlotPoints::from_iter(traj_plot[..traj_plot.len() - 2].iter().cloned()),
+            PlotPoints::from_iter(traj_plot[1..].iter().cloned()),
+        )
+        .color(Color32::LIGHT_BLUE)
+        .name("Trajectory");
 
-        let best_pose_line = Line::new(PlotPoints::from_iter(best_trajectory_points))
-            .color(Color32::from_rgb(0, 255, 0))
-            .name("Best Pose");
-        // let plot_points_2 = PlotPoints::from_iter(vec![
-        //     [0.0, 0.0], // Start point
-        //     [1.0, 1.0], // End point
-        // ]);
-
-        // let trajectory_line_2 = Line::new(plot_points_2)
-        //     .color(Color32::from_rgb(255, 0, 255))
-        //     .name("Trajectory");
-
-        Plot::new("trajectory_plot")
-            .width(500.0)
+        // Plot the graph.
+        Plot::new("trajectory_match_viz")
+            .width(300.0)
             .height(300.0)
+            .legend(Legend::default())
+            .center_x_axis(true)
+            .center_y_axis(true)
+            .data_aspect(1.0)
             .show(ui, |plot_ui| {
-                plot_ui.line(best_pose_line);
-                plot_ui.line(trajectory_line);
-                // plot_ui.line(trajectory_line_y);
+                // x-axis
+                plot_ui.line(
+                    Line::new(PlotPoints::from_iter([[0.0, 0.0], [0.2, 0.0]])).color(Color32::RED),
+                );
+                // y-axis
+                plot_ui.line(
+                    Line::new(PlotPoints::from_iter([[0.0, 0.0], [0.0, 0.2]]))
+                        .color(Color32::GREEN),
+                );
+                plot_ui.arrows(data_traj_arrows);
+                plot_ui.arrows(traj_arrows);
             });
     });
 
@@ -155,75 +178,39 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
                 });
             })
             .body(|mut body| {
-                for (nearest_trajectory, pose_matching_result) in motion_matching_result
-                    .nearest_trajectories
-                    .iter()
-                    .zip(motion_matching_result.pose_matching_result.iter())
+                for (i, (trajectory, pose_dist)) in
+                    motion_matching_result.trajectories_poses.iter().enumerate()
                 {
-                    if let Some(trajectory) = nearest_trajectory {
-                        let is_best_pose = trajectory.chunk_index
-                            == motion_matching_result.best_pose_result.chunk_index
-                            && trajectory.chunk_offset
-                                == motion_matching_result.best_pose_result.chunk_offset
-                            && trajectory
-                                .distance
-                                .eq(&motion_matching_result.best_pose_result.trajectory_distance)
-                            && pose_matching_result
-                                .eq(&motion_matching_result.best_pose_result.pose_distance);
+                    let row_color = match i == motion_matching_result.selected_trajectory {
+                        true => Some(Color32::GREEN),
+                        false => Some(Color32::GRAY),
+                    };
 
-                        let row_color = if is_best_pose {
-                            Some(Color32::RED)
-                        } else {
-                            Some(Color32::GRAY)
-                        };
-                        body.row(20.0, |mut row| {
-                            row.col(|ui| {
-                                ui.visuals_mut().override_text_color = row_color;
+                    body.row(20.0, |mut row| {
+                        row.col(|ui| {
+                            ui.visuals_mut().override_text_color = row_color;
 
-                                ui.label(format!("{}", trajectory.chunk_index));
-                                ui.separator();
-                            });
-                            row.col(|ui| {
-                                ui.visuals_mut().override_text_color = row_color;
-                                ui.label(format!("{}", trajectory.chunk_offset));
-                                ui.separator();
-                            });
-                            row.col(|ui| {
-                                ui.visuals_mut().override_text_color = row_color;
-                                ui.label(format!("{}", trajectory.distance));
-                                ui.separator();
-                            });
-                            row.col(|ui| {
-                                ui.visuals_mut().override_text_color = row_color;
-                                ui.label(format!("{}", pose_matching_result));
-                                ui.separator();
-                            });
+                            ui.label(format!("{}", trajectory.chunk_index));
+                            ui.separator();
                         });
-                    }
+                        row.col(|ui| {
+                            ui.visuals_mut().override_text_color = row_color;
+                            ui.label(format!("{}", trajectory.chunk_offset));
+                            ui.separator();
+                        });
+                        row.col(|ui| {
+                            ui.visuals_mut().override_text_color = row_color;
+                            ui.label(format!("{}", trajectory.distance));
+                            ui.separator();
+                        });
+                        row.col(|ui| {
+                            ui.visuals_mut().override_text_color = row_color;
+                            ui.label(format!("{}", pose_dist));
+                            ui.separator();
+                        });
+                    });
                 }
             });
-    });
-
-    ui.add_space(10.0);
-
-    ui.label("Best Match Pose");
-    groupbox(ui, |ui| {
-        ui.label(format!(
-            "Chunk Index: {}",
-            motion_matching_result.best_pose_result.chunk_index
-        ));
-        ui.label(format!(
-            "Chunk Offset: {}",
-            motion_matching_result.best_pose_result.chunk_offset
-        ));
-        ui.label(format!(
-            "Trajectory Distance: {}",
-            motion_matching_result.best_pose_result.trajectory_distance
-        ));
-        ui.label(format!(
-            "Pose Distance: {}",
-            motion_matching_result.best_pose_result.pose_distance
-        ));
     });
 
     ui.add_space(10.0);
@@ -240,4 +227,13 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
 
     ui.label("Memory Usage");
     ui.add_space(10.0);
+}
+
+#[derive(Default, Resource)]
+pub struct MotionMatchingResult {
+    /// Match trajectories and pose distances.
+    pub trajectories_poses: Vec<(MatchTrajectory, f32)>,
+    pub selected_trajectory: usize,
+    pub traj_matching_time: String,
+    pub pose_matching_time: String,
 }

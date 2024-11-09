@@ -9,7 +9,6 @@ pub mod draw_axes;
 pub mod motion;
 pub mod motion_matching;
 pub mod player;
-pub mod pose_matching;
 pub mod record;
 pub mod scene_loader;
 pub mod trajectory;
@@ -40,7 +39,6 @@ impl Plugin for MotionMatchingAppPlugin {
                 mode: AssetMode::Processed,
                 ..default()
             }),
-            draw_axes::DrawAxesPlugin,
             transform2d::Transform2dPlugin,
             record::RecordPlugin::<Transform2d>::default(),
             record::RecordPlugin::<Velocity>::default(),
@@ -53,8 +51,7 @@ impl Plugin for MotionMatchingAppPlugin {
             ui::UiPlugin,
             player::PlayerPlugin,
             motion_matching::MotionMatchingPlugin,
-            // TODO: Merge this into motion matching plugin.
-            pose_matching::PoseMatchingPlugin,
+            draw_axes::DrawAxesPlugin,
         ));
 
         app.init_state::<GameMode>();

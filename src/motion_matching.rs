@@ -3,42 +3,37 @@ use bevy::prelude::*;
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion::chunk::ChunkIterator;
 use crate::motion::motion_asset::MotionAsset;
-use crate::motion::motion_player::{JumpToPose, MotionPose, TrajectoryPosePair};
+use crate::motion::motion_player::{JumpToPose, MotionPose};
 use crate::motion::{MotionData, MotionHandle};
-use crate::player::PlayerMarker;
-use crate::pose_matching::match_pose;
-use crate::scene_loader::MainScene;
 use crate::trajectory::{Trajectory, TrajectoryConfig, TrajectoryDistance, TrajectoryPoint};
+use crate::ui::play_mode::MotionMatchingResult;
 use crate::{GameMode, MainSet, BVH_SCALE_RATIO};
 
 pub struct MotionMatchingPlugin;
 
 impl Plugin for MotionMatchingPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<MotionMatchingResult>()
-            .add_event::<TrajectoryMatch>()
-            .add_event::<PredictionMatch>()
-            .add_event::<NearestTrajectories>()
-            .add_systems(Startup, load_motion_data)
-            .add_systems(
-                Update,
-                (test, trajectory_match, pose_match)
-                    .in_set(MainSet::MotionMatching)
-                    .run_if(in_state(GameMode::Play)),
-            );
+        app.insert_resource(MotionMatchingConfig {
+            max_match_count: 5,
+            match_threshold: 1.0,
+            pred_match_threshold: 1.0,
+        })
+        .add_event::<TrajectoryMatch>()
+        .add_event::<PredictionMatch>()
+        .add_event::<NearestTrajectories>()
+        .add_systems(Startup, load_motion_data)
+        .add_systems(
+            Update,
+            (test, trajectory_match, pose_match)
+                .in_set(MainSet::MotionMatching)
+                .run_if(in_state(GameMode::Play)),
+        );
     }
 }
 
-fn test(
-    // q_entities: Query<Entity, With<TrajectoryPosePair>>,
-    input: Res<ButtonInput<KeyCode>>,
-    mut match_evw: EventWriter<TrajectoryMatch>,
-) {
+fn test(input: Res<ButtonInput<KeyCode>>, mut match_evw: EventWriter<TrajectoryMatch>) {
     if input.just_pressed(KeyCode::Space) {
         match_evw.send(TrajectoryMatch);
-        // for entity in q_entities.iter() {
-        //     match_evw.send(TrajectoryMatch(entity));
-        // }
     }
 }
 
@@ -54,10 +49,10 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
 /// Performs a match every [`TrajectoryMatch`] event.
 fn trajectory_match(
     motion_data: MotionData,
-    q_trajectory: Query<(&Trajectory, &Transform)>,
+    q_trajectory: Query<(&Trajectory, &Transform, Entity)>,
     mut match_evr: EventReader<TrajectoryMatch>,
     trajectory_config: Res<TrajectoryConfig>,
-    mut motion_matching_result: ResMut<MotionMatchingResult>,
+    match_config: Res<MotionMatchingConfig>,
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
 ) {
     if match_evr.is_empty() {
@@ -69,38 +64,37 @@ fn trajectory_match(
         return;
     };
 
-    const N: usize = 5;
-    let mut nearest_trajectories_stack = [None::<NearestTrajectory>; N];
     let num_segments = trajectory_config.num_segments();
     let num_points = trajectory_config.num_points();
 
-    for (trajectory, transform) in q_trajectory.iter() {
-        let entity_inv_matrix = transform.compute_matrix().inverse();
-        let entity_trajectory = trajectory
+    for (trajectory, transform, entity) in q_trajectory.iter() {
+        let inv_matrix = transform.compute_matrix().inverse();
+        let traj = trajectory
             .iter()
             .map(|&(mut point)| {
-                point.translation = entity_inv_matrix
+                point.translation = inv_matrix
                     .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
                     .xz();
+                // x axis is reversed in bevy.
+                point.translation.x = -point.translation.x;
                 point
             })
             .collect::<Vec<_>>();
 
-        // println!("Entity\n{:?}\n", entity_trajectory);
+        let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
 
-        let mut stack_count = 0;
         for (chunk_index, chunk) in motion_data.trajectory_data.iter_chunk().enumerate() {
+            println!("CHUNK #{chunk_index}");
             // Number of trajectory in this chunk.
             let num_trajectories = chunk.len() - num_segments;
 
             for chunk_offset in 0..num_trajectories {
-                let trajectory_data = &chunk[chunk_offset..chunk_offset + num_points];
+                let data_traj = &chunk[chunk_offset..chunk_offset + num_points];
 
                 // Center point of trajectory
-                let data_inv_matrix = trajectory_data[trajectory_config.history_count]
-                    .matrix
-                    .inverse();
-                let data_trajectory = trajectory_data
+                let data_inv_matrix = data_traj[trajectory_config.history_count].matrix.inverse();
+
+                let data_traj = data_traj
                     .iter()
                     .map(|point| {
                         let (.., translation) = point.matrix.to_scale_rotation_translation();
@@ -112,102 +106,119 @@ fn trajectory_match(
                     })
                     .collect::<Vec<_>>();
 
-                let distance = entity_trajectory.distance(&data_trajectory);
-                // println!("{:?}", data_trajectory);
+                let distance = traj.distance(&data_traj);
                 println!("{distance}");
 
-                if stack_count < N {
+                // Distance must be below the threshold.
+                if distance > match_config.match_threshold {
+                    continue;
+                }
+
+                if nearest_trajs.len() < match_config.max_match_count {
                     // Stack not yet full, push into it
-                    nearest_trajectories_stack[stack_count] = Some(NearestTrajectory {
+                    nearest_trajs.push(MatchTrajectory {
                         distance,
                         chunk_index,
                         chunk_offset,
                     });
-                } else if let Some(max_trajectory) = nearest_trajectories_stack[N - 1] {
-                    if distance < max_trajectory.distance {
-                        nearest_trajectories_stack[N - 1] = Some(NearestTrajectory {
+                } else if let Some(worst_match) = nearest_trajs.last_mut() {
+                    if distance < worst_match.distance {
+                        *worst_match = MatchTrajectory {
                             distance,
                             chunk_index,
                             chunk_offset,
-                        })
+                        };
                     }
                 }
 
-                stack_count = usize::min(stack_count + 1, N);
-
                 // Sort so that trajectories with the largest distance
                 // is placed as the final element in the stack
-                nearest_trajectories_stack.sort_by(|t0, t1| match (t0, t1) {
-                    (None, None) => std::cmp::Ordering::Equal,
-                    (None, Some(_)) => std::cmp::Ordering::Greater,
-                    (Some(_), None) => std::cmp::Ordering::Less,
-                    (Some(t0), Some(t1)) => t0.distance.total_cmp(&t1.distance),
-                });
+                nearest_trajs.sort_by(|t0, t1| t0.distance.total_cmp(&t1.distance));
             }
         }
 
-        motion_matching_result.nearest_trajectories = nearest_trajectories_stack;
-        nearest_trajectories_evw.send(NearestTrajectories(nearest_trajectories_stack));
+        nearest_trajectories_evw.send(NearestTrajectories {
+            trajectories: nearest_trajs,
+            entity,
+        });
     }
 }
 
 fn pose_match(
     motion_data: MotionData,
-    mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
-    q_players: Query<(&JointMap, Entity), With<TrajectoryPosePair>>,
-    mut nearest_trajectories_reader: EventReader<NearestTrajectories>,
+    q_transforms: Query<&Transform>,
+    q_joint_maps: Query<&JointMap>,
+    mut nearest_trajectories_evr: EventReader<NearestTrajectories>,
     mut motion_matching_result: ResMut<MotionMatchingResult>,
-    // q_entities: Query<Entity, With<TrajectoryPosePair>>,
     mut jump_evw: EventWriter<JumpToPose>,
 ) {
-    let Some(motion_data) = motion_data.get() else {
+    let Some(motion_asset) = motion_data.get() else {
         return;
     };
-    let mut smallest_pose_distance = f32::MAX;
-    let mut best_trajectory_index = 0;
 
-    if nearest_trajectories_reader.is_empty() {
-        return;
-    }
+    for trajs in nearest_trajectories_evr.read() {
+        motion_matching_result.trajectories_poses.clear();
 
-    for (joint_map, entity) in q_players.iter() {
-        for nearest_trajectories in nearest_trajectories_reader.read() {
-            println!("Nearest Traj No: {:?}", nearest_trajectories.len());
-            for (i, nearest_traj) in nearest_trajectories.iter().enumerate() {
-                if let Some(trajectory) = nearest_traj {
-                    let pose_distance =
-                        match_pose(trajectory, motion_data, &mut q_transforms, joint_map);
+        // Ignore if there is no trajectories at all.
+        if trajs.is_empty() {
+            continue;
+        }
 
-                    motion_matching_result.pose_matching_result[i] = pose_distance;
+        let Ok(joint_map) = q_joint_maps.get(trajs.entity) else {
+            continue;
+        };
 
-                    if pose_distance < smallest_pose_distance {
-                        smallest_pose_distance = pose_distance;
-                        best_trajectory_index = i;
-                        // println!("Chunk Index: {}", best_trajectory_index);
-                    }
-                }
+        let mut smallest_pose_dist = f32::MAX;
+        let mut best_traj_index = 0;
 
-                if let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] {
-                    motion_matching_result.best_pose_result.chunk_index =
-                        best_trajectory.chunk_index;
-                    motion_matching_result.best_pose_result.chunk_offset =
-                        best_trajectory.chunk_offset;
-                    motion_matching_result.best_pose_result.trajectory_distance =
-                        best_trajectory.distance;
-                    motion_matching_result.best_pose_result.pose_distance = smallest_pose_distance;
+        for (i, traj) in trajs.iter().enumerate() {
+            // Get pose based on trajectory data.
+            // TODO: check for looping. (UNSAFE!)
+            let pose = motion_asset
+                .pose_data
+                .get_chunk(traj.chunk_index)
+                .and_then(|poses| poses.get(traj.chunk_offset))
+                .unwrap();
 
-                    jump_evw.send(JumpToPose(
-                        MotionPose {
-                            chunk_index: best_trajectory.chunk_index,
-                            time: motion_data
-                                .trajectory_data
-                                .time_from_chunk_offset(best_trajectory.chunk_offset),
-                        },
-                        entity,
-                    ));
+            let mut pose_dist = 0.0;
+
+            for joint_info in motion_asset.joints() {
+                let joint_name = joint_info.name();
+
+                if let Some(transform) = joint_map
+                    .get(joint_name)
+                    .and_then(|e| q_transforms.get(*e).ok())
+                {
+                    let (pose_pos, pose_rot) = pose.get_pos_rot(joint_info);
+
+                    // Calcualte distance and angle difference.
+                    pose_dist += Vec3::distance(transform.translation, pose_pos);
+                    pose_dist += Quat::angle_between(transform.rotation, pose_rot);
                 }
             }
+
+            if pose_dist < smallest_pose_dist {
+                smallest_pose_dist = pose_dist;
+                best_traj_index = i;
+            }
+
+            motion_matching_result
+                .trajectories_poses
+                .push((*traj, pose_dist));
         }
+
+        motion_matching_result.selected_trajectory = best_traj_index;
+
+        let best_traj = &trajs[best_traj_index];
+        jump_evw.send(JumpToPose {
+            motion_pose: MotionPose {
+                chunk_index: best_traj.chunk_index,
+                time: motion_asset
+                    .trajectory_data
+                    .time_from_chunk_offset(best_traj.chunk_offset),
+            },
+            entity: trajs.entity,
+        });
     }
 }
 
@@ -231,134 +242,6 @@ pub struct TrajectoryMatch;
 #[derive(Event, Debug, Deref)]
 pub struct PredictionMatch(MotionPose);
 
-// pub fn match_trajectory(
-//     user_input_trajectory: Query<(&Trajectory, &Transform, &MovementDirection), With<PlayerMarker>>,
-//     mut q_transforms: Query<&mut Transform, (Without<MainScene>, Without<PlayerMarker>)>,
-//     mut main_character: Query<&JointMap, With<MainScene>>,
-//     time: Res<Time>,
-//     mut motion_player_pair: ResMut<MotionDataPlayerPair>,
-//     motion_data: MotionData,
-//     mut match_time: Local<f32>,
-//     mut interpolation_time: Local<f32>,
-//     mut prev_direction: Local<Vec2>,
-//     mut motion_matching_result: ResMut<MotionMatchingResult>,
-// ) {
-//     const TRAJECTORY_INTERVAL: f32 = 0.5;
-//     const MATCH_INTERVAL: f32 = 0.4;
-//     const INTERPOLATION_DURATION: f32 = TRAJECTORY_INTERVAL - MATCH_INTERVAL;
-
-//     const MATCH_TRAJECTORY_COUNT: usize = 5;
-
-//     let Ok((trajectory, transform, direction)) = user_input_trajectory.get_single() else {
-//         return;
-//     };
-
-//     // if user input not changing, match every 0.4, if user input change, match
-//     if Vec2::dot(**direction, *prev_direction) < 0.5 && direction.length_squared() > 0.1 {
-//         *match_time = 0.0;
-//     }
-//     *prev_direction = **direction;
-
-//     if motion_player_pair.is_playing == false {
-//         return;
-//     }
-
-//     // MATCH_INTERVAL -> 0.0
-//     *match_time -= time.delta_seconds();
-//     // 0.0 -> INTERPOLATION_DURATION (0 to 0.1)
-//     *interpolation_time = f32::min(
-//         INTERPOLATION_DURATION,
-//         *interpolation_time + time.delta_seconds(),
-//     );
-
-//     // (0 to 1)
-//     let mut interpolation_factor = *interpolation_time / INTERPOLATION_DURATION;
-//     if motion_player_pair.pair_bool == true {
-//         // Reverse interpolation factor.
-//         interpolation_factor = 1.0 - interpolation_factor;
-//     }
-//     motion_player_pair.interpolation_factor = interpolation_factor;
-
-//     // `MATCH_INTERVAL` have passed, match!
-//     if *match_time <= 0.0 {
-//         // Reset the timers.
-//         *match_time = MATCH_INTERVAL;
-//         *interpolation_time = 0.0;
-
-//         let start_time = Instant::now();
-
-//         if let Some(motion_asset) = motion_data.get() {
-//             let nearest_trajectories = find_nearest_trajectories::<MATCH_TRAJECTORY_COUNT>(
-//                 motion_asset,
-//                 trajectory,
-//                 transform,
-//             );
-
-//             info!(
-//                 "{MATCH_TRAJECTORY_COUNT} nearest trajectories:\n{:?}",
-//                 nearest_trajectories
-//             );
-
-//             let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
-//             let trajectory_duration_str = format!("{:.4}", traj_duration);
-//             // println!("Time taken for trajectory matching: {trajectory_duration_str}");
-//             motion_matching_result.traj_matching_time = trajectory_duration_str;
-
-//             motion_matching_result.nearest_trajectories = nearest_trajectories;
-
-//             let mut smallest_pose_distance = f32::MAX;
-//             let mut best_trajectory_index = 0;
-
-//             let start_pose_time = Instant::now();
-
-//             // println!("Nearest Trajectory length: {}", nearest_trajectories.len());
-//             for (i, nearest_trajectory) in nearest_trajectories.iter().enumerate() {
-//                 if let Some(nearest_trajectory) = nearest_trajectory {
-//                     let (pose_distance, pose) = match_pose(
-//                         nearest_trajectory,
-//                         motion_asset,
-//                         &mut q_transforms,
-//                         &mut main_character,
-//                     );
-
-//                     motion_matching_result.pose_matching_result[i] = pose_distance;
-
-//                     if pose_distance < smallest_pose_distance {
-//                         smallest_pose_distance = pose_distance;
-//                         best_trajectory_index = i;
-//                         // println!("Chunk Index: {}", best_trajectory_index);
-//                     }
-//                 }
-//             }
-
-//             let pose_duration = start_pose_time.elapsed().as_secs_f64() * 1000.0;
-//             let pose_duration_str = format!("{:.4}", pose_duration);
-//             // println!("Time taken for pose matching: {pose_duration_str}");
-//             motion_matching_result.pose_matching_time = pose_duration_str;
-
-//             if let Some(best_trajectory) = nearest_trajectories[best_trajectory_index] {
-//                 motion_matching_result.best_pose_result.chunk_index = best_trajectory.chunk_index;
-//                 motion_matching_result.best_pose_result.chunk_offset = best_trajectory.chunk_offset;
-//                 motion_matching_result.best_pose_result.trajectory_distance =
-//                     best_trajectory.distance;
-//                 motion_matching_result.best_pose_result.pose_distance = smallest_pose_distance;
-
-//                 let player_index = motion_player_pair.pair_bool as usize;
-//                 motion_player_pair.jump_to_pose(
-//                     best_trajectory.chunk_index,
-//                     motion_asset
-//                         .trajectory_data
-//                         .time_from_chunk_offset(best_trajectory.chunk_offset + 3),
-//                     player_index,
-//                 );
-//             }
-//         }
-
-//         // Flip boolean for the next match.
-//         motion_player_pair.pair_bool = !motion_player_pair.pair_bool;
-//     }
-// }
-
 #[derive(Component, Default, Debug)]
 pub struct BestPoseResult {
     pub chunk_index: usize,
@@ -367,17 +250,8 @@ pub struct BestPoseResult {
     pub pose_distance: f32,
 }
 
-#[derive(Default, Resource)]
-pub struct MotionMatchingResult {
-    pub nearest_trajectories: [Option<NearestTrajectory>; 5],
-    pub pose_matching_result: [f32; 5],
-    pub best_pose_result: BestPoseResult,
-    pub traj_matching_time: String,
-    pub pose_matching_time: String,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct NearestTrajectory {
+#[derive(Debug, Clone, Copy)]
+pub struct MatchTrajectory {
     /// Error distance from this trajectory to the trajecctory that is being compared to.
     pub distance: f32,
     /// Index pointing to the chunk that holds this trajectory.
@@ -386,11 +260,18 @@ pub struct NearestTrajectory {
     pub chunk_offset: usize,
 }
 
+/// A vec of [`MatchTrajectory`] that has the least [`MatchTrajectory::distance`].
 #[derive(Event, Debug, Deref, DerefMut)]
-pub struct NearestTrajectories([Option<NearestTrajectory>; 5]);
+pub struct NearestTrajectories {
+    #[deref]
+    trajectories: Vec<MatchTrajectory>,
+    entity: Entity,
+}
 
+#[derive(Resource, Debug)]
 pub struct MotionMatchingConfig {
-    pub match_count: usize,
+    /// Maximum number of trajectory matches.
+    pub max_match_count: usize,
     /// Any distance beyond this threshold will not be considered.
     pub match_threshold: f32,
     pub pred_match_threshold: f32,

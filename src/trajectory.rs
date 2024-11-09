@@ -200,6 +200,30 @@ fn update_prev_transform2ds(mut q_transform2ds: Query<(&mut PrevTransform2d, &Tr
     }
 }
 
+pub fn draw_trajectory_plot(
+    q_trajectories: Query<(&Trajectory, &Transform)>,
+    mut trajectories_plot: ResMut<TrajectoryPlot>,
+) {
+    for (trajectory, transform) in q_trajectories.iter() {
+        let inv_matrix = transform.compute_matrix().inverse();
+
+        **trajectories_plot = trajectory
+            .iter()
+            .map(|point| {
+                let mut point = inv_matrix.transform_point3(Vec3::new(
+                    point.translation.x,
+                    0.0,
+                    point.translation.y,
+                ));
+                // x axis is reversed in bevy.
+                point.x = -point.x;
+                point.xz()
+            })
+            .map(|p| p.as_dvec2().to_array())
+            .collect::<Vec<_>>();
+    }
+}
+
 #[derive(Bundle)]
 pub struct TrajectoryBundle {
     pub trajectory: Trajectory,
@@ -288,17 +312,18 @@ impl TrajectoryDistance for [TrajectoryPoint] {
             offset_distance += Vec2::distance(offset1, offset0);
         }
 
-        let mut velocity_distance = 0.0;
+        // let mut velocity_distance = 0.0;
 
-        for i in 0..len {
-            velocity_distance += Vec2::distance(self[i].velocity, rhs[i].velocity);
-        }
+        // for i in 0..len {
+        //     velocity_distance += Vec2::distance_squared(self[i].velocity, rhs[i].velocity);
+        // }
 
         // Averaging the distances.
         offset_distance /= len.saturating_sub(1) as f32;
-        velocity_distance /= len as f32;
+        // velocity_distance /= len as f32;
 
-        offset_distance + velocity_distance
+        // Return root means distance.
+        offset_distance // + f32::sqrt(velocity_distance)
     }
 }
 
@@ -334,42 +359,5 @@ impl TrajectoryConfig {
     }
 }
 
-#[derive(Resource, Debug, Default)]
-pub struct TrajectoryPlot {
-    pub trajectories_points: Vec<[f64; 2]>,
-}
-
-pub fn draw_trajectory_plot(
-    mut trajectories_point: ResMut<TrajectoryPlot>,
-    user_input_trajectory: Query<(&Trajectory, &Transform)>,
-) {
-    for (trajectory, transform) in user_input_trajectory.iter() {
-        let player_inv_matrix = transform.compute_matrix().inverse();
-
-        let player_local_translations: Vec<_> = trajectory
-            .iter()
-            .map(|point| {
-                player_inv_matrix.transform_point3(Vec3::new(
-                    point.translation.x,
-                    0.0,
-                    point.translation.y,
-                ))
-            })
-            .map(|v| v.xz())
-            .collect();
-
-        if let Some(mut start) = player_local_translations.first() {
-            trajectories_point.trajectories_points.clear();
-            for next in &player_local_translations[1..] {
-                trajectories_point
-                    .trajectories_points
-                    .push([start.x as f64, start.y as f64]);
-                start = next;
-            }
-
-            trajectories_point
-                .trajectories_points
-                .push([start.x as f64, start.y as f64]);
-        }
-    }
-}
+#[derive(Resource, Debug, Default, Deref, DerefMut)]
+pub struct TrajectoryPlot(Vec<[f64; 2]>);

@@ -10,8 +10,6 @@ use bevy_egui::EguiPlugin;
 #[cfg(feature = "debug")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-use crate::motion_matching::MotionMatchingResult;
-
 pub mod builder;
 pub mod config;
 pub mod play_mode;
@@ -30,6 +28,7 @@ impl Plugin for UiPlugin {
             .init_resource::<config::DrawMainArmature>()
             .init_resource::<config::DrawTrajectory>()
             .init_resource::<builder::BuildConfigs>()
+            .init_resource::<play_mode::MotionMatchingResult>()
             .add_systems(PreUpdate, reset_mouse_in_ui)
             .add_systems(Update, right_panel.in_set(UiSystemSet));
     }
@@ -63,15 +62,8 @@ enum RightPanelPage {
     PlayMode,
 }
 
-fn right_panel(
-    world: &mut World,
-    params: &mut SystemState<(
-        EguiContexts,
-        Res<MotionMatchingResult>,
-        Local<RightPanelPage>,
-    )>,
-) {
-    let (mut contexts, nearest_trajectories, mut page) = params.get_mut(world);
+fn right_panel(world: &mut World, params: &mut SystemState<(EguiContexts, Local<RightPanelPage>)>) {
+    let (mut contexts, mut page) = params.get_mut(world);
 
     let ctx = contexts.ctx_mut().clone();
     egui::SidePanel::left("left_panel")
