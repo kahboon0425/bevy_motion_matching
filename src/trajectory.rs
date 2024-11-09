@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::draw_axes::{ColorPalette, DrawAxes};
 use crate::player::MovementConfig;
-use crate::record::Records;
+use crate::record::{Records, RecordsBundle};
 use crate::transform2d::Transform2d;
 use crate::MainSet;
 
@@ -124,6 +124,8 @@ fn history_trajectory(
                 }
 
                 curr_delta_time = transform_record[record_index].delta_time;
+                // Accumulate time and index so that we don't loop through
+                // previously looped records.
                 record_time += curr_delta_time;
                 record_index += 1;
 
@@ -198,13 +200,29 @@ fn update_prev_transform2ds(mut q_transform2ds: Query<(&mut PrevTransform2d, &Tr
     }
 }
 
-#[derive(Bundle, Default)]
+#[derive(Bundle)]
 pub struct TrajectoryBundle {
     pub trajectory: Trajectory,
     pub transform2d: Transform2d,
     pub prev_transform2d: PrevTransform2d,
     pub velocity: Velocity,
     pub movement_direction: MovementDirection,
+    pub transform2d_records: RecordsBundle<Transform2d>,
+    pub velocity_records: RecordsBundle<Velocity>,
+}
+
+impl TrajectoryBundle {
+    pub fn new(record_len: usize) -> Self {
+        Self {
+            trajectory: Trajectory::default(),
+            transform2d: Transform2d::default(),
+            prev_transform2d: PrevTransform2d::default(),
+            velocity: Velocity::default(),
+            movement_direction: MovementDirection::default(),
+            transform2d_records: RecordsBundle::new(record_len),
+            velocity_records: RecordsBundle::new(record_len),
+        }
+    }
 }
 
 /// Trajectory containing prediction and history based on [`TrajectoryConfig`].
@@ -252,6 +270,42 @@ pub struct TrajectoryConfig {
     pub history_count: usize,
 }
 
+pub trait TrajectoryDistance {
+    fn distance(&self, rhs: &Self) -> f32;
+}
+
+impl TrajectoryDistance for [TrajectoryPoint] {
+    fn distance(&self, rhs: &Self) -> f32 {
+        let len = self.len();
+        assert_eq!(len, rhs.len());
+
+        let mut offset_distance = 0.0;
+
+        for i in 1..len {
+            let offset0 = self[i].translation - self[i - 1].translation;
+            let offset1 = rhs[i].translation - rhs[i - 1].translation;
+
+            println!("{} - {}", self[i].translation, self[i - 1].translation);
+            // println!("dist({offset0}, {offset1})");
+
+            offset_distance += Vec2::distance(offset1, offset0);
+        }
+
+        let mut velocity_distance = 0.0;
+
+        for i in 0..len {
+            velocity_distance += Vec2::distance(self[i].velocity, rhs[i].velocity);
+        }
+
+        // Averaging the distances.
+        offset_distance /= len.saturating_sub(1) as f32;
+        velocity_distance /= len as f32;
+
+        offset_distance
+        // offset_distance + velocity_distance
+    }
+}
+
 impl TrajectoryConfig {
     /// Duration of the prediction part of the trajectory.
     #[inline]
@@ -281,26 +335,6 @@ impl TrajectoryConfig {
     #[inline]
     pub fn total_time(&self) -> f32 {
         self.interval_time * self.num_segments() as f32
-    }
-}
-
-pub trait TrajectoryDistance {
-    fn distance(&self, rhs: &Self) -> f32;
-}
-
-impl TrajectoryDistance for [TrajectoryPoint] {
-    fn distance(&self, rhs: &Self) -> f32 {
-        assert_eq!(self.len(), rhs.len());
-
-        let mut total_distance = 0.0;
-        for (point0, point1) in self.iter().zip(rhs.iter()) {
-            let translation_distance = Vec2::distance(point0.translation, point1.translation);
-            let velocity_distance = Vec2::distance(point0.velocity, point1.velocity);
-            total_distance += translation_distance + velocity_distance;
-        }
-
-        // Return the root mean distance
-        total_distance / self.len() as f32
     }
 }
 

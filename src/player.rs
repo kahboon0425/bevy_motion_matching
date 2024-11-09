@@ -11,9 +11,12 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<MovementConfig>()
-            .add_systems(PreUpdate, movement_direction.in_set(MainSet::Action))
-            .add_systems(Update, draw_player_direction);
+        app.init_resource::<MovementConfig>().add_systems(
+            Update,
+            (movement_direction, draw_player_direction)
+                .chain()
+                .in_set(MainSet::Action),
+        );
     }
 }
 

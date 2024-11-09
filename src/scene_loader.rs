@@ -29,7 +29,7 @@ fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
         .spawn((MainScene, SceneBundle { scene, ..default() }))
         .insert((
             PlayerBundle::default(),
-            TrajectoryBundle::default(),
+            TrajectoryBundle::new(100),
             MotionPlayerBundle::default(),
         ));
 }

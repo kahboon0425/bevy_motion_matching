@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use crate::transform2d::Transform2d;
 use crate::{bvh_manager::bvh_player::JointMap, GameMode};
-use crate::{BVH_SCALE_RATIO, LARGE_EPSILON};
+use crate::{MainSet, BVH_SCALE_RATIO, LARGE_EPSILON};
 
 use super::chunk::ChunkIterator;
 use super::pose_data::{Pose, PoseData};
@@ -25,7 +25,8 @@ impl Plugin for MotionPlayerPlugin {
                 ),
                 MotionPlayerSet::Interpolate,
             )
-                .chain(),
+                .chain()
+                .in_set(MainSet::Animation),
         );
 
         app.insert_resource(MotionPlayerConfig {

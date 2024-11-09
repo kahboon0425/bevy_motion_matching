@@ -9,7 +9,7 @@ use crate::player::PlayerMarker;
 use crate::pose_matching::match_pose;
 use crate::scene_loader::MainScene;
 use crate::trajectory::{Trajectory, TrajectoryConfig, TrajectoryDistance, TrajectoryPoint};
-use crate::{GameMode, BVH_SCALE_RATIO};
+use crate::{GameMode, MainSet, BVH_SCALE_RATIO};
 
 pub struct MotionMatchingPlugin;
 
@@ -22,7 +22,9 @@ impl Plugin for MotionMatchingPlugin {
             .add_systems(Startup, load_motion_data)
             .add_systems(
                 Update,
-                (test, trajectory_match, pose_match).run_if(in_state(GameMode::Play)),
+                (test, trajectory_match, pose_match)
+                    .in_set(MainSet::MotionMatching)
+                    .run_if(in_state(GameMode::Play)),
             );
     }
 }
@@ -84,7 +86,7 @@ fn trajectory_match(
             })
             .collect::<Vec<_>>();
 
-        println!("Entity\n{:?}\n", entity_trajectory);
+        // println!("Entity\n{:?}\n", entity_trajectory);
 
         let mut stack_count = 0;
         for (chunk_index, chunk) in motion_data.trajectory_data.iter_chunk().enumerate() {
@@ -111,8 +113,8 @@ fn trajectory_match(
                     .collect::<Vec<_>>();
 
                 let distance = entity_trajectory.distance(&data_trajectory);
-                println!("{:?}", data_trajectory);
-                println!("{:#?}", distance);
+                // println!("{:?}", data_trajectory);
+                println!("{distance}");
 
                 if stack_count < N {
                     // Stack not yet full, push into it
@@ -194,7 +196,6 @@ fn pose_match(
                         best_trajectory.distance;
                     motion_matching_result.best_pose_result.pose_distance = smallest_pose_distance;
 
-                    println!("Entity {entity}");
                     jump_evw.send(JumpToPose(
                         MotionPose {
                             chunk_index: best_trajectory.chunk_index,
@@ -387,119 +388,6 @@ pub struct NearestTrajectory {
 
 #[derive(Event, Debug, Deref, DerefMut)]
 pub struct NearestTrajectories([Option<NearestTrajectory>; 5]);
-
-/// /// Find `N` number of nearest trajectories.
-///
-/// # Panic
-///
-/// Panic if `N` is 0.
-pub fn find_nearest_trajectories<const N: usize>(
-    motion_data: &MotionAsset,
-    player_trajectory: &Trajectory,
-    player_transform: &Transform,
-) -> [Option<NearestTrajectory>; N] {
-    assert!(
-        N > 0,
-        "Unable to find closest trajectory if the number of closest trajectory needed is 0."
-    );
-
-    let player_inv_matrix = player_transform.compute_matrix().inverse();
-    let mut stack_count = 0;
-    let mut nearest_trajectories_stack = [None::<NearestTrajectory>; N];
-    let threshold = 10.0;
-
-    let trajectories = &motion_data.trajectory_data;
-
-    let player_local_translations = player_trajectory
-        .iter()
-        .map(|player_trajectory| {
-            player_inv_matrix.transform_point3(Vec3::new(
-                player_trajectory.translation.x,
-                0.0,
-                player_trajectory.translation.y,
-            ))
-        })
-        .map(|v| v.xz())
-        .collect::<Vec<_>>();
-
-    for (chunk_index, chunk) in trajectories.iter_chunk().enumerate() {
-        let chunk_count = chunk.len();
-        if chunk_count < 7 {
-            warn!("Chunk ({chunk_index}) has less than 7 trajectories. (only {chunk_count})");
-            continue;
-        }
-
-        for chunk_offset in 0..chunk_count - 6 {
-            let trajectory = &chunk[chunk_offset..chunk_offset + 7];
-
-            // Center point of trajectory
-            let inv_matrix = trajectory[3].matrix.inverse();
-
-            let data_local_translations = trajectory
-                .iter()
-                .map(|trajectory| {
-                    inv_matrix.transform_point3(trajectory.matrix.to_scale_rotation_translation().2)
-                })
-                // Rescale?
-                .map(|v| v.xz() * BVH_SCALE_RATIO)
-                .collect::<Vec<_>>();
-
-            let distance =
-                trajectory_distance(&player_local_translations, &data_local_translations);
-
-            // println!("Distance: {}", distance);
-            // if distance > threshold {
-            //     continue;
-            // }
-
-            if stack_count < N {
-                // Stack not yet full, push into it
-                nearest_trajectories_stack[stack_count] = Some(NearestTrajectory {
-                    distance,
-                    chunk_index,
-                    chunk_offset,
-                });
-            } else if let Some(max_trajectory) = nearest_trajectories_stack[N - 1] {
-                if distance < max_trajectory.distance {
-                    nearest_trajectories_stack[N - 1] = Some(NearestTrajectory {
-                        distance,
-                        chunk_index,
-                        chunk_offset,
-                    })
-                }
-            }
-
-            stack_count = usize::min(stack_count + 1, N);
-
-            // Sort so that trajectories with the largest distance
-            // is placed as the final element in the stack
-            nearest_trajectories_stack.sort_by(|t0, t1| match (t0, t1) {
-                (None, None) => std::cmp::Ordering::Equal,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (Some(t0), Some(t1)) => t0.distance.total_cmp(&t1.distance),
-            });
-        }
-    }
-
-    nearest_trajectories_stack
-}
-
-// TODO: Replace this
-pub fn trajectory_distance(traj0: &[Vec2], traj1: &[Vec2]) -> f32 {
-    // println!("{traj0:?}");
-    // println!("{traj1:?}");
-    // println!("===============\n");
-    let mut distance = 0.0;
-    for i in 1..traj0.len() {
-        let offset0 = traj0[i] - traj0[i - 1];
-        let offset1 = traj1[i] - traj1[i - 1];
-
-        distance += Vec2::distance(offset1, offset0);
-    }
-
-    distance
-}
 
 pub struct MotionMatchingConfig {
     pub match_count: usize,
