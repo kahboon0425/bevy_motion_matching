@@ -284,6 +284,26 @@ impl TrajectoryConfig {
     }
 }
 
+pub trait TrajectoryDistance {
+    fn distance(&self, rhs: &Self) -> f32;
+}
+
+impl TrajectoryDistance for [TrajectoryPoint] {
+    fn distance(&self, rhs: &Self) -> f32 {
+        assert_eq!(self.len(), rhs.len());
+
+        let mut total_distance = 0.0;
+        for (point0, point1) in self.iter().zip(rhs.iter()) {
+            let translation_distance = Vec2::distance(point0.translation, point1.translation);
+            let velocity_distance = Vec2::distance(point0.velocity, point1.velocity);
+            total_distance += translation_distance + velocity_distance;
+        }
+
+        // Return the root mean distance
+        total_distance / self.len() as f32
+    }
+}
+
 #[derive(Resource, Debug, Default)]
 pub struct TrajectoryPlot {
     pub trajectories_points: Vec<[f64; 2]>,
