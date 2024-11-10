@@ -6,7 +6,13 @@
 Motion matching enables characters to smoothly transition between animations by finding the best matching pose and trajectory from an extensive database, without the need to create state machines.
 Gameplay logic can be embedded side by side with motion matching by querying animations with the desired attributes.
 
-![Screenshot](./.github/assets/screenshot.png)
+### Configuration
+
+![config](./.github/assets/config.png)
+
+### Play Mode
+
+![play-mode](./.github/assets/play-mode.png)
 
 ## Reference
 
