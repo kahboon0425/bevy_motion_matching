@@ -8,7 +8,7 @@ use super::chunk::{ChunkIterator, ChunkOffsets};
 pub struct TrajectoryData {
     /// Trajectory matrices.
     points: Vec<TrajectoryDataPoint>,
-    /// Offset index of [`Self::matrices`] chunks.
+    /// Offset index of [`Self::points`] chunks.
     ///
     /// # Example
     ///

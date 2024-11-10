@@ -20,7 +20,7 @@ impl<T: Recordable> Plugin for RecordPlugin<T> {
     }
 }
 
-/// Push in a new [`Transform2dComp`] to the front of a [`Transform2dRecord`] while popping out an old one.
+/// Push in a new [`Record`] to the front of a [`Records`] while popping out an old one.
 fn record<T: Recordable>(mut q_records: Query<(&T, &mut Records<T>)>, time: Res<Time>) {
     for (&value, mut record) in q_records.iter_mut() {
         record.pop_back();
@@ -58,7 +58,7 @@ impl<T: Recordable> RecordsBundle<T> {
     }
 }
 
-/// A history record of the target [`Transform2dComp`] component.
+/// A history record of the target component `T`.
 #[derive(Component, Default, Debug, Deref, DerefMut, Clone)]
 pub struct Records<T: Recordable>(VecDeque<Record<T>>);
 
@@ -70,7 +70,7 @@ pub struct Record<T: Recordable> {
     pub delta_time: f32,
 }
 
-/// Determines the size of [`Transform2dRecord`].
+/// Determines the size of [`Records`].
 #[derive(Component, Default, Debug, Deref, DerefMut, Clone, Copy)]
 pub struct RecordLen<T: Recordable>(#[deref] usize, PhantomData<T>);
 

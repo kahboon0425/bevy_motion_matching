@@ -311,7 +311,7 @@ fn pose_to_joint_transforms(
 pub enum MotionPlayerSet {
     /// Handles [`JumpToPose`] event.
     JumpToPose,
-    /// Performs [`TrajectoryPose::try_apply_pose`].
+    /// Applies pose from [`TrajectoryPosePair`].
     ApplyPose,
     /// Apply interpolated pose from [`TrajectoryPosePair`] to their respective joint transforms.
     ApplyJointTransform,
@@ -352,7 +352,7 @@ impl TrajectoryPosePair {
 
 #[derive(Component, Debug, Default)]
 pub struct MotionPlayer {
-    /// Interpolation factor between [`Self::motion_poses`].
+    /// Interpolation factor between [`TrajectoryPosePair`].
     interp_factor: f32,
     /// The target index of [`TrajectoryPosePair`].
     /// Also denotes which direction [`Self::interp_factor`] is going towards.
@@ -449,7 +449,7 @@ pub struct TrajectoryPose {
 impl TrajectoryPose {
     /// Apply pose from [`Self::motion_pose`] to [`Self::pose`] if possible. (See [`MotionPose`]).
     /// Returns true if successful and vice versa.
-    pub fn try_apply_pose(&mut self, pose_data: &PoseData) -> bool {
+    fn try_apply_pose(&mut self, pose_data: &PoseData) -> bool {
         if let Some(pose) = self.motion_pose.get_pose(pose_data) {
             self.pose = pose;
             return true;
@@ -462,7 +462,7 @@ impl TrajectoryPose {
     /// Returns true if successful and vice versa.
     ///
     /// Note: This does not apply the pose itself. (See [`Self::try_apply_pose`])
-    pub fn try_loop_pose(&mut self, pose_data: &PoseData) -> bool {
+    fn try_loop_pose(&mut self, pose_data: &PoseData) -> bool {
         if pose_data.is_chunk_loopable(self.motion_pose.chunk_index) != Some(true) {
             return false;
         }

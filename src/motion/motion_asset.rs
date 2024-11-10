@@ -20,7 +20,7 @@ impl Plugin for MotionAssetPlugin {
     }
 }
 
-/// A memory and storage efficient storage of [`JointInfo`] and multiple motion data ([`TrajectoryData`] & [`Poses`]).
+/// A memory and storage efficient storage of [`JointInfo`] and chunks of [`TrajectoryData`] & [`PoseData`].
 #[derive(Asset, TypePath, Serialize, Deserialize, Debug)]
 pub struct MotionAsset {
     /// Joint data.
