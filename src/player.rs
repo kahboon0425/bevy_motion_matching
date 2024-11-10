@@ -1,83 +1,93 @@
 use bevy::prelude::*;
+use leafwing_input_manager::prelude::*;
 
-use crate::trajectory::TrajectoryBundle;
+use crate::action::PlayerAction;
+use crate::draw_axes::{ColorPalette, DrawAxes};
+use crate::trajectory::MovementDirection;
+use crate::transform2d::Transform2d;
+use crate::MainSet;
 
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_player)
-            .add_systems(PreUpdate, input_direction);
+        app.insert_resource(MovementConfig {
+            walk_speed: 2.0,
+            run_speed: 4.0,
+            lerp_factor: 10.0,
+        })
+        .add_systems(
+            Update,
+            (movement_direction, draw_player_direction)
+                .chain()
+                .in_set(MainSet::Action),
+        );
+    }
+}
+
+fn movement_direction(
+    mut q_movement_directions: Query<(&mut MovementDirection, &Transform2d)>,
+    movement_config: Res<MovementConfig>,
+    action: Res<ActionState<PlayerAction>>,
+    time: Res<Time>,
+) {
+    let mut action_axis = action
+        .clamped_axis_pair(&PlayerAction::Walk)
+        .map(|axis| axis.xy().normalize_or_zero())
+        .unwrap_or_default();
+    action_axis.x = -action_axis.x;
+
+    for (mut movement_direction, transform2d) in q_movement_directions.iter_mut() {
+        let mut target_direction = Vec2::ZERO;
+        target_direction += transform2d.forward() * action_axis.y;
+        target_direction += transform2d.right() * action_axis.x;
+
+        **movement_direction = Vec2::lerp(
+            **movement_direction,
+            target_direction,
+            f32::min(1.0, movement_config.lerp_factor * time.delta_seconds()),
+        );
+    }
+}
+
+fn draw_player_direction(
+    q_transform2ds: Query<&Transform2d, With<PlayerMarker>>,
+    mut draw_axes: ResMut<DrawAxes>,
+    palette: Res<ColorPalette>,
+) {
+    for transform2d in q_transform2ds.iter() {
+        draw_axes.draw_forward(
+            Mat4::from_rotation_translation(
+                Quat::from_rotation_y(transform2d.angle),
+                transform2d.translation3d(),
+            ),
+            0.5,
+            palette.green,
+        );
     }
 }
 
 #[derive(Bundle, Default)]
 pub struct PlayerBundle {
     pub marker: PlayerMarker,
-    pub transform: Transform,
-    pub speed: Speed,
-    pub direction: MovementDirection,
+    pub movement_speed: MovementSpeed,
 }
 
 #[derive(Component, Default)]
 pub struct PlayerMarker;
 
-#[derive(Component)]
-pub struct Speed(f32);
+#[derive(Component, Default, Deref, DerefMut, Clone, Copy)]
+pub struct MovementSpeed(f32);
 
-impl Speed {
+impl MovementSpeed {
     pub fn get(&self) -> f32 {
         self.0
     }
 }
 
-impl Default for Speed {
-    fn default() -> Self {
-        Self(2.0)
-    }
-}
-
-#[derive(Component, Default)]
-pub struct MovementDirection(Vec2);
-
-impl MovementDirection {
-    pub fn get(&self) -> Vec2 {
-        self.0
-    }
-
-    pub fn get_vec3(&self) -> Vec3 {
-        Vec3::new(self.0.x, 0.0, self.0.y)
-    }
-}
-
-fn setup_player(mut commands: Commands) {
-    commands.spawn((PlayerBundle::default(), TrajectoryBundle::default()));
-}
-
-fn input_direction(
-    mut q_player: Query<(&mut MovementDirection, &mut Transform, &Speed), With<PlayerMarker>>,
-    key_input: Res<ButtonInput<KeyCode>>,
-    time: Res<Time>,
-) {
-    let mut input_dir = Vec2::ZERO;
-
-    if key_input.any_pressed([KeyCode::KeyW, KeyCode::ArrowUp]) {
-        input_dir.y -= 1.0;
-    }
-    if key_input.any_pressed([KeyCode::KeyS, KeyCode::ArrowDown]) {
-        input_dir.y += 1.0;
-    }
-    if key_input.any_pressed([KeyCode::KeyD, KeyCode::ArrowRight]) {
-        input_dir.x += 1.0;
-    }
-    if key_input.any_pressed([KeyCode::KeyA, KeyCode::ArrowLeft]) {
-        input_dir.x -= 1.0;
-    }
-
-    input_dir = Vec2::normalize_or_zero(input_dir);
-    for (mut direction, mut transform, speed) in q_player.iter_mut() {
-        *direction = MovementDirection(input_dir);
-
-        transform.translation += direction.get_vec3() * speed.get() * time.delta_seconds();
-    }
+#[derive(Resource, Debug)]
+pub struct MovementConfig {
+    pub walk_speed: f32,
+    pub run_speed: f32,
+    pub lerp_factor: f32,
 }

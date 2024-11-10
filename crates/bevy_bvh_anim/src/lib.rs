@@ -1,76 +1,94 @@
 pub use bvh_anim;
 
-use bevy::{
-    asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
-    prelude::*,
-    utils::{
-        thiserror::{self, Error},
-        BoxedFuture,
-    },
-};
-use bvh_anim::Bvh;
+use bevy::prelude::*;
+use bvh_anim::{ChannelType, Frame, JointData};
 
 pub mod prelude {
-    pub use crate::{BvhAsset, BvhAssetPlugin};
+    pub use crate::bvh_asset::{BvhAsset, BvhAssetPlugin};
+    pub use crate::joint_matrices::JointMatrices;
+    pub use crate::joint_traits::{JointChannelTrait, JointTrait};
+    pub use crate::FrameExt;
     // Re-exports bvh_anim's commonly used types
     pub use bvh_anim::{
         bvh, Axis as BvhAxis, Bvh, Channel, Frame, Frames, Joint, JointData, JointName,
     };
 }
+pub mod bvh_asset;
+pub mod joint_matrices;
+pub mod joint_traits;
 
-pub struct BvhAssetPlugin;
+pub trait FrameExt {
+    fn get_pos_rot(&self, joint_data: &JointData) -> (Vec3, Quat);
 
-impl Plugin for BvhAssetPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_asset::<BvhAsset>()
-            .init_asset_loader::<BvhAssetLoader>();
-    }
+    fn get_pos(&self, joint_data: &JointData) -> Vec3;
+
+    fn get_rot(&self, joint_data: &JointData) -> Quat;
 }
 
-#[derive(Asset, TypePath)]
-pub struct BvhAsset(Bvh);
+impl FrameExt for Frame {
+    #[must_use]
+    fn get_pos_rot(&self, joint_data: &JointData) -> (Vec3, Quat) {
+        let mut pos = Vec3::ZERO;
+        let mut euler = Vec3::ZERO;
 
-impl BvhAsset {
-    pub fn get(&self) -> &Bvh {
-        &self.0
-    }
-}
+        for channel in joint_data.channels() {
+            let Some(&data) = self.get(channel) else {
+                continue;
+            };
 
-#[derive(Default)]
-pub struct BvhAssetLoader;
+            match channel.channel_type() {
+                ChannelType::RotationX => euler.x = data.to_radians(),
+                ChannelType::RotationY => euler.y = data.to_radians(),
+                ChannelType::RotationZ => euler.z = data.to_radians(),
+                ChannelType::PositionX => pos.x = data,
+                ChannelType::PositionY => pos.y = data,
+                ChannelType::PositionZ => pos.z = data,
+            }
+        }
 
-impl AssetLoader for BvhAssetLoader {
-    type Asset = BvhAsset;
-    type Settings = ();
-    type Error = BvhAssetLoaderError;
-
-    fn load<'a>(
-        &'a self,
-        reader: &'a mut Reader,
-        _settings: &'a (),
-        _load_context: &'a mut LoadContext,
-    ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
-        Box::pin(async move {
-            let mut bytes = Vec::new();
-            reader.read_to_end(&mut bytes).await?;
-            let bvh = bvh_anim::from_bytes(bytes)?;
-            Ok(BvhAsset(bvh))
-        })
+        (
+            pos,
+            Quat::from_euler(EulerRot::XYZ, euler.x, euler.y, euler.z),
+        )
     }
 
-    fn extensions(&self) -> &[&str] {
-        &["bvh"]
-    }
-}
+    #[must_use]
+    fn get_pos(&self, joint_data: &JointData) -> Vec3 {
+        let mut pos = Vec3::ZERO;
 
-/// Possible errors that can be produced by [`BvhAssetLoader`]
-#[non_exhaustive]
-#[derive(Debug, Error)]
-pub enum BvhAssetLoaderError {
-    /// An [Io](std::io) Error
-    #[error("Could not load bvh file: {0}")]
-    Io(#[from] std::io::Error),
-    /// A [Bvh](bvh_anim::errors::LoadError) Error
-    #[error("Could not load bvh: {0}")]
-    BvhLoadError(#[from] bvh_anim::errors::LoadError),
+        for channel in joint_data.channels() {
+            let Some(&data) = self.get(channel) else {
+                continue;
+            };
+
+            match channel.channel_type() {
+                ChannelType::PositionX => pos.x = data,
+                ChannelType::PositionY => pos.y = data,
+                ChannelType::PositionZ => pos.z = data,
+                _ => {}
+            }
+        }
+
+        pos
+    }
+
+    #[must_use]
+    fn get_rot(&self, joint_data: &JointData) -> Quat {
+        let mut euler = Vec3::ZERO;
+
+        for channel in joint_data.channels() {
+            let Some(&data) = self.get(channel) else {
+                continue;
+            };
+
+            match channel.channel_type() {
+                ChannelType::RotationX => euler.x = data.to_radians(),
+                ChannelType::RotationY => euler.y = data.to_radians(),
+                ChannelType::RotationZ => euler.z = data.to_radians(),
+                _ => {}
+            }
+        }
+
+        Quat::from_euler(EulerRot::XYZ, euler.x, euler.y, euler.z)
+    }
 }

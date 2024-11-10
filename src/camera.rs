@@ -22,7 +22,7 @@ impl Plugin for CameraPlugin {
             .init_resource::<CameraFocus>()
             .add_systems(Startup, spawn_camera)
             .add_systems(
-                Update,
+                PreUpdate,
                 pan_orbit_camera
                     .run_if(any_with_component::<PanOrbitState>)
                     .after(UiSystemSet),
@@ -134,14 +134,13 @@ fn spawn_camera(mut commands: Commands) {
             hdr: true,
             ..default()
         },
-        dither: DebandDither::Enabled,
+        deband_dither: DebandDither::Enabled,
         tonemapping: Tonemapping::AcesFitted,
         ..default()
     };
     commands.spawn(camera).insert(BloomSettings::default());
 }
 
-#[allow(clippy::too_many_arguments)]
 fn pan_orbit_camera(
     mut q_camera: Query<(&PanOrbitSettings, &mut PanOrbitState, &mut Transform)>,
     q_global_transforms: Query<&GlobalTransform>,
@@ -180,6 +179,7 @@ fn pan_orbit_camera(
 
     let left_clicked = mouse.pressed(MouseButton::Left);
 
+    let is_focus = camera_focus.get().is_some();
     for (settings, mut state, mut transform) in &mut q_camera {
         // Camera focus
         if settings
@@ -187,7 +187,7 @@ fn pan_orbit_camera(
             .map(|key| kbd.just_pressed(key))
             .unwrap_or(false)
         {
-            if camera_focus.get().is_some() {
+            if is_focus {
                 camera_focus.clear();
             } else if let Ok(entity) = q_main_scene.get_single() {
                 camera_focus.set(entity);
@@ -208,11 +208,12 @@ fn pan_orbit_camera(
         }
 
         let mut total_orbit = Vec2::ZERO;
-        if settings
+        if (settings
             .orbit_key
             .map(|key| kbd.pressed(key))
             .unwrap_or(false)
-            && left_clicked
+            && left_clicked)
+            || is_focus
         {
             total_orbit -= total_motion * settings.orbit_sensitivity;
         }

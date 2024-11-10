@@ -1,11 +1,13 @@
-use bevy::{
-    prelude::*,
-    render::{
-        mesh::VertexAttributeValues,
-        texture::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor},
-    },
+use bevy::prelude::*;
+use bevy::render::mesh::VertexAttributeValues;
+use bevy::render::texture::{
+    ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
-use bevy_third_person_camera::ThirdPersonCameraTarget;
+
+use crate::draw_axes::ColorPalette;
+use crate::motion::motion_player::MotionPlayerBundle;
+use crate::player::PlayerBundle;
+use crate::trajectory::TrajectoryBundle;
 
 /// Load glb file and setup the scene.
 pub struct SceneLoaderPlugin;
@@ -24,9 +26,12 @@ fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     let scene: Handle<Scene> = asset_server.load("glb/model_skeleton_mixamo.glb#Scene0");
     info!("Loaded scene: {:?}", scene);
     commands
-        .spawn(SceneBundle { scene, ..default() })
-        .insert(MainScene)
-        .insert(ThirdPersonCameraTarget);
+        .spawn((MainScene, SceneBundle { scene, ..default() }))
+        .insert((
+            PlayerBundle::default(),
+            TrajectoryBundle::new(100),
+            MotionPlayerBundle::default(),
+        ));
 }
 
 fn spawn_light(mut commands: Commands) {
@@ -51,6 +56,7 @@ fn spawn_ground(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
+    palette: Res<ColorPalette>,
 ) {
     let size = 25.0;
     let mut plane_mesh = Plane3d::default().mesh().size(size, size).build();
@@ -63,28 +69,34 @@ fn spawn_ground(
         }
     };
 
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(plane_mesh),
-        material: materials.add(StandardMaterial {
-            base_color: Color::WHITE,
-            base_color_texture: Some(asset_server.load_with_settings(
-                "textures/Grid.png",
-                |s: &mut _| {
-                    *s = ImageLoaderSettings {
-                        sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
-                            // rewriting mode to repeat image,
-                            address_mode_u: ImageAddressMode::Repeat,
-                            address_mode_v: ImageAddressMode::Repeat,
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(plane_mesh),
+            material: materials.add(StandardMaterial {
+                base_color: palette.base2,
+                base_color_texture: Some(asset_server.load_with_settings(
+                    "textures/Grid.png",
+                    |s: &mut _| {
+                        *s = ImageLoaderSettings {
+                            sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
+                                // rewriting mode to repeat image,
+                                address_mode_u: ImageAddressMode::Repeat,
+                                address_mode_v: ImageAddressMode::Repeat,
+                                ..default()
+                            }),
                             ..default()
-                        }),
-                        ..default()
-                    }
-                },
-            )),
-            reflectance: 0.5,
-            metallic: 0.5,
+                        }
+                    },
+                )),
+                reflectance: 0.5,
+                metallic: 0.5,
+                ..default()
+            }),
             ..default()
-        }),
-        ..default()
-    });
+        },
+        GroundPlane,
+    ));
 }
+
+#[derive(Component)]
+pub struct GroundPlane;

@@ -1,0 +1,14 @@
+(
+    meta_format_version: "1.0",
+    processed_info: Some((
+        hash: (140, 210, 33, 225, 72, 34, 22, 168, 120, 157, 205, 69, 201, 107, 204, 7, 109, 14, 200, 44, 243, 85, 120, 180, 201, 174, 28, 0, 126, 56, 61, 128),
+        full_hash: (140, 210, 33, 225, 72, 34, 22, 168, 120, 157, 205, 69, 201, 107, 204, 7, 109, 14, 200, 44, 243, 85, 120, 180, 201, 174, 28, 0, 126, 56, 61, 128),
+        process_dependencies: [],
+    )),
+    asset: Load(
+        loader: "bevy_bvh_anim::bvh_asset::BvhAssetLoader",
+        settings: (
+            loopable: false,
+        ),
+    ),
+)
