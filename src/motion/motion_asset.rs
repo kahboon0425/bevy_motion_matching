@@ -7,6 +7,8 @@ use bevy_bvh_anim::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::LARGE_EPSILON;
+
 use super::joint_info::JointInfo;
 use super::pose_data::PoseData;
 use super::trajectory_data::{TrajectoryData, TrajectoryDataConfig, TrajectoryDataPoint};
@@ -102,7 +104,7 @@ impl MotionAsset {
                 }
                 // Make sure it's not above the final frame.
                 // (With an EPSILON error away :D)
-                let time = f32::min(target_time, bvh_duration - f32::EPSILON);
+                let time = f32::min(target_time, bvh_duration - LARGE_EPSILON);
 
                 // Interpolate between 2 surrounding frame.
                 let start = (time / frame_time) as usize;

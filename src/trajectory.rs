@@ -313,6 +313,7 @@ impl TrajectoryDistance for [TrajectoryPoint] {
             offset_distance += Vec2::distance(offset1, offset0);
         }
 
+        // NOTE: Velocity matching is not quite reliable yet.
         // let mut velocity_distance = 0.0;
 
         // for i in 0..len {

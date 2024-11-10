@@ -157,23 +157,18 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
 
     ui.group(|ui| {
         TableBuilder::new(ui)
-            .columns(Column::exact(110.0).resizable(true), 4)
+            .columns(Column::auto(), 3)
             .header(20.0, |mut header| {
                 header.col(|ui| {
-                    ui.heading(egui::RichText::new("Chunk Index").size(12.0));
-
+                    ui.heading(egui::RichText::new("Index:Offset").size(12.0).strong());
                     ui.separator();
                 });
                 header.col(|ui| {
-                    ui.heading(egui::RichText::new("Chunk offset").size(12.0));
+                    ui.heading(egui::RichText::new("Traj Dist.").size(12.0).strong());
                     ui.separator();
                 });
                 header.col(|ui| {
-                    ui.heading(egui::RichText::new("Trajectory Distance").size(12.0));
-                    ui.separator();
-                });
-                header.col(|ui| {
-                    ui.heading(egui::RichText::new("Pose Distance").size(12.0));
+                    ui.heading(egui::RichText::new("Pose Dist.").size(12.0).strong());
                     ui.separator();
                 });
             })
@@ -189,23 +184,20 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
                     body.row(20.0, |mut row| {
                         row.col(|ui| {
                             ui.visuals_mut().override_text_color = row_color;
-
-                            ui.label(format!("{}", trajectory.chunk_index));
+                            ui.label(format!(
+                                "{}:{}",
+                                trajectory.chunk_index, trajectory.chunk_offset
+                            ));
                             ui.separator();
                         });
                         row.col(|ui| {
                             ui.visuals_mut().override_text_color = row_color;
-                            ui.label(format!("{}", trajectory.chunk_offset));
+                            ui.label(format!("{:.3}", trajectory.distance));
                             ui.separator();
                         });
                         row.col(|ui| {
                             ui.visuals_mut().override_text_color = row_color;
-                            ui.label(format!("{}", trajectory.distance));
-                            ui.separator();
-                        });
-                        row.col(|ui| {
-                            ui.visuals_mut().override_text_color = row_color;
-                            ui.label(format!("{}", pose_dist));
+                            ui.label(format!("{:.3}", pose_dist));
                             ui.separator();
                         });
                     });

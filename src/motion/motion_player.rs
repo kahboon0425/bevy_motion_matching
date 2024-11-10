@@ -37,10 +37,15 @@ impl Plugin for MotionPlayerPlugin {
             Update,
             (
                 jump_to_pose.in_set(MotionPlayerSet::JumpToPose),
-                apply_trajectory_pose.in_set(MotionPlayerSet::ApplyPose),
+                apply_trajectory_pose
+                    .chain()
+                    .in_set(MotionPlayerSet::ApplyPose),
                 pose_to_joint_transforms.in_set(MotionPlayerSet::ApplyJointTransform),
                 apply_root_transform.in_set(MotionPlayerSet::ApplyRootTransform),
-                (update_trajectory_pose_time, update_interp_factor)
+                (
+                    (loop_trajectory_pose_time, update_trajectory_pose_time).chain(),
+                    update_interp_factor,
+                )
                     .in_set(MotionPlayerSet::Interpolate),
                 test.before(MotionPlayerSet::JumpToPose),
             )
@@ -89,11 +94,7 @@ fn apply_root_transform(
     )>,
     mut q_transforms: Query<&mut Transform>,
 ) {
-    let Some(root_joint) = motion_data
-        .get()
-        // SAFETY: We assume there is a root joint.
-        .map(|asset| asset.get_joint(0).unwrap())
-    else {
+    let Some(root_joint) = motion_data.get().and_then(|asset| asset.get_joint(0)) else {
         return;
     };
 
@@ -110,7 +111,6 @@ fn apply_root_transform(
         for i in 0..2 {
             if let Some(traj_pose) = &traj_pose_pair[i] {
                 let root_transform2d = traj_pose.entity_root_transform2d;
-
                 let traj_inv_matrix = traj_pose.traj_root_matrix.inverse();
 
                 let pose_matrix = traj_pose.pose.get_matrix(root_joint);
@@ -258,7 +258,51 @@ fn update_trajectory_pose_time(
 ) {
     for mut traj_pose_pair in q_traj_pose_pairs.iter_mut() {
         for traj_pose in traj_pose_pair.iter_mut().filter_map(Some).flatten() {
-            traj_pose.update_time(time.delta_seconds())
+            traj_pose.update_time(time.delta_seconds());
+        }
+    }
+}
+
+fn loop_trajectory_pose_time(
+    motion_data: MotionData,
+    mut q_traj_pose_pairs: Query<(&mut TrajectoryPosePair, &MotionPlayer, &Transform2d)>,
+) {
+    let Some(motion_asset) = motion_data.get() else {
+        return;
+    };
+
+    let Some(root_joint) = motion_asset.get_joint(0) else {
+        return;
+    };
+
+    for (mut traj_pose_pair, motion_player, transform2d) in q_traj_pose_pairs.iter_mut() {
+        let index = motion_player.target_pair_index();
+
+        if let Some(traj_pose) = traj_pose_pair[index].as_mut() {
+            let pose_data = &motion_asset.pose_data;
+
+            if pose_data.is_chunk_loopable(traj_pose.motion_pose.chunk_index) != Some(true) {
+                continue;
+            }
+
+            // SAFETY: Already checked above.
+            let poses = pose_data.get_chunk_unchecked(traj_pose.motion_pose.chunk_index);
+            let duration = pose_data.interval_time() * poses.len().saturating_sub(1) as f32;
+
+            // Time is still within the animation duration, continue playing...
+            if traj_pose.motion_pose.time < duration {
+                continue;
+            }
+
+            // Set time.
+            traj_pose.motion_pose.time %= duration;
+            // Loop time.
+            if let Some(pose) = traj_pose.motion_pose.get_pose(pose_data) {
+                // Set transforms.
+                traj_pose.traj_root_matrix = pose.get_matrix(root_joint);
+                traj_pose.entity_root_transform2d = *transform2d;
+                traj_pose.pose = pose;
+            }
         }
     }
 }
@@ -342,7 +386,9 @@ impl TrajectoryPosePair {
         let pose1 = self[1].as_ref().map(|traj_pose| &traj_pose.pose);
 
         match (factor, pose0, pose1) {
+            // Fully committed to the first one only.
             (_, Some(pose), None) | (0.0, Some(pose), _) => Some(pose.clone()),
+            // Fully committed to the second one only.
             (_, None, Some(pose)) | (1.0, _, Some(pose)) => Some(pose.clone()),
             (t, Some(pose0), Some(pose1)) => Some(Pose::lerp(pose0, pose1, t)),
             _ => None,
@@ -410,13 +456,12 @@ impl MotionPose {
 
         let poses = pose_data.get_chunk(self.chunk_index)?;
 
-        // 2 poses is a segment, so we need to deduct by 1.
-        let total_duration = interval_time * (poses.len().saturating_sub(1)) as f32;
+        // 2 poses is an animation segment, so we need to deduct by 1.
+        let duration = interval_time * (poses.len().saturating_sub(1)) as f32;
 
         // Make sure it's not above the final frame.
         // (With an EPSILON error away :D)
-        let time = f32::min(self.time, total_duration - LARGE_EPSILON);
-        // let time = f32::min(self.time, total_duration - f32::EPSILON);
+        let time = f32::min(self.time, duration - LARGE_EPSILON);
 
         // Interpolate between 2 surrounding frame.
         let start = (time / interval_time) as usize;
@@ -456,25 +501,6 @@ impl TrajectoryPose {
         }
 
         false
-    }
-
-    /// Loop [`Self::motion_pose`] time if possible.
-    /// Returns true if successful and vice versa.
-    ///
-    /// Note: This does not apply the pose itself. (See [`Self::try_apply_pose`])
-    fn try_loop_pose(&mut self, pose_data: &PoseData) -> bool {
-        if pose_data.is_chunk_loopable(self.motion_pose.chunk_index) != Some(true) {
-            return false;
-        }
-
-        // SAFETY: Already checked above.
-        let poses = pose_data.get_chunk_unchecked(self.motion_pose.chunk_index);
-        let duration = pose_data.interval_time() * poses.len().saturating_sub(1) as f32;
-
-        // Loop time.
-        self.motion_pose.time %= duration;
-
-        true
     }
 
     /// Increase [`Self::elapsed_time`] and [`Self::motion_pose`] time.

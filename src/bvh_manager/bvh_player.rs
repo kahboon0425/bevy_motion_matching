@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
     utils::hashbrown::HashMap,
 };
-use bevy_bvh_anim::prelude::*;
+use bevy_bvh_anim::{bvh_anim::ChannelType, prelude::*};
 
 use crate::{scene_loader::MainScene, GameMode};
 
@@ -121,7 +121,7 @@ fn bvh_player(
         return;
     };
 
-    let current_frame = FrameData(current_frame);
+    let curr_frame = FrameData(current_frame);
     let next_frame = FrameData(next_frame);
 
     for joint_map in q_scene.iter() {
@@ -141,35 +141,31 @@ fn bvh_player(
             let offset = Vec3::new(o.x, o.y, o.z);
 
             // Get data from 2 frames surrounding the target time.
-            let mut curr_translation = offset;
-            let mut next_translation = offset;
+            let mut curr_pos = offset;
+            let mut next_pos = offset;
 
             let channels = joint_data.channels();
 
-            let curr_euler;
-            let next_euler;
+            let curr_rot;
+            let next_rot;
 
             if channels.len() == 3 {
-                curr_euler = current_frame.get_euler(channels);
-                next_euler = next_frame.get_euler(channels);
+                curr_rot = curr_frame.get_rot(channels);
+                next_rot = next_frame.get_rot(channels);
             } else {
-                let current_offset;
+                let curr_offset;
                 let next_offset;
-                (current_offset, curr_euler) = current_frame.get_translation_euler(channels);
-                (next_offset, next_euler) = next_frame.get_translation_euler(channels);
+                (curr_offset, curr_rot) = curr_frame.get_pos_rot(channels);
+                (next_offset, next_rot) = next_frame.get_pos_rot(channels);
 
                 // Overwrite translation if it exists
-                curr_translation = current_offset;
-                next_translation = next_offset;
+                curr_pos = curr_offset;
+                next_pos = next_offset;
             }
 
-            let curr_rotation = eulerdeg_to_quat(curr_euler);
-            let next_rotation = eulerdeg_to_quat(next_euler);
-
             // Interpolate between the 2 frames
-            let interp_translation =
-                Vec3::lerp(curr_translation, next_translation, interpolation_factor);
-            let interp_rotation = Quat::slerp(curr_rotation, next_rotation, interpolation_factor);
+            let interp_translation = Vec3::lerp(curr_pos, next_pos, interpolation_factor);
+            let interp_rotation = Quat::slerp(curr_rot, next_rot, interpolation_factor);
 
             transform.translation = interp_translation;
             transform.rotation = interp_rotation;
@@ -186,35 +182,24 @@ fn bvh_player(
 }
 
 pub fn get_pose(local_time: f32, bvh_data: &Bvh) -> (usize, f32) {
-    let duration_per_frame = bvh_data.frame_time().as_secs_f32();
+    let frame_time = bvh_data.frame_time().as_secs_f32();
+    let num_frame = bvh_data.num_frames();
+    // 2 frames is an animation segment, so we need to deduct by 1.
+    let duration = frame_time * num_frame.saturating_sub(1) as f32;
+    let time = local_time % duration;
 
-    let total_animation_time = duration_per_frame * bvh_data.frames().len() as f32;
+    let frame_index = (time / frame_time) as usize;
+    let interp_factor = (time % frame_time) / frame_time;
 
-    let animation_time = local_time % total_animation_time;
-
-    let frame_index =
-        (animation_time / duration_per_frame).floor() as usize % bvh_data.frames().len();
-
-    let interpolation_factor = (animation_time % duration_per_frame) / duration_per_frame;
-
-    (frame_index, interpolation_factor)
+    (frame_index, interp_factor)
 }
 
-pub fn quat_to_eulerdeg(rotation: Quat) -> Vec3 {
+fn quat_to_eulerdeg(rotation: Quat) -> Vec3 {
     let euler = rotation.to_euler(EulerRot::XYZ);
     Vec3::new(
         euler.0.to_degrees(),
         euler.1.to_degrees(),
         euler.2.to_degrees(),
-    )
-}
-
-pub fn eulerdeg_to_quat(euler: Vec3) -> Quat {
-    Quat::from_euler(
-        EulerRot::XYZ,
-        euler.x.to_radians(),
-        euler.y.to_radians(),
-        euler.z.to_radians(),
     )
 }
 
@@ -225,31 +210,71 @@ pub struct JointMap(pub HashMap<String, Entity>);
 #[derive(Resource, Default, Debug)]
 pub struct SelectedBvhAsset(pub AssetId<BvhAsset>);
 
-#[derive(Debug)]
+#[derive(Debug, Deref)]
 pub struct FrameData<'a>(pub &'a Frame);
 
 impl<'a> FrameData<'a> {
-    pub fn get_euler(&self, channels: &[Channel]) -> Vec3 {
-        Vec3::new(
-            self.0[&channels[0]],
-            self.0[&channels[1]],
-            self.0[&channels[2]],
+    pub fn get_pos_rot(&self, channels: &[Channel]) -> (Vec3, Quat) {
+        let mut pos = Vec3::ZERO;
+        let mut euler = Vec3::ZERO;
+
+        for channel in channels {
+            let Some(&data) = self.get(channel) else {
+                continue;
+            };
+
+            match channel.channel_type() {
+                ChannelType::RotationX => euler.x = data.to_radians(),
+                ChannelType::RotationY => euler.y = data.to_radians(),
+                ChannelType::RotationZ => euler.z = data.to_radians(),
+                ChannelType::PositionX => pos.x = data,
+                ChannelType::PositionY => pos.y = data,
+                ChannelType::PositionZ => pos.z = data,
+            }
+        }
+
+        (
+            pos,
+            Quat::from_euler(EulerRot::XYZ, euler.x, euler.y, euler.z),
         )
     }
 
-    pub fn get_translation_euler(&self, channels: &[Channel]) -> (Vec3, Vec3) {
-        (
-            Vec3::new(
-                self.0[&channels[0]],
-                self.0[&channels[1]],
-                self.0[&channels[2]],
-            ),
-            Vec3::new(
-                self.0[&channels[3]],
-                self.0[&channels[4]],
-                self.0[&channels[5]],
-            ),
-        )
+    pub fn get_pos(&self, channels: &[Channel]) -> Vec3 {
+        let mut pos = Vec3::ZERO;
+
+        for channel in channels {
+            let Some(&data) = self.get(channel) else {
+                continue;
+            };
+
+            match channel.channel_type() {
+                ChannelType::PositionX => pos.x = data,
+                ChannelType::PositionY => pos.y = data,
+                ChannelType::PositionZ => pos.z = data,
+                _ => {}
+            }
+        }
+
+        pos
+    }
+
+    pub fn get_rot(&self, channels: &[Channel]) -> Quat {
+        let mut euler = Vec3::ZERO;
+
+        for channel in channels {
+            let Some(&data) = self.get(channel) else {
+                continue;
+            };
+
+            match channel.channel_type() {
+                ChannelType::RotationX => euler.x = data.to_radians(),
+                ChannelType::RotationY => euler.y = data.to_radians(),
+                ChannelType::RotationZ => euler.z = data.to_radians(),
+                _ => {}
+            }
+        }
+
+        Quat::from_euler(EulerRot::XYZ, euler.x, euler.y, euler.z)
     }
 }
 

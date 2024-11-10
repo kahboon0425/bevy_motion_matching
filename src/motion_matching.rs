@@ -18,7 +18,7 @@ impl Plugin for MotionMatchingPlugin {
         app.insert_resource(MatchConfig {
             max_match_count: 5,
             match_threshold: 0.2,
-            pred_match_threshold: 0.1,
+            pred_match_threshold: 0.15,
         })
         .add_event::<TrajectoryMatch>()
         .add_event::<PredictionMatch>()
@@ -91,9 +91,12 @@ fn prediction_match(
     mut pred_match_evr: EventReader<PredictionMatch>,
     mut match_evw: EventWriter<TrajectoryMatch>,
 ) {
-    let Some(trajector_data) = motion_data.get().map(|asset| &asset.trajectory_data) else {
+    let Some(motion_asset) = motion_data.get() else {
         return;
     };
+
+    let trajectory_data = &motion_asset.trajectory_data;
+    let pose_data = &motion_asset.pose_data;
 
     let num_points = trajectory_config.num_predict_points();
 
@@ -115,17 +118,25 @@ fn prediction_match(
             })
             .collect::<Vec<_>>();
 
-        let chunk_offset = trajector_data.chunk_offset_from_time(pred_match.time);
+        let mut chunk_offset = trajectory_data.chunk_offset_from_time(pred_match.time);
 
-        let Some(data_traj_chunk) = trajector_data.get_chunk(pred_match.chunk_index) else {
+        let (Some(data_traj_chunk), Some(loopable)) = (
+            trajectory_data.get_chunk(pred_match.chunk_index),
+            pose_data.is_chunk_loopable(pred_match.chunk_index),
+        ) else {
             match_evw.send(TrajectoryMatch(pred_match.entity));
             continue;
         };
 
         // Do we have enough trajectories?
-        if data_traj_chunk.len() - chunk_offset < num_points {
-            match_evw.send(TrajectoryMatch(pred_match.entity));
-            continue;
+        if data_traj_chunk.len().saturating_sub(chunk_offset) < num_points {
+            match loopable {
+                true => chunk_offset = 0,
+                false => {
+                    match_evw.send(TrajectoryMatch(pred_match.entity));
+                    continue;
+                }
+            }
         }
 
         let data_traj = &data_traj_chunk[chunk_offset..chunk_offset + num_points];
@@ -298,6 +309,8 @@ fn pose_match(
                     pose_dist += Quat::angle_between(transform.rotation, pose_rot);
                 }
             }
+            pose_dist /= motion_asset.joints().len() as f32;
+            pose_dist *= BVH_SCALE_RATIO;
 
             if pose_dist < smallest_pose_dist {
                 smallest_pose_dist = pose_dist;
