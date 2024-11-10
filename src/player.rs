@@ -12,8 +12,8 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(MovementConfig {
-            walk_speed: 3.0,
-            run_speed: 6.0,
+            walk_speed: 2.0,
+            run_speed: 4.0,
             lerp_factor: 10.0,
         })
         .add_systems(

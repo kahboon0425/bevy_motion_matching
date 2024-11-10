@@ -41,6 +41,7 @@ fn predict_trajectory(
     movement_config: Res<MovementConfig>,
 ) {
     const DAMPING: f32 = 0.9;
+    // const STOP_DAMPING: f32 = 0.8;
 
     for (mut trajectory, transform2d, velocity, direction) in q_trajectories.iter_mut() {
         // Predict trajectory.
@@ -340,26 +341,40 @@ impl TrajectoryConfig {
         self.interval_time * self.history_count as f32
     }
 
-    /// Number of trajectory segments in a trajectory.
+    /// Number of segments in a trajectory.
     #[inline]
     pub fn num_segments(&self) -> usize {
         self.predict_count + self.history_count
     }
 
-    /// Number of trajectory points in a trajectory.
+    /// Number of points in a trajectory.
     #[inline]
     pub fn num_points(&self) -> usize {
         self.num_segments() + 1
     }
 
+    /// Number of prediction segments in a trajectory.
     #[inline]
     pub fn num_predict_segments(&self) -> usize {
         self.predict_count
     }
 
+    /// Number of prediction points in a trajectory.
     #[inline]
     pub fn num_predict_points(&self) -> usize {
         self.num_predict_segments() + 1
+    }
+
+    /// Number of history segments in a trajectory.
+    #[inline]
+    pub fn num_history_segments(&self) -> usize {
+        self.history_count
+    }
+
+    /// Number of history points in a trajectory.
+    #[inline]
+    pub fn num_history_points(&self) -> usize {
+        self.num_history_segments() + 1
     }
 
     /// Total duration of the entire trajectory.

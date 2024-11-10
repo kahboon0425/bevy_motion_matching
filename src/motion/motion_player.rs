@@ -30,7 +30,7 @@ impl Plugin for MotionPlayerPlugin {
         );
 
         app.insert_resource(MotionPlayerConfig {
-            interpolation_duration: 0.3333,
+            interp_duration: 0.3333,
         })
         .add_event::<JumpToPose>()
         .add_systems(
@@ -40,7 +40,7 @@ impl Plugin for MotionPlayerPlugin {
                 apply_trajectory_pose.in_set(MotionPlayerSet::ApplyPose),
                 pose_to_joint_transforms.in_set(MotionPlayerSet::ApplyJointTransform),
                 apply_root_transform.in_set(MotionPlayerSet::ApplyRootTransform),
-                (update_trajectory_pose_time, update_interpolation_factor)
+                (update_trajectory_pose_time, update_interp_factor)
                     .in_set(MotionPlayerSet::Interpolate),
                 test.before(MotionPlayerSet::JumpToPose),
             )
@@ -149,7 +149,7 @@ fn apply_root_transform(
         }
 
         let root_config = match (
-            motion_player.interpolation_factor,
+            motion_player.interp_factor,
             final_root_config[0],
             final_root_config[1],
         ) {
@@ -225,7 +225,7 @@ fn jump_to_pose(
             continue;
         };
 
-        let index = motion_player.target_frame_index;
+        let index = motion_player.target_pair_index;
         traj_pose_pair[index] = Some(TrajectoryPose {
             motion_pose: **jump_to_pose,
             traj_root_matrix: pose.get_matrix(root_joint),
@@ -236,20 +236,19 @@ fn jump_to_pose(
     }
 }
 
-fn update_interpolation_factor(
+fn update_interp_factor(
     mut q_motion_players: Query<&mut MotionPlayer>,
     time: Res<Time>,
     motion_player_config: Res<MotionPlayerConfig>,
 ) {
     assert!(
-        motion_player_config.interpolation_duration > 0.0,
+        motion_player_config.interp_duration > 0.0,
         "Interpolation duration cannot be 0 or below!"
     );
 
     for mut motion_player in q_motion_players.iter_mut() {
-        motion_player.update_interpolation_factor(
-            time.delta_seconds() / motion_player_config.interpolation_duration,
-        );
+        motion_player
+            .update_interp_factor(time.delta_seconds() / motion_player_config.interp_duration);
     }
 }
 
@@ -291,8 +290,7 @@ fn pose_to_joint_transforms(
     };
 
     for (traj_pose_pair, motion_player, joint_map) in q_motion_players.iter() {
-        let Some(pose) = traj_pose_pair.get_interpolated_pose(motion_player.interpolation_factor)
-        else {
+        let Some(pose) = traj_pose_pair.get_interpolated_pose(motion_player.interp_factor) else {
             return;
         };
 
@@ -355,36 +353,41 @@ impl TrajectoryPosePair {
 #[derive(Component, Debug, Default)]
 pub struct MotionPlayer {
     /// Interpolation factor between [`Self::motion_poses`].
-    interpolation_factor: f32,
-    /// The target index of [`Self::motion_poses`].
-    /// Also denotes which direction [`Self::interpolation_factor`] is going towards.
-    target_frame_index: usize,
-}
-
-#[derive(Resource, Debug)]
-pub struct MotionPlayerConfig {
-    /// Duration for [`Self::interpolation_factor`] to go between 0 and 1.
-    interpolation_duration: f32,
+    interp_factor: f32,
+    /// The target index of [`TrajectoryPosePair`].
+    /// Also denotes which direction [`Self::interp_factor`] is going towards.
+    target_pair_index: usize,
 }
 
 impl MotionPlayer {
     fn switch_target_index(&mut self) {
-        self.target_frame_index = (self.target_frame_index + 1) % 2;
+        self.target_pair_index = (self.target_pair_index + 1) % 2;
     }
 
-    /// Update [`Self::interpolation_factor`] based on [`Self::interpolation_duration`].
-    fn update_interpolation_factor(&mut self, delta_factor: f32) {
-        match self.target_frame_index {
+    /// Update [`Self::interp_factor`] based on [`MotionPlayerConfig::interp_duration`].
+    fn update_interp_factor(&mut self, delta_factor: f32) {
+        match self.target_pair_index {
             0 => {
-                self.interpolation_factor = f32::max(0.0, self.interpolation_factor - delta_factor);
+                self.interp_factor = f32::max(0.0, self.interp_factor - delta_factor);
             }
             1 => {
-                self.interpolation_factor = f32::min(1.0, self.interpolation_factor + delta_factor);
+                self.interp_factor = f32::min(1.0, self.interp_factor + delta_factor);
             }
             x => {
                 error!("Target frame index of MotionPlayer is neither 0 nor 1! It's {x}...");
             }
         }
+    }
+}
+
+// Getters
+impl MotionPlayer {
+    pub fn target_pair_index(&self) -> usize {
+        self.target_pair_index
+    }
+
+    pub fn interp_factor(&self) -> f32 {
+        self.interp_factor
     }
 }
 
@@ -481,10 +484,25 @@ impl TrajectoryPose {
     }
 }
 
-fn remove_y_rotation(quaternion: Quat) -> Quat {
-    // Decompose the quaternion into forward and up vectors
-    let forward = quaternion.mul_vec3(Vec3::Z).normalize();
+// Getters
+impl TrajectoryPose {
+    pub fn motion_pose(&self) -> &MotionPose {
+        &self.motion_pose
+    }
 
-    // Create a new quaternion that aligns the forward vector while keeping it horizontal
-    Quat::from_rotation_arc(forward, Vec3::new(forward.x, 0.0, forward.z).normalize())
+    pub fn elapsed_time(&self) -> f32 {
+        self.elapsed_time
+    }
+}
+
+#[derive(Resource, Debug)]
+pub struct MotionPlayerConfig {
+    /// Duration for [`MotionPlayer::interp_factor`] to go between 0 and 1.
+    interp_duration: f32,
+}
+
+impl MotionPlayerConfig {
+    pub fn interp_duration(&self) -> f32 {
+        self.interp_duration
+    }
 }

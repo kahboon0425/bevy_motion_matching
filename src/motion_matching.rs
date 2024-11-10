@@ -3,7 +3,9 @@ use bevy::prelude::*;
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion::chunk::ChunkIterator;
 use crate::motion::motion_asset::MotionAsset;
-use crate::motion::motion_player::{JumpToPose, MotionPose};
+use crate::motion::motion_player::{
+    JumpToPose, MotionPlayer, MotionPlayerConfig, MotionPose, TrajectoryPosePair,
+};
 use crate::motion::{MotionData, MotionHandle};
 use crate::trajectory::{Trajectory, TrajectoryConfig, TrajectoryDistance, TrajectoryPoint};
 use crate::ui::play_mode::MotionMatchingResult;
@@ -13,29 +15,22 @@ pub struct MotionMatchingPlugin;
 
 impl Plugin for MotionMatchingPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(MotionMatchingConfig {
+        app.insert_resource(MatchConfig {
             max_match_count: 5,
-            match_threshold: 1.0,
-            pred_match_threshold: 1.0,
+            match_threshold: 0.2,
+            pred_match_threshold: 0.1,
         })
         .add_event::<TrajectoryMatch>()
         .add_event::<PredictionMatch>()
         .add_event::<NearestTrajectories>()
-        .add_systems(Startup, load_motion_data)
-        .add_systems(Update, test)
+        .add_systems(PreStartup, load_motion_data)
         .add_systems(
             Update,
-            (prediction_match, trajectory_match, pose_match)
+            (flow, prediction_match, trajectory_match, pose_match)
                 .chain()
                 .in_set(MainSet::MotionMatching)
                 .run_if(in_state(GameMode::Play)),
         );
-    }
-}
-
-fn test(input: Res<ButtonInput<KeyCode>>, mut match_evw: EventWriter<TrajectoryMatch>) {
-    if input.just_pressed(KeyCode::Space) {
-        match_evw.send(TrajectoryMatch);
     }
 }
 
@@ -46,22 +41,126 @@ pub fn load_motion_data(mut commands: Commands, asset_server: Res<AssetServer>) 
     commands.insert_resource(MotionHandle(motion_data));
 }
 
+fn flow(
+    q_players: Query<(&MotionPlayer, &TrajectoryPosePair, Entity)>,
+    trajectory_config: Res<TrajectoryConfig>,
+    motion_player_config: Res<MotionPlayerConfig>,
+    mut match_evw: EventWriter<TrajectoryMatch>,
+    mut pred_match_evw: EventWriter<PredictionMatch>,
+) {
+    let predict_time = trajectory_config.predict_time();
+    let interp_duration = motion_player_config.interp_duration();
+
+    let max_elapsed_time = predict_time - interp_duration;
+    assert!(
+        max_elapsed_time > 0.0,
+        "Prediction duration cannot be shorter than interpolation duration!"
+    );
+
+    for (motion_player, traj_pose_pair, entity) in q_players.iter() {
+        let index = motion_player.target_pair_index();
+        let Some(traj_pose) = &traj_pose_pair[index] else {
+            // Find a new animation to play.
+            match_evw.send(TrajectoryMatch(entity));
+            continue;
+        };
+
+        match traj_pose.elapsed_time() < max_elapsed_time {
+            true => {
+                // Continue playing the animation...
+                continue;
+            }
+            false => {
+                pred_match_evw.send(PredictionMatch {
+                    motion_pose: *traj_pose.motion_pose(),
+                    entity,
+                });
+            }
+        }
+    }
+}
+
+/// Match only the prediction trajectory on the current playing trajectory.
+///
+/// Performs a match [`PredictionMatch`] event.
+fn prediction_match(
+    motion_data: MotionData,
+    q_trajectory: Query<(&Trajectory, &Transform)>,
+    match_config: Res<MatchConfig>,
+    trajectory_config: Res<TrajectoryConfig>,
+    mut pred_match_evr: EventReader<PredictionMatch>,
+    mut match_evw: EventWriter<TrajectoryMatch>,
+) {
+    let Some(trajector_data) = motion_data.get().map(|asset| &asset.trajectory_data) else {
+        return;
+    };
+
+    let num_points = trajectory_config.num_predict_points();
+
+    for pred_match in pred_match_evr.read() {
+        let Ok((trajectory, transform)) = q_trajectory.get(pred_match.entity) else {
+            continue;
+        };
+
+        let inv_matrix = transform.compute_matrix().inverse();
+        let traj = trajectory
+            .iter()
+            // Only match the prediction trajectory.
+            .skip(trajectory_config.history_count)
+            .map(|&(mut point)| {
+                point.translation = inv_matrix
+                    .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
+                    .xz();
+                point
+            })
+            .collect::<Vec<_>>();
+
+        let chunk_offset = trajector_data.chunk_offset_from_time(pred_match.time);
+
+        let Some(data_traj_chunk) = trajector_data.get_chunk(pred_match.chunk_index) else {
+            match_evw.send(TrajectoryMatch(pred_match.entity));
+            continue;
+        };
+
+        // Do we have enough trajectories?
+        if data_traj_chunk.len() - chunk_offset < num_points {
+            match_evw.send(TrajectoryMatch(pred_match.entity));
+            continue;
+        }
+
+        let data_traj = &data_traj_chunk[chunk_offset..chunk_offset + num_points];
+
+        // Center point of trajectory.
+        let data_inv_matrix = data_traj[0].matrix.inverse();
+        let data_traj = data_traj
+            .iter()
+            .map(|point| {
+                let (.., translation) = point.matrix.to_scale_rotation_translation();
+                TrajectoryPoint {
+                    translation: data_inv_matrix.transform_point3(translation).xz()
+                        * BVH_SCALE_RATIO,
+                    velocity: point.velocity * BVH_SCALE_RATIO,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if traj.distance(&data_traj) > match_config.pred_match_threshold {
+            match_evw.send(TrajectoryMatch(pred_match.entity));
+        }
+    }
+}
+
 /// Search for the best match trajectory from [`MotionData`].
 ///
 /// Performs a match every [`TrajectoryMatch`] event.
 fn trajectory_match(
     motion_data: MotionData,
-    q_trajectory: Query<(&Trajectory, &Transform, Entity)>,
+    q_trajectory: Query<(&Trajectory, &Transform)>,
     mut match_evr: EventReader<TrajectoryMatch>,
     trajectory_config: Res<TrajectoryConfig>,
-    match_config: Res<MotionMatchingConfig>,
+    match_config: Res<MatchConfig>,
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
 ) {
-    if match_evr.is_empty() {
-        return;
-    }
-    match_evr.clear();
-
     let Some(motion_data) = motion_data.get() else {
         return;
     };
@@ -69,16 +168,19 @@ fn trajectory_match(
     let num_segments = trajectory_config.num_segments();
     let num_points = trajectory_config.num_points();
 
-    for (trajectory, transform, entity) in q_trajectory.iter() {
+    for traj_match in match_evr.read() {
+        let entity = **traj_match;
+        let Ok((traj, transform)) = q_trajectory.get(entity) else {
+            continue;
+        };
+
         let inv_matrix = transform.compute_matrix().inverse();
-        let traj = trajectory
+        let traj = traj
             .iter()
             .map(|&(mut point)| {
                 point.translation = inv_matrix
                     .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
                     .xz();
-                // x axis is reversed in bevy.
-                point.translation.x = -point.translation.x;
                 point
             })
             .collect::<Vec<_>>();
@@ -86,7 +188,6 @@ fn trajectory_match(
         let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
 
         for (chunk_index, chunk) in motion_data.trajectory_data.iter_chunk().enumerate() {
-            println!("CHUNK #{chunk_index}");
             // Number of trajectory in this chunk.
             let num_trajectories = chunk.len() - num_segments;
 
@@ -109,7 +210,6 @@ fn trajectory_match(
                     .collect::<Vec<_>>();
 
                 let distance = traj.distance(&data_traj);
-                println!("{distance}");
 
                 // Distance must be below the threshold.
                 if distance > match_config.match_threshold {
@@ -224,105 +324,16 @@ fn pose_match(
     }
 }
 
-/// Match only the prediction trajectory on the current playing trajectory.
-///
-/// Performs a match [`PredictionMatch`] event.
-fn prediction_match(
-    motion_data: MotionData,
-    q_trajectory: Query<(&Trajectory, &Transform)>,
-    trajectory_config: Res<TrajectoryConfig>,
-    mut match_evr: EventWriter<TrajectoryMatch>,
-    mut jump_evr: EventReader<JumpToPose>,
-) {
-    let threshold = 0.02;
-
-    let Some(motion_data) = motion_data.get() else {
-        return;
-    };
-
-    let num_segments = trajectory_config.num_predict_segments();
-    let num_points = trajectory_config.num_predict_points();
-
-    for (trajectory, transform) in q_trajectory.iter() {
-        let entity_inv_matrix = transform.compute_matrix().inverse();
-        let entity_trajectory = trajectory
-            .iter()
-            .skip(trajectory_config.history_count)
-            .map(|&(mut point)| {
-                point.translation = entity_inv_matrix
-                    .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
-                    .xz();
-                point
-            })
-            .collect::<Vec<_>>();
-
-        for jump_to_pose in jump_evr.read() {
-            let curr_chunk_index = jump_to_pose.chunk_index;
-            let curr_time = jump_to_pose.time;
-            // println!("Time {}", curr_time);
-            let chunk_offset = motion_data
-                .trajectory_data
-                .chunk_offset_from_time(curr_time);
-            // println!("Chunk Offset: {}", chunk_offset);
-
-            let current_chunk = motion_data.trajectory_data.get_chunk(curr_chunk_index);
-            // println!("Current Chunk: {:?}", current_chunk);
-
-            if let Some(chunk) = current_chunk {
-                let num_trajectories =
-                    calculate_trajectory_count(chunk.len(), chunk_offset, num_segments);
-                // println!("Number of traj: {}", num_trajectories);
-
-                if num_trajectories <= num_segments {
-                    match_evr.send(TrajectoryMatch);
-                    return;
-                } else {
-                    let trajectory_data = &chunk[chunk_offset..chunk_offset + num_points];
-
-                    // Center point of trajectory
-                    let data_inv_matrix = trajectory_data[0].matrix.inverse();
-                    let data_trajectory = trajectory_data
-                        .iter()
-                        .map(|point| {
-                            let (.., translation) = point.matrix.to_scale_rotation_translation();
-                            TrajectoryPoint {
-                                translation: data_inv_matrix.transform_point3(translation).xz()
-                                    * BVH_SCALE_RATIO,
-                                velocity: point.velocity * BVH_SCALE_RATIO,
-                            }
-                        })
-                        .collect::<Vec<_>>();
-                    let distance = entity_trajectory.distance(&data_trajectory);
-                    println!("Distance: {}", distance);
-                    if distance >= threshold {
-                        println!("{}", "Sending");
-                        match_evr.send(TrajectoryMatch);
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn calculate_trajectory_count(chunk_len: usize, offset: usize, num_segments: usize) -> usize {
-    let length_from_offset = chunk_len.saturating_sub(offset);
-    println!("Chunk len from curr chunk offset: {}", length_from_offset);
-    if length_from_offset <= num_segments {
-        0
-    } else {
-        length_from_offset - num_segments
-    }
-}
-
-#[derive(Event, Debug)]
-pub struct TrajectoryMatch;
-
-// #[derive(Event, Debug)]
-// pub struct TrajectoryMatch(pub Entity);
+#[derive(Event, Debug, Deref, DerefMut)]
+pub struct TrajectoryMatch(pub Entity);
 
 // TODO: Prediction match must loop back for loopable animations.
-#[derive(Event, Debug, Deref)]
-pub struct PredictionMatch(MotionPose);
+#[derive(Event, Debug, Deref, DerefMut)]
+pub struct PredictionMatch {
+    #[deref]
+    pub motion_pose: MotionPose,
+    pub entity: Entity,
+}
 
 #[derive(Component, Default, Debug)]
 pub struct BestPoseResult {
@@ -351,7 +362,7 @@ pub struct NearestTrajectories {
 }
 
 #[derive(Resource, Debug)]
-pub struct MotionMatchingConfig {
+pub struct MatchConfig {
     /// Maximum number of trajectory matches.
     pub max_match_count: usize,
     /// Any distance beyond this threshold will not be considered.
