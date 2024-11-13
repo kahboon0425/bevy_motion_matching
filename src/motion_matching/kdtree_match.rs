@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use kdtree::distance::squared_euclidean;
+// use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 
 use crate::motion::chunk::ChunkIterator;
@@ -107,45 +107,24 @@ pub(super) fn trajectory_match_with_kdtree(
             traj_offsets.push(offset.y);
         }
 
-        // println!("current traj: {:?}", user_traj);
-
-        let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
-        let nearest_trajectories = kd_tree
+        let nearest_trajs = kd_tree
             .nearest(
                 &traj_offsets,
                 match_config.max_match_count,
-                &squared_euclidean,
+                &offset_distance,
+                // &squared_euclidean,
             )
-            .unwrap();
+            .unwrap()
+            .into_iter()
+            .filter(|(distance, (..))| *distance < match_config.match_threshold)
+            .map(|(distance, &(chunk_index, chunk_offset))| MatchTrajectory {
+                distance,
+                chunk_index,
+                chunk_offset,
+            })
+            .collect::<Vec<_>>();
 
-        println!("{:?}", nearest_trajectories);
-
-        for (distance, (chunk_index, chunk_offset)) in nearest_trajectories {
-            // println!("Nearest Traj Distance: {:?}", distance);
-            // if distance > match_config.match_threshold {
-            //     continue;
-            // }
-            if nearest_trajs.len() < match_config.max_match_count {
-                // Stack not yet full, push into it
-                nearest_trajs.push(MatchTrajectory {
-                    distance,
-                    chunk_index: *chunk_index,
-                    chunk_offset: *chunk_offset,
-                });
-            } else if let Some(worst_match) = nearest_trajs.last_mut() {
-                if distance < worst_match.distance {
-                    *worst_match = MatchTrajectory {
-                        distance,
-                        chunk_index: *chunk_index,
-                        chunk_offset: *chunk_offset,
-                    };
-                }
-            }
-
-            // Sort so that trajectories with the largest distance
-            // is placed as the final element in the stack
-            nearest_trajs.sort_by(|t0, t1| t0.distance.total_cmp(&t1.distance));
-        }
+        println!("{:?}", nearest_trajs);
 
         nearest_trajectories_evw.send(NearestTrajectories {
             trajectories: nearest_trajs,
@@ -154,32 +133,23 @@ pub(super) fn trajectory_match_with_kdtree(
     }
 }
 
-fn distance_(traj: &[f32], stored_traj: &[f32]) -> f32 {
-    let len = traj.len();
-    assert_eq!(len, stored_traj.len());
-    // println!("user traj: {:?}", traj);
-    // println!("stored traj: {:?}", stored_traj);
+pub fn offset_distance(offsets0: &[f32], offsets1: &[f32]) -> f32 {
+    let len = offsets0.len();
+    debug_assert_eq!(len, offsets1.len());
 
     let mut offset_distance = 0.0;
 
-    for i in 1..len / 2 {
-        let x1 = 2 * i;
-        let y1 = x1 + 1;
-        let x0 = x1 - 2;
-        let y0 = x1 - 1;
+    for i in 0..len / 2 {
+        let x_index = i * 2;
+        let y_index = x_index + 1;
 
-        let offset0 = Vec2::new(traj[x1] - traj[x0], traj[y1] - traj[y0]);
-        let offset1 = Vec2::new(
-            stored_traj[x1] - stored_traj[x0],
-            stored_traj[y1] - stored_traj[y0],
-        );
+        let offset0 = Vec2::new(offsets0[x_index], offsets0[y_index]);
+        let offset1 = Vec2::new(offsets1[x_index], offsets1[y_index]);
 
         offset_distance += offset0.distance(offset1);
     }
 
-    // println!("Offset Distance: {}", offset_distance);
     offset_distance /= (len / 2).saturating_sub(1) as f32;
-
     offset_distance
 }
 
