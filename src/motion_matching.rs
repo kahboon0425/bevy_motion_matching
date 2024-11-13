@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use kdtree::KdTree;
 
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion::chunk::ChunkIterator;
@@ -25,11 +26,21 @@ impl Plugin for MotionMatchingPlugin {
         .add_event::<NearestTrajectories>()
         .add_systems(PreStartup, load_motion_data)
         .add_systems(
+            PreUpdate,
+            populate_kdtree.run_if(not(resource_exists::<KdTreeResource>)),
+        )
+        .add_systems(
             Update,
-            (flow, prediction_match, trajectory_match, pose_match)
+            (
+                flow,
+                prediction_match,
+                // trajectory_match,
+                trajectory_match_with_kdtree,
+                pose_match,
+            )
                 .chain()
                 .in_set(MainSet::MotionMatching)
-                .run_if(in_state(GameMode::Play)),
+                .run_if(in_state(GameMode::Play).and_then(resource_exists::<KdTreeResource>)),
         );
     }
 }
@@ -161,6 +172,149 @@ fn prediction_match(
     }
 }
 
+#[derive(Resource, Deref, DerefMut)]
+struct KdTreeResource(KdTree<f32, (usize, usize), Vec<f32>>);
+
+fn populate_kdtree(
+    mut commands: Commands,
+    motion_data: MotionData,
+    trajectory_config: Res<TrajectoryConfig>,
+) {
+    let Some(motion_data) = motion_data.get() else {
+        return;
+    };
+
+    let num_segments = trajectory_config.num_segments();
+    let num_points = trajectory_config.num_points();
+
+    let mut kdtree = KdTree::new(num_points * 2);
+
+    // Populate KD-Tree with motion data
+    for (chunk_index, chunk) in motion_data.trajectory_data.iter_chunk().enumerate() {
+        let num_trajectories = chunk.len() - num_segments;
+
+        for chunk_offset in 0..num_trajectories {
+            let data_traj = &chunk[chunk_offset..chunk_offset + num_points];
+            let data_inv_matrix = data_traj[trajectory_config.history_count].matrix.inverse();
+
+            let mut seven_traj: Vec<f32> = Vec::new();
+            // Add each point from the trajectory to the KD-Tree
+            for (i, point) in data_traj.iter().enumerate() {
+                let (.., translation) = point.matrix.to_scale_rotation_translation();
+                let transformed_translation = data_inv_matrix.transform_point3(translation).xz();
+
+                seven_traj.push(transformed_translation.x);
+                seven_traj.push(transformed_translation.y);
+            }
+            kdtree.add(seven_traj, (chunk_index, chunk_offset)).unwrap();
+        }
+    }
+    println!("KdTree: {:?}", kdtree);
+    commands.insert_resource(KdTreeResource(kdtree));
+}
+
+fn trajectory_match_with_kdtree(
+    q_trajectory: Query<(&Trajectory, &Transform)>,
+    mut match_evr: EventReader<TrajectoryMatch>,
+    match_config: Res<MatchConfig>,
+    mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
+    kd_tree: Res<KdTreeResource>,
+) {
+    for traj_match in match_evr.read() {
+        let entity = **traj_match;
+        let Ok((traj, transform)) = q_trajectory.get(entity) else {
+            continue;
+        };
+
+        let inv_matrix = transform.compute_matrix().inverse();
+        let traj = traj
+            .iter()
+            .map(|&(mut point)| {
+                point.translation = inv_matrix
+                    .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
+                    .xz();
+                point
+            })
+            .collect::<Vec<_>>();
+
+        let mut user_traj = Vec::with_capacity(traj.len() * 2);
+
+        // println!("traj points: {:?}", traj);
+        for point in &traj {
+            user_traj.push(point.translation.x);
+            user_traj.push(point.translation.y);
+        }
+
+        // println!("current traj: {:?}", user_traj);
+
+        let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
+        let nearest_trajectories = kd_tree
+            .nearest(&user_traj, match_config.max_match_count, &distance_)
+            .unwrap();
+
+        for (distance, (chunk_index, chunk_offset)) in nearest_trajectories {
+            // println!("Nearest Traj Distance: {:?}", distance);
+            // if distance > match_config.match_threshold {
+            //     continue;
+            // }
+            if nearest_trajs.len() < match_config.max_match_count {
+                // Stack not yet full, push into it
+                nearest_trajs.push(MatchTrajectory {
+                    distance,
+                    chunk_index: *chunk_index,
+                    chunk_offset: *chunk_offset,
+                });
+            } else if let Some(worst_match) = nearest_trajs.last_mut() {
+                if distance < worst_match.distance {
+                    *worst_match = MatchTrajectory {
+                        distance,
+                        chunk_index: *chunk_index,
+                        chunk_offset: *chunk_offset,
+                    };
+                }
+            }
+
+            // Sort so that trajectories with the largest distance
+            // is placed as the final element in the stack
+            nearest_trajs.sort_by(|t0, t1| t0.distance.total_cmp(&t1.distance));
+        }
+
+        nearest_trajectories_evw.send(NearestTrajectories {
+            trajectories: nearest_trajs,
+            entity,
+        });
+    }
+}
+
+fn distance_(traj: &[f32], stored_traj: &[f32]) -> f32 {
+    let len = traj.len();
+    assert_eq!(len, stored_traj.len());
+    // println!("user traj: {:?}", traj);
+    // println!("stored traj: {:?}", stored_traj);
+
+    let mut offset_distance = 0.0;
+
+    for i in 1..len / 2 {
+        let x1 = 2 * i;
+        let y1 = x1 + 1;
+        let x0 = x1 - 2;
+        let y0 = x1 - 1;
+
+        let offset0 = Vec2::new(traj[x1] - traj[x0], traj[y1] - traj[y0]);
+        let offset1 = Vec2::new(
+            stored_traj[x1] - stored_traj[x0],
+            stored_traj[y1] - stored_traj[y0],
+        );
+
+        offset_distance += offset0.distance(offset1);
+    }
+
+    // println!("Offset Distance: {}", offset_distance);
+    offset_distance /= (len / 2).saturating_sub(1) as f32;
+
+    offset_distance
+}
+
 /// Search for the best match trajectory from [`MotionData`].
 ///
 /// Performs a match every [`TrajectoryMatch`] event.
@@ -196,6 +350,7 @@ fn trajectory_match(
             })
             .collect::<Vec<_>>();
 
+        println!("current traj: {:?}", traj);
         let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
 
         for (chunk_index, chunk) in motion_data.trajectory_data.iter_chunk().enumerate() {

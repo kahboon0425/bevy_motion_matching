@@ -879,6 +879,7 @@ dependencies = [
  "bevy_gltf",
  "egui_extras",
  "egui_plot",
+ "kdtree",
  "leafwing-input-manager",
  "serde",
  "serde_json",
@@ -2607,6 +2608,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29c15563dc2726973df627357ce0c9ddddbea194836909d655df6a75d2cf296d"
 dependencies = [
  "wasm-bindgen",
+]
+
+[[package]]
+name = "kdtree"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f0a0e9f770b65bac9aad00f97a67ab5c5319effed07f6da385da3c2115e47ba"
+dependencies = [
+ "num-traits",
+ "thiserror",
 ]
 
 [[package]]
