@@ -107,10 +107,16 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         let data_traj = data_traj
             .iter()
             .map(|traj| {
-                data_inv_matrix.transform_point3(traj.matrix.to_scale_rotation_translation().2)
+                data_inv_matrix
+                    .transform_point3(traj.matrix.to_scale_rotation_translation().2)
+                    .xz()
             })
-            // Rescale?
-            .map(|v| (v.xz() * BVH_SCALE_RATIO).as_dvec2().to_array())
+            .map(|mut v| {
+                // x axis is reversed in bevy.
+                v.x = -v.x;
+                v *= BVH_SCALE_RATIO;
+                v.as_dvec2().to_array()
+            })
             .collect::<Vec<_>>();
 
         // Asset data's trajectory.
