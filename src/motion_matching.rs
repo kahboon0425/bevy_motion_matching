@@ -1,7 +1,14 @@
+// use peak_alloc::PeakAlloc;
+// #[global_allocator]
+// static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+use std::time::Instant;
+
 use bevy::prelude::*;
 use kdtree_match::KdTreeMatchPlugin;
+use kmeans_match::KMeansMatchPlugin;
 
 pub mod kdtree_match;
+pub mod kmeans_match;
 
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion::chunk::ChunkIterator;
@@ -32,6 +39,7 @@ impl Plugin for MotionMatchingPlugin {
         );
 
         app.add_plugins(KdTreeMatchPlugin)
+            .add_plugins(KMeansMatchPlugin)
             .insert_resource(MatchConfig {
                 max_match_count: 5,
                 match_threshold: 0.2,
@@ -215,9 +223,10 @@ fn trajectory_match(
             })
             .collect::<Vec<_>>();
 
-        println!("current traj: {:?}", traj);
+        // println!("current traj: {:?}", traj);
         let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
 
+        let start_time = Instant::now();
         for (chunk_index, chunk) in motion_data.trajectory_data.iter_chunk().enumerate() {
             // Number of trajectory in this chunk.
             let num_trajectories = chunk.len() - num_segments;
@@ -268,8 +277,16 @@ fn trajectory_match(
                 // is placed as the final element in the stack
                 nearest_trajs.sort_by(|t0, t1| t0.distance.total_cmp(&t1.distance));
             }
+            // let knn_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
+            // println!(
+            //     "KNN search peak memory usage: {} MB",
+            //     knn_search_peak_memory
+            // );
         }
 
+        let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
+        let trajectory_duration_str = format!("{:.4}", traj_duration);
+        println!("Time taken for trajectory matching: {trajectory_duration_str}");
         nearest_trajectories_evw.send(NearestTrajectories {
             trajectories: nearest_trajs,
             entity,

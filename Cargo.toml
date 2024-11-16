@@ -54,6 +54,17 @@ leafwing-input-manager = "0.14"
 # debug editor (run with debug feature to enable it)
 bevy-inspector-egui = { version = "0.25", optional = true }
 kdtree = "0.7.0"
+peak_alloc = "0.2.1"
+clustering = "0.2.1"
+# rand = "0.8.5"
+
+# linfa = "0.7.0"
+# linfa-clustering = "0.7.0"
+# ndarray = "0.16.1"
+# linfa-nn = "0.7.0"
+# rand_xoshiro = "0.6.0"
+# ndarray-rand = "0.15.0"
+# linfa-datasets = "0.7.0"
 
 [dev-dependencies]
 bevy-inspector-egui = { version = "0.25" }

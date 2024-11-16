@@ -1,5 +1,10 @@
+// use peak_alloc::PeakAlloc;
+// #[global_allocator]
+// static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+use std::time::Instant;
+
 use bevy::prelude::*;
-// use kdtree::distance::squared_euclidean;
+use kdtree::distance::squared_euclidean;
 use kdtree::KdTree;
 
 use crate::motion::chunk::ChunkIterator;
@@ -15,16 +20,16 @@ pub struct KdTreeMatchPlugin;
 
 impl Plugin for KdTreeMatchPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            PreUpdate,
-            populate_kdtree.run_if(not(resource_exists::<KdTreeResource>)),
-        )
-        .add_systems(
-            Update,
-            trajectory_match_with_kdtree
-                .in_set(MotionMatchingSet::GlobalMatch)
-                .run_if(resource_exists::<KdTreeResource>),
-        );
+        // app.add_systems(
+        //     PreUpdate,
+        //     populate_kdtree.run_if(not(resource_exists::<KdTreeResource>)),
+        // )
+        // .add_systems(
+        //     Update,
+        //     trajectory_match_with_kdtree
+        //         .in_set(MotionMatchingSet::GlobalMatch)
+        //         .run_if(resource_exists::<KdTreeResource>),
+        // );
     }
 }
 
@@ -62,6 +67,7 @@ pub(super) fn populate_kdtree(
             // Add each offset from the trajectory to the KD-Tree
             for i in 1..data_traj.len() {
                 let offset = (data_traj[i] - data_traj[i - 1]) * BVH_SCALE_RATIO;
+                println!("Offset : {}", offset);
                 traj_offsets.push(offset.x);
                 traj_offsets.push(offset.y);
             }
@@ -71,7 +77,7 @@ pub(super) fn populate_kdtree(
                 .unwrap();
         }
     }
-    println!("KdTree: {:?}", kdtree);
+    // println!("KdTree: {:?}", kdtree);
     commands.insert_resource(KdTreeResource(kdtree));
 }
 
@@ -107,12 +113,14 @@ pub(super) fn trajectory_match_with_kdtree(
             traj_offsets.push(offset.y);
         }
 
+        let start_time = Instant::now();
+
         let nearest_trajs = kd_tree
             .nearest(
                 &traj_offsets,
                 match_config.max_match_count,
-                &offset_distance,
-                // &squared_euclidean,
+                // &offset_distance,
+                &squared_euclidean,
             )
             .unwrap()
             .into_iter()
@@ -124,8 +132,17 @@ pub(super) fn trajectory_match_with_kdtree(
             })
             .collect::<Vec<_>>();
 
-        println!("{:?}", nearest_trajs);
+        // println!("{:?}", nearest_trajs);
 
+        let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
+        let trajectory_duration_str = format!("{:.4}", traj_duration);
+        println!("Time taken for trajectory matching: {trajectory_duration_str}");
+
+        // let kdtree_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
+        // println!(
+        //     "KD-Tree search peak memory usage: {} MB",
+        //     kdtree_search_peak_memory
+        // );
         nearest_trajectories_evw.send(NearestTrajectories {
             trajectories: nearest_trajs,
             entity,
