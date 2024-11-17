@@ -35,7 +35,7 @@ impl Plugin for KdTreeMatchPlugin {
     }
 }
 
-pub(super) fn populate_kdtree(
+fn populate_kdtree(
     mut commands: Commands,
     motion_data: MotionData,
     trajectory_config: Res<TrajectoryConfig>,
@@ -81,7 +81,7 @@ pub(super) fn populate_kdtree(
     commands.insert_resource(KdTreeResource(kdtree));
 }
 
-pub(super) fn trajectory_match_with_kdtree(
+fn trajectory_match_with_kdtree(
     q_trajectory: Query<(&Trajectory, &Transform)>,
     mut match_evr: EventReader<TrajectoryMatch>,
     match_config: Res<MatchConfig>,

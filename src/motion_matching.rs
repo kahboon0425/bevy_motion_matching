@@ -41,9 +41,6 @@ impl Plugin for MotionMatchingPlugin {
 
         app.add_plugins(KdTreeMatchPlugin)
             .add_plugins(KMeansMatchPlugin)
-            .insert_resource(SelectedMethod {
-                method: Method::BruteForceKNN,
-            })
             .insert_resource(MatchConfig {
                 max_match_count: 5,
                 match_threshold: 0.2,
@@ -444,9 +441,4 @@ pub enum MotionMatchingSet {
     PredictionMatch,
     GlobalMatch,
     PoseMatch,
-}
-
-#[derive(Resource, Default, Deref, DerefMut)]
-pub struct SelectedMethod {
-    pub method: Method,
 }

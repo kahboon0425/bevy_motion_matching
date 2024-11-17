@@ -4,10 +4,11 @@ use bevy_egui::egui;
 use bevy_egui::egui::Color32;
 use egui_plot::{Arrows, Legend, Line, Plot, PlotPoints};
 
+use crate::motion::chunk::ChunkIterator;
 use crate::motion::MotionData;
-use crate::motion_matching::{MatchTrajectory, SelectedMethod};
+use crate::motion_matching::MatchTrajectory;
+use crate::trajectory::TrajectoryConfig;
 use crate::trajectory::TrajectoryPlot;
-use crate::{motion::chunk::ChunkIterator, trajectory::TrajectoryConfig};
 use crate::{GameMode, Method, BVH_SCALE_RATIO};
 
 use super::groupbox;
@@ -27,8 +28,7 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         ResMut<MotionMatchingResult>,
         Res<TrajectoryPlot>,
         Res<TrajectoryConfig>,
-        ResMut<SelectedMethod>,
-        ResMut<State<Method>>,
+        Res<State<Method>>,
         ResMut<NextState<Method>>,
     )>::new(world);
 
@@ -39,8 +39,7 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         mut motion_matching_result,
         traj_plot,
         traj_config,
-        mut selected_method,
-        _method_state,
+        method_state,
         mut next_method_state,
     ) = params.get_mut(world);
 
@@ -92,11 +91,9 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         ui.label("Method:");
 
         let methods = ["BruteForceKNN", "KdTree", "KMeans"];
-        let mut selected_index = match selected_method.method {
-            Method::BruteForceKNN => 0,
-            Method::KdTree => 1,
-            Method::KMeans => 2,
-        };
+
+        // cast enum into a usize
+        let mut selected_index = *method_state.get() as usize;
 
         egui::ComboBox::from_label("")
             .selected_text(methods[selected_index].to_string())
@@ -109,14 +106,11 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
             _ => Method::BruteForceKNN,
         };
 
-        // println!("Current State: {:?}", method_state.get());
-
-        if new_method != selected_method.method {
-            selected_method.method = new_method;
+        if *method_state.get() != new_method {
             motion_matching_result.matching_result = MatchingResult::default();
         }
 
-        next_method_state.set(selected_method.method);
+        next_method_state.set(new_method);
     });
 
     ui.add_space(10.0);

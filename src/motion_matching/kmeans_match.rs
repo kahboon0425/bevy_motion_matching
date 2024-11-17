@@ -33,7 +33,7 @@ impl Plugin for KMeansMatchPlugin {
         );
     }
 }
-pub(super) fn populate_kmeans(
+fn populate_kmeans(
     mut commands: Commands,
     motion_data: MotionData,
     trajectory_config: Res<TrajectoryConfig>,
@@ -69,7 +69,6 @@ pub(super) fn populate_kmeans(
                 traj_offsets.push(offset.y);
             }
 
-            // println!("Traj Offset Count: {}", &traj_offsets.len());
             trajectory_offsets.push((traj_offsets, chunk_index, chunk_offset));
         }
     }
@@ -100,7 +99,7 @@ pub(super) fn populate_kmeans(
     })
 }
 
-pub(super) fn trajectory_match_with_kmeans(
+fn trajectory_match_with_kmeans(
     q_trajectory: Query<(&Trajectory, &Transform)>,
     mut match_evr: EventReader<TrajectoryMatch>,
     match_config: Res<MatchConfig>,
