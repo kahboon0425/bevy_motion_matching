@@ -7,6 +7,7 @@ use kdtree::KdTree;
 use crate::motion::chunk::ChunkIterator;
 use crate::motion::MotionData;
 use crate::trajectory::{Trajectory, TrajectoryConfig};
+use crate::ui::play_mode::MotionMatchingResult;
 use crate::{Method, BVH_SCALE_RATIO};
 
 use super::{
@@ -87,6 +88,7 @@ pub(super) fn trajectory_match_with_kdtree(
     match_config: Res<MatchConfig>,
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
     kd_tree: Res<KdTreeResource>,
+    mut motion_matching_result: ResMut<MotionMatchingResult>,
 ) {
     println!("KDTree Method");
     PEAK_ALLOC.reset_peak_usage();
@@ -134,6 +136,8 @@ pub(super) fn trajectory_match_with_kdtree(
             })
             .collect::<Vec<_>>();
 
+        // println!("{:?}", nearest_trajs);
+
         let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
         let trajectory_duration_str = format!("{:.4}", traj_duration);
         println!("Time taken for trajectory matching: {trajectory_duration_str}");
@@ -143,6 +147,21 @@ pub(super) fn trajectory_match_with_kdtree(
             "KD-Tree search peak memory usage: {} MB",
             kdtree_search_peak_memory
         );
+
+        let runs = motion_matching_result.matching_result.runs + 1;
+
+        motion_matching_result.matching_result.avg_time =
+            (motion_matching_result.matching_result.avg_time
+                * motion_matching_result.matching_result.runs as f64
+                + traj_duration)
+                / runs as f64;
+        motion_matching_result.matching_result.avg_memory =
+            (motion_matching_result.matching_result.avg_memory
+                * motion_matching_result.matching_result.runs as f64
+                + kdtree_search_peak_memory as f64)
+                / runs as f64;
+        motion_matching_result.matching_result.runs = runs;
+
         nearest_trajectories_evw.send(NearestTrajectories {
             trajectories: nearest_trajs,
             entity,

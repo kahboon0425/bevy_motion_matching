@@ -24,7 +24,7 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         MotionData,
         ResMut<NextState<GameMode>>,
         Res<State<GameMode>>,
-        Res<MotionMatchingResult>,
+        ResMut<MotionMatchingResult>,
         Res<TrajectoryPlot>,
         Res<TrajectoryConfig>,
         ResMut<SelectedMethod>,
@@ -36,7 +36,7 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         motion_data,
         mut next_game_mode,
         game_mode,
-        motion_matching_result,
+        mut motion_matching_result,
         traj_plot,
         traj_config,
         mut selected_method,
@@ -102,7 +102,7 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
             .selected_text(methods[selected_index].to_string())
             .show_index(ui, &mut selected_index, methods.len(), |i| methods[i]);
 
-        selected_method.method = match selected_index {
+        let new_method = match selected_index {
             0 => Method::BruteForceKNN,
             1 => Method::KdTree,
             2 => Method::KMeans,
@@ -110,6 +110,12 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         };
 
         // println!("Current State: {:?}", method_state.get());
+
+        if new_method != selected_method.method {
+            selected_method.method = new_method;
+            motion_matching_result.matching_result = MatchingResult::default();
+        }
+
         next_method_state.set(selected_method.method);
     });
 
@@ -247,17 +253,12 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
 
     ui.add_space(10.0);
 
+    let result = motion_matching_result.matching_result;
     ui.label(format!(
-        "Trajactory Matching Time: {} ms",
-        motion_matching_result.traj_matching_time,
+        "Average Trajactory Matching Time: {:.3} ms",
+        result.avg_time,
     ));
-
-    ui.label(format!(
-        "Pose Matching Time: {} ms",
-        motion_matching_result.pose_matching_time,
-    ));
-
-    ui.label("Memory Usage");
+    ui.label(format!("Average Memory Usage: {:.3} ms", result.avg_memory,));
     ui.add_space(10.0);
 }
 
@@ -266,6 +267,13 @@ pub struct MotionMatchingResult {
     /// Match trajectories and pose distances.
     pub trajectories_poses: Vec<(MatchTrajectory, f32)>,
     pub selected_trajectory: usize,
-    pub traj_matching_time: String,
-    pub pose_matching_time: String,
+    pub matching_result: MatchingResult,
+    // pub pose_matching_time: String,
+}
+
+#[derive(Default, Component, Copy, Clone)]
+pub struct MatchingResult {
+    pub avg_time: f64,
+    pub avg_memory: f64,
+    pub runs: usize,
 }

@@ -6,6 +6,7 @@ use crate::{
     motion::{chunk::ChunkIterator, MotionData},
     motion_matching::MatchTrajectory,
     trajectory::{Trajectory, TrajectoryConfig},
+    ui::play_mode::MotionMatchingResult,
     Method, BVH_SCALE_RATIO,
 };
 
@@ -105,6 +106,7 @@ pub(super) fn trajectory_match_with_kmeans(
     match_config: Res<MatchConfig>,
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
     kmeans: Res<KMeansResource>,
+    mut motion_matching_result: ResMut<MotionMatchingResult>,
 ) {
     println!("KMeans Method");
     PEAK_ALLOC.reset_peak_usage();
@@ -181,11 +183,26 @@ pub(super) fn trajectory_match_with_kmeans(
         let trajectory_duration_str = format!("{:.4}", traj_duration);
         println!("Time taken for trajectory matching: {trajectory_duration_str}");
 
-        let kdtree_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
+        let kmeans_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
         println!(
             "K-Means search peak memory usage: {} MB",
-            kdtree_search_peak_memory
+            kmeans_search_peak_memory
         );
+
+        let runs = motion_matching_result.matching_result.runs + 1;
+
+        motion_matching_result.matching_result.avg_time =
+            (motion_matching_result.matching_result.avg_time
+                * motion_matching_result.matching_result.runs as f64
+                + traj_duration)
+                / runs as f64;
+        motion_matching_result.matching_result.avg_memory =
+            (motion_matching_result.matching_result.avg_memory
+                * motion_matching_result.matching_result.runs as f64
+                + kmeans_search_peak_memory as f64)
+                / runs as f64;
+
+        motion_matching_result.matching_result.runs = runs;
         nearest_trajs.sort_by(|t0, t1| t0.distance.total_cmp(&t1.distance));
 
         nearest_trajectories_evw.send(NearestTrajectories {

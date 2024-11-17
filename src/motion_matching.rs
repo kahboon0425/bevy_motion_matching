@@ -16,7 +16,7 @@ use crate::motion::motion_player::{
 use crate::motion::{MotionData, MotionHandle};
 use crate::trajectory::{Trajectory, TrajectoryConfig, TrajectoryDistance, TrajectoryPoint};
 use crate::ui::play_mode::MotionMatchingResult;
-use crate::{GameMode, MainSet, Method, BVH_SCALE_RATIO};
+use crate::{motion_matching, GameMode, MainSet, Method, BVH_SCALE_RATIO};
 
 use peak_alloc::PeakAlloc;
 #[global_allocator]
@@ -204,6 +204,7 @@ fn trajectory_match(
     trajectory_config: Res<TrajectoryConfig>,
     match_config: Res<MatchConfig>,
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
+    mut motion_matching_result: ResMut<MotionMatchingResult>,
 ) {
     println!("Brute Force KNN Method");
     PEAK_ALLOC.reset_peak_usage();
@@ -295,6 +296,21 @@ fn trajectory_match(
         let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
         let trajectory_duration_str = format!("{:.4}", traj_duration);
         println!("Time taken for trajectory matching: {trajectory_duration_str}");
+
+        let runs = motion_matching_result.matching_result.runs + 1;
+
+        motion_matching_result.matching_result.avg_time =
+            (motion_matching_result.matching_result.avg_time
+                * motion_matching_result.matching_result.runs as f64
+                + traj_duration)
+                / runs as f64;
+        motion_matching_result.matching_result.avg_memory =
+            (motion_matching_result.matching_result.avg_memory
+                * motion_matching_result.matching_result.runs as f64
+                + knn_search_peak_memory as f64)
+                / runs as f64;
+        motion_matching_result.matching_result.runs = runs;
+
         nearest_trajectories_evw.send(NearestTrajectories {
             trajectories: nearest_trajs,
             entity,
