@@ -1,6 +1,3 @@
-// use peak_alloc::PeakAlloc;
-// #[global_allocator]
-// static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 use std::time::Instant;
 
 use bevy::prelude::*;
@@ -14,6 +11,7 @@ use crate::BVH_SCALE_RATIO;
 
 use super::{
     MatchConfig, MatchTrajectory, MotionMatchingSet, NearestTrajectories, TrajectoryMatch,
+    PEAK_ALLOC,
 };
 
 pub struct KdTreeMatchPlugin;
@@ -88,6 +86,7 @@ pub(super) fn trajectory_match_with_kdtree(
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
     kd_tree: Res<KdTreeResource>,
 ) {
+    PEAK_ALLOC.reset_peak_usage();
     for traj_match in match_evr.read() {
         let entity = **traj_match;
         let Ok((traj, transform)) = q_trajectory.get(entity) else {
@@ -138,11 +137,11 @@ pub(super) fn trajectory_match_with_kdtree(
         let trajectory_duration_str = format!("{:.4}", traj_duration);
         println!("Time taken for trajectory matching: {trajectory_duration_str}");
 
-        // let kdtree_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
-        // println!(
-        //     "KD-Tree search peak memory usage: {} MB",
-        //     kdtree_search_peak_memory
-        // );
+        let kdtree_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
+        println!(
+            "KD-Tree search peak memory usage: {} MB",
+            kdtree_search_peak_memory
+        );
         nearest_trajectories_evw.send(NearestTrajectories {
             trajectories: nearest_trajs,
             entity,

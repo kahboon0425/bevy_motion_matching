@@ -1,9 +1,6 @@
-// use peak_alloc::PeakAlloc;
-// #[global_allocator]
-// static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+use bevy::prelude::*;
 use std::time::Instant;
 
-use bevy::prelude::*;
 use kdtree_match::KdTreeMatchPlugin;
 use kmeans_match::KMeansMatchPlugin;
 
@@ -20,6 +17,10 @@ use crate::motion::{MotionData, MotionHandle};
 use crate::trajectory::{Trajectory, TrajectoryConfig, TrajectoryDistance, TrajectoryPoint};
 use crate::ui::play_mode::MotionMatchingResult;
 use crate::{GameMode, MainSet, BVH_SCALE_RATIO};
+
+use peak_alloc::PeakAlloc;
+#[global_allocator]
+static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 
 pub struct MotionMatchingPlugin;
 
@@ -54,7 +55,7 @@ impl Plugin for MotionMatchingPlugin {
                 (
                     flow.in_set(MotionMatchingSet::Flow),
                     prediction_match.in_set(MotionMatchingSet::PredictionMatch),
-                    // trajectory_match.in_set(MotionMatchingSet::GlobalMatch),
+                    trajectory_match.in_set(MotionMatchingSet::GlobalMatch),
                     pose_match,
                 ),
             );
@@ -199,6 +200,7 @@ fn trajectory_match(
     match_config: Res<MatchConfig>,
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
 ) {
+    PEAK_ALLOC.reset_peak_usage();
     let Some(motion_data) = motion_data.get() else {
         return;
     };
@@ -277,13 +279,13 @@ fn trajectory_match(
                 // is placed as the final element in the stack
                 nearest_trajs.sort_by(|t0, t1| t0.distance.total_cmp(&t1.distance));
             }
-            // let knn_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
-            // println!(
-            //     "KNN search peak memory usage: {} MB",
-            //     knn_search_peak_memory
-            // );
         }
 
+        let knn_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
+        println!(
+            "KNN search peak memory usage: {} MB",
+            knn_search_peak_memory
+        );
         let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
         let trajectory_duration_str = format!("{:.4}", traj_duration);
         println!("Time taken for trajectory matching: {trajectory_duration_str}");

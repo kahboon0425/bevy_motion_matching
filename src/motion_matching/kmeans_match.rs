@@ -1,6 +1,3 @@
-use peak_alloc::PeakAlloc;
-#[global_allocator]
-static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 use std::time::Instant;
 
 use bevy::prelude::*;
@@ -12,7 +9,7 @@ use crate::{
     BVH_SCALE_RATIO,
 };
 
-use super::{MatchConfig, MotionMatchingSet, NearestTrajectories, TrajectoryMatch};
+use super::{MatchConfig, MotionMatchingSet, NearestTrajectories, TrajectoryMatch, PEAK_ALLOC};
 
 use clustering::*;
 
@@ -20,16 +17,16 @@ pub struct KMeansMatchPlugin;
 
 impl Plugin for KMeansMatchPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            PreUpdate,
-            populate_kmeans.run_if(not(resource_exists::<KMeansResource>)),
-        )
-        .add_systems(
-            Update,
-            trajectory_match_with_kmeans
-                .in_set(MotionMatchingSet::GlobalMatch)
-                .run_if(resource_exists::<KMeansResource>),
-        );
+        // app.add_systems(
+        //     preupdate,
+        //     populate_kmeans.run_if(not(resource_exists::<kmeansresource>)),
+        // )
+        // .add_systems(
+        //     update,
+        //     trajectory_match_with_kmeans
+        //         .in_set(motionmatchingset::globalmatch)
+        //         .run_if(resource_exists::<kmeansresource>),
+        // );
     }
 }
 pub(super) fn populate_kmeans(
@@ -82,15 +79,14 @@ pub(super) fn populate_kmeans(
     // Number of clusters, 8 random centroid will be chosen
     let k = 8;
     // Max iterations
-    let max_iter = 100;
+    let max_iter = 10;
     let clustering = kmeans(k, &data, max_iter);
+
+    let mut cluster_members: Vec<Vec<(usize, usize, Vec<f32>)>> = vec![Vec::new(); k];
 
     for (i, cluster_id) in clustering.membership.iter().enumerate() {
         let (offsets, chunk_index, chunk_offset) = &trajectory_offsets[i];
-        // println!(
-        //     "Traj {} assigned to cluster {}: chunk_index = {}, chunk_offset = {}",
-        //     i, cluster_id, chunk_index, chunk_offset
-        // );
+        cluster_members[cluster_id.clone()].push((*chunk_index, *chunk_offset, offsets.clone()));
     }
 
     // println!("Centroid Count: {}", clustering.centroids.len());
@@ -99,6 +95,7 @@ pub(super) fn populate_kmeans(
         centroids: clustering.centroids,
         cluster_memberships: clustering.membership,
         trajectory_offsets,
+        cluster_members,
     })
 }
 
@@ -109,6 +106,7 @@ pub(super) fn trajectory_match_with_kmeans(
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
     kmeans: Res<KMeansResource>,
 ) {
+    PEAK_ALLOC.reset_peak_usage();
     for traj_match in match_evr.read() {
         let entity = **traj_match;
         let Ok((traj, transform)) = q_trajectory.get(entity) else {
@@ -134,18 +132,6 @@ pub(super) fn trajectory_match_with_kmeans(
             traj_offsets.push(offset.y);
         }
 
-        // let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
-
-        // Number of clusters
-        let k = kmeans.centroids.len();
-        let mut cluster_members = vec![Vec::new(); k];
-
-        // Group trajectory offsets by cluster ID
-        for (i, &cluster_id) in kmeans.cluster_memberships.iter().enumerate() {
-            let (offsets, chunk_index, chunk_offset) = &kmeans.trajectory_offsets[i];
-            cluster_members[cluster_id].push((*chunk_index, *chunk_offset, offsets));
-        }
-
         let start_time = Instant::now();
 
         let mut nearest_centroids = Vec::new();
@@ -163,7 +149,6 @@ pub(super) fn trajectory_match_with_kmeans(
                 continue;
             }
         }
-        nearest_centroids.sort_by(|a, b| a.0.total_cmp(&b.0));
 
         let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
         for (distance, centroid_index) in nearest_centroids {
@@ -171,7 +156,7 @@ pub(super) fn trajectory_match_with_kmeans(
             //     "Nearest Centroid: {}, Distance: {}",
             //     centroid_index, distance
             // );
-            if let Some(members) = cluster_members.get(centroid_index) {
+            if let Some(members) = kmeans.cluster_members.get(centroid_index) {
                 for (chunk_index, chunk_offset, offsets) in members {
                     // println!(
                     //     " - Chunk Index: {}, Chunk Offset: {}, Offsets: {:?}",
@@ -207,6 +192,7 @@ pub(super) fn trajectory_match_with_kmeans(
         let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
         let trajectory_duration_str = format!("{:.4}", traj_duration);
         println!("Time taken for trajectory matching: {trajectory_duration_str}");
+
         let kdtree_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
         println!(
             "K-Means search peak memory usage: {} MB",
@@ -247,4 +233,5 @@ pub struct KMeansResource {
     pub cluster_memberships: Vec<usize>,
     // trajectory offsets with chunk index and chunk offset
     pub trajectory_offsets: Vec<(Vec<f32>, usize, usize)>,
+    pub cluster_members: Vec<Vec<(usize, usize, Vec<f32>)>>,
 }
