@@ -180,14 +180,8 @@ pub(super) fn trajectory_match_with_kmeans(
         }
 
         let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
-        let trajectory_duration_str = format!("{:.4}", traj_duration);
-        println!("Time taken for trajectory matching: {trajectory_duration_str}");
 
         let kmeans_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
-        println!(
-            "K-Means search peak memory usage: {} MB",
-            kmeans_search_peak_memory
-        );
 
         let runs = motion_matching_result.matching_result.runs + 1;
 

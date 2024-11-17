@@ -69,7 +69,6 @@ pub(super) fn populate_kdtree(
             // Add each offset from the trajectory to the KD-Tree
             for i in 1..data_traj.len() {
                 let offset = (data_traj[i] - data_traj[i - 1]) * BVH_SCALE_RATIO;
-                println!("Offset : {}", offset);
                 traj_offsets.push(offset.x);
                 traj_offsets.push(offset.y);
             }
@@ -139,14 +138,8 @@ pub(super) fn trajectory_match_with_kdtree(
         // println!("{:?}", nearest_trajs);
 
         let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
-        let trajectory_duration_str = format!("{:.4}", traj_duration);
-        println!("Time taken for trajectory matching: {trajectory_duration_str}");
 
         let kdtree_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
-        println!(
-            "KD-Tree search peak memory usage: {} MB",
-            kdtree_search_peak_memory
-        );
 
         let runs = motion_matching_result.matching_result.runs + 1;
 
