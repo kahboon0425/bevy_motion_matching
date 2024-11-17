@@ -60,7 +60,6 @@ pub(super) fn populate_kmeans(
                     data_inv_matrix.transform_point3(translation).xz()
                 })
                 .collect::<Vec<_>>();
-            // println!("Data Traj Count: {}", data_traj.len());
 
             let mut traj_offsets = Vec::new();
             for i in 1..data_traj.len() {
@@ -89,10 +88,8 @@ pub(super) fn populate_kmeans(
 
     for (i, cluster_id) in clustering.membership.iter().enumerate() {
         let (offsets, chunk_index, chunk_offset) = &trajectory_offsets[i];
-        cluster_members[cluster_id.clone()].push((*chunk_index, *chunk_offset, offsets.clone()));
+        cluster_members[*cluster_id].push((*chunk_index, *chunk_offset, offsets.clone()));
     }
-
-    // println!("Centroid Count: {}", clustering.centroids.len());
 
     commands.insert_resource(KMeansResource {
         centroids: clustering.centroids,
@@ -140,12 +137,8 @@ pub(super) fn trajectory_match_with_kmeans(
 
         let mut nearest_centroids = Vec::new();
         for (i, centroid) in kmeans.centroids.iter().enumerate() {
-            let d = &centroid.0;
-            // println!("Hereeeeeeeeeeeeeeeeeeeee: {:?}", d);
-            // let distance = traj_offsets.offset_distance(centroid.0);
             let centroid_f32: Vec<f32> = centroid.0.iter().map(|&x| x as f32).collect();
             let distance = offset_distance(&traj_offsets, &centroid_f32);
-            // println!("Distanceeeeeeeeeeeeeeeeeeeeeeeeeeee: {}", distance);
 
             if distance <= match_config.match_threshold {
                 nearest_centroids.push((distance, i));
@@ -155,19 +148,10 @@ pub(super) fn trajectory_match_with_kmeans(
         }
 
         let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
-        for (distance, centroid_index) in nearest_centroids {
-            // println!(
-            //     "Nearest Centroid: {}, Distance: {}",
-            //     centroid_index, distance
-            // );
+        for (_distance, centroid_index) in nearest_centroids {
             if let Some(members) = kmeans.cluster_members.get(centroid_index) {
                 for (chunk_index, chunk_offset, offsets) in members {
-                    // println!(
-                    //     " - Chunk Index: {}, Chunk Offset: {}, Offsets: {:?}",
-                    //     chunk_index, chunk_offset, offsets
-                    // );
-                    let distance = offset_distance(&traj_offsets, &offsets);
-                    // println!("Distanceeeeeeeeeeeeeeeeeeeeeee: {}", distance);
+                    let distance = offset_distance(&traj_offsets, offsets);
 
                     if distance > match_config.match_threshold {
                         continue;

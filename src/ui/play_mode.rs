@@ -40,7 +40,7 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         traj_plot,
         traj_config,
         mut selected_method,
-        mut method_state,
+        _method_state,
         mut next_method_state,
     ) = params.get_mut(world);
 

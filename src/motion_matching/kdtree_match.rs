@@ -78,7 +78,6 @@ pub(super) fn populate_kdtree(
                 .unwrap();
         }
     }
-    // println!("KdTree: {:?}", kdtree);
     commands.insert_resource(KdTreeResource(kdtree));
 }
 
@@ -134,8 +133,6 @@ pub(super) fn trajectory_match_with_kdtree(
                 chunk_offset,
             })
             .collect::<Vec<_>>();
-
-        // println!("{:?}", nearest_trajs);
 
         let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
         let trajectory_duration_str = format!("{:.4}", traj_duration);
