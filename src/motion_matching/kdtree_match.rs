@@ -7,7 +7,7 @@ use kdtree::KdTree;
 use crate::motion::chunk::ChunkIterator;
 use crate::motion::MotionData;
 use crate::trajectory::{Trajectory, TrajectoryConfig};
-use crate::BVH_SCALE_RATIO;
+use crate::{Method, BVH_SCALE_RATIO};
 
 use super::{
     MatchConfig, MatchTrajectory, MotionMatchingSet, NearestTrajectories, TrajectoryMatch,
@@ -18,16 +18,19 @@ pub struct KdTreeMatchPlugin;
 
 impl Plugin for KdTreeMatchPlugin {
     fn build(&self, app: &mut App) {
-        // app.add_systems(
-        //     PreUpdate,
-        //     populate_kdtree.run_if(not(resource_exists::<KdTreeResource>)),
-        // )
-        // .add_systems(
-        //     Update,
-        //     trajectory_match_with_kdtree
-        //         .in_set(MotionMatchingSet::GlobalMatch)
-        //         .run_if(resource_exists::<KdTreeResource>),
-        // );
+        app.add_systems(
+            PreUpdate,
+            populate_kdtree
+                .run_if(not(resource_exists::<KdTreeResource>))
+                .run_if(in_state(Method::KdTree)),
+        )
+        .add_systems(
+            Update,
+            trajectory_match_with_kdtree
+                .in_set(MotionMatchingSet::GlobalMatch)
+                .run_if(resource_exists::<KdTreeResource>)
+                .run_if(in_state(Method::KdTree)),
+        );
     }
 }
 
@@ -86,6 +89,7 @@ pub(super) fn trajectory_match_with_kdtree(
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
     kd_tree: Res<KdTreeResource>,
 ) {
+    println!("KDTree Method");
     PEAK_ALLOC.reset_peak_usage();
     for traj_match in match_evr.read() {
         let entity = **traj_match;

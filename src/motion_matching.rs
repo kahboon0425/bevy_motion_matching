@@ -16,7 +16,7 @@ use crate::motion::motion_player::{
 use crate::motion::{MotionData, MotionHandle};
 use crate::trajectory::{Trajectory, TrajectoryConfig, TrajectoryDistance, TrajectoryPoint};
 use crate::ui::play_mode::MotionMatchingResult;
-use crate::{GameMode, MainSet, BVH_SCALE_RATIO};
+use crate::{GameMode, MainSet, Method, BVH_SCALE_RATIO};
 
 use peak_alloc::PeakAlloc;
 #[global_allocator]
@@ -41,6 +41,9 @@ impl Plugin for MotionMatchingPlugin {
 
         app.add_plugins(KdTreeMatchPlugin)
             .add_plugins(KMeansMatchPlugin)
+            .insert_resource(SelectedMethod {
+                method: Method::BruteForceKNN,
+            })
             .insert_resource(MatchConfig {
                 max_match_count: 5,
                 match_threshold: 0.2,
@@ -55,7 +58,9 @@ impl Plugin for MotionMatchingPlugin {
                 (
                     flow.in_set(MotionMatchingSet::Flow),
                     prediction_match.in_set(MotionMatchingSet::PredictionMatch),
-                    trajectory_match.in_set(MotionMatchingSet::GlobalMatch),
+                    trajectory_match
+                        .in_set(MotionMatchingSet::GlobalMatch)
+                        .run_if(in_state(Method::BruteForceKNN)),
                     pose_match,
                 ),
             );
@@ -200,6 +205,7 @@ fn trajectory_match(
     match_config: Res<MatchConfig>,
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
 ) {
+    println!("Brute Force KNN Method");
     PEAK_ALLOC.reset_peak_usage();
     let Some(motion_data) = motion_data.get() else {
         return;
@@ -428,4 +434,9 @@ pub enum MotionMatchingSet {
     PredictionMatch,
     GlobalMatch,
     PoseMatch,
+}
+
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct SelectedMethod {
+    pub method: Method,
 }

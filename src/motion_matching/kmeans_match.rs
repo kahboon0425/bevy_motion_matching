@@ -6,7 +6,7 @@ use crate::{
     motion::{chunk::ChunkIterator, MotionData},
     motion_matching::MatchTrajectory,
     trajectory::{Trajectory, TrajectoryConfig},
-    BVH_SCALE_RATIO,
+    Method, BVH_SCALE_RATIO,
 };
 
 use super::{MatchConfig, MotionMatchingSet, NearestTrajectories, TrajectoryMatch, PEAK_ALLOC};
@@ -17,16 +17,19 @@ pub struct KMeansMatchPlugin;
 
 impl Plugin for KMeansMatchPlugin {
     fn build(&self, app: &mut App) {
-        // app.add_systems(
-        //     preupdate,
-        //     populate_kmeans.run_if(not(resource_exists::<kmeansresource>)),
-        // )
-        // .add_systems(
-        //     update,
-        //     trajectory_match_with_kmeans
-        //         .in_set(motionmatchingset::globalmatch)
-        //         .run_if(resource_exists::<kmeansresource>),
-        // );
+        app.add_systems(
+            PreUpdate,
+            populate_kmeans
+                .run_if(not(resource_exists::<KMeansResource>))
+                .run_if(in_state(Method::KMeans)),
+        )
+        .add_systems(
+            Update,
+            trajectory_match_with_kmeans
+                .in_set(MotionMatchingSet::GlobalMatch)
+                .run_if(resource_exists::<KMeansResource>)
+                .run_if(in_state(Method::KMeans)),
+        );
     }
 }
 pub(super) fn populate_kmeans(
@@ -106,6 +109,7 @@ pub(super) fn trajectory_match_with_kmeans(
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
     kmeans: Res<KMeansResource>,
 ) {
+    println!("KMeans Method");
     PEAK_ALLOC.reset_peak_usage();
     for traj_match in match_evr.read() {
         let entity = **traj_match;

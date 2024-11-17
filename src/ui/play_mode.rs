@@ -5,10 +5,10 @@ use bevy_egui::egui::Color32;
 use egui_plot::{Arrows, Legend, Line, Plot, PlotPoints};
 
 use crate::motion::MotionData;
-use crate::motion_matching::MatchTrajectory;
+use crate::motion_matching::{MatchTrajectory, SelectedMethod};
 use crate::trajectory::TrajectoryPlot;
 use crate::{motion::chunk::ChunkIterator, trajectory::TrajectoryConfig};
-use crate::{GameMode, BVH_SCALE_RATIO};
+use crate::{GameMode, Method, BVH_SCALE_RATIO};
 
 use super::groupbox;
 use egui_extras::{Column, TableBuilder};
@@ -27,6 +27,9 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         Res<MotionMatchingResult>,
         Res<TrajectoryPlot>,
         Res<TrajectoryConfig>,
+        ResMut<SelectedMethod>,
+        ResMut<State<Method>>,
+        ResMut<NextState<Method>>,
     )>::new(world);
 
     let (
@@ -36,6 +39,9 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         motion_matching_result,
         traj_plot,
         traj_config,
+        mut selected_method,
+        mut method_state,
+        mut next_method_state,
     ) = params.get_mut(world);
 
     let Some(motion_asset) = motion_data.get() else {
@@ -81,6 +87,34 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     }
 
     ui.add_space(10.0);
+
+    ui.horizontal(|ui| {
+        ui.label("Method:");
+
+        let methods = ["BruteForceKNN", "KdTree", "KMeans"];
+        let mut selected_index = match selected_method.method {
+            Method::BruteForceKNN => 0,
+            Method::KdTree => 1,
+            Method::KMeans => 2,
+        };
+
+        egui::ComboBox::from_label("")
+            .selected_text(methods[selected_index].to_string())
+            .show_index(ui, &mut selected_index, methods.len(), |i| methods[i]);
+
+        selected_method.method = match selected_index {
+            0 => Method::BruteForceKNN,
+            1 => Method::KdTree,
+            2 => Method::KMeans,
+            _ => Method::BruteForceKNN,
+        };
+
+        // println!("Current State: {:?}", method_state.get());
+        next_method_state.set(selected_method.method);
+    });
+
+    ui.add_space(10.0);
+
     groupbox(ui, |ui| {
         ui.label("Trajectory Matching Visualization");
 

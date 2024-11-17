@@ -54,7 +54,7 @@ impl Plugin for MotionMatchingAppPlugin {
             draw_axes::DrawAxesPlugin,
         ));
 
-        app.init_state::<GameMode>();
+        app.init_state::<GameMode>().init_state::<Method>();
     }
 }
 
@@ -73,4 +73,12 @@ pub enum MainSet {
     Trajectory,
     MotionMatching,
     Animation,
+}
+
+#[derive(States, Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Method {
+    #[default]
+    BruteForceKNN,
+    KdTree,
+    KMeans,
 }
