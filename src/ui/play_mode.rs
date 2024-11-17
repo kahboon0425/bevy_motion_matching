@@ -4,11 +4,12 @@ use bevy_egui::egui;
 use bevy_egui::egui::Color32;
 use egui_plot::{Arrows, Legend, Line, Plot, PlotPoints};
 
+use crate::motion::chunk::ChunkIterator;
 use crate::motion::MotionData;
 use crate::motion_matching::MatchTrajectory;
+use crate::trajectory::TrajectoryConfig;
 use crate::trajectory::TrajectoryPlot;
-use crate::{motion::chunk::ChunkIterator, trajectory::TrajectoryConfig};
-use crate::{GameMode, BVH_SCALE_RATIO};
+use crate::{GameMode, Method, BVH_SCALE_RATIO};
 
 use super::groupbox;
 use egui_extras::{Column, TableBuilder};
@@ -24,18 +25,22 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         MotionData,
         ResMut<NextState<GameMode>>,
         Res<State<GameMode>>,
-        Res<MotionMatchingResult>,
+        ResMut<MotionMatchingResult>,
         Res<TrajectoryPlot>,
         Res<TrajectoryConfig>,
+        Res<State<Method>>,
+        ResMut<NextState<Method>>,
     )>::new(world);
 
     let (
         motion_data,
         mut next_game_mode,
         game_mode,
-        motion_matching_result,
+        mut motion_matching_result,
         traj_plot,
         traj_config,
+        method_state,
+        mut next_method_state,
     ) = params.get_mut(world);
 
     let Some(motion_asset) = motion_data.get() else {
@@ -81,6 +86,35 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
     }
 
     ui.add_space(10.0);
+
+    ui.horizontal(|ui| {
+        ui.label("Method:");
+
+        let methods = ["BruteForceKNN", "KdTree", "KMeans"];
+
+        // cast enum into a usize
+        let mut selected_index = *method_state.get() as usize;
+
+        egui::ComboBox::from_label("")
+            .selected_text(methods[selected_index].to_string())
+            .show_index(ui, &mut selected_index, methods.len(), |i| methods[i]);
+
+        let new_method = match selected_index {
+            0 => Method::BruteForceKNN,
+            1 => Method::KdTree,
+            2 => Method::KMeans,
+            _ => Method::BruteForceKNN,
+        };
+
+        if *method_state.get() != new_method {
+            motion_matching_result.matching_result = MatchingResult::default();
+        }
+
+        next_method_state.set(new_method);
+    });
+
+    ui.add_space(10.0);
+
     groupbox(ui, |ui| {
         ui.label("Trajectory Matching Visualization");
 
@@ -107,10 +141,16 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         let data_traj = data_traj
             .iter()
             .map(|traj| {
-                data_inv_matrix.transform_point3(traj.matrix.to_scale_rotation_translation().2)
+                data_inv_matrix
+                    .transform_point3(traj.matrix.to_scale_rotation_translation().2)
+                    .xz()
             })
-            // Rescale?
-            .map(|v| (v.xz() * BVH_SCALE_RATIO).as_dvec2().to_array())
+            .map(|mut v| {
+                // x axis is reversed in bevy.
+                v.x = -v.x;
+                v *= BVH_SCALE_RATIO;
+                v.as_dvec2().to_array()
+            })
             .collect::<Vec<_>>();
 
         // Asset data's trajectory.
@@ -207,17 +247,12 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
 
     ui.add_space(10.0);
 
+    let result = motion_matching_result.matching_result;
     ui.label(format!(
-        "Trajactory Matching Time: {} ms",
-        motion_matching_result.traj_matching_time,
+        "Average Trajactory Matching Time: {:.3} ms",
+        result.avg_time,
     ));
-
-    ui.label(format!(
-        "Pose Matching Time: {} ms",
-        motion_matching_result.pose_matching_time,
-    ));
-
-    ui.label("Memory Usage");
+    ui.label(format!("Average Memory Usage: {:.3} ms", result.avg_memory,));
     ui.add_space(10.0);
 }
 
@@ -226,6 +261,13 @@ pub struct MotionMatchingResult {
     /// Match trajectories and pose distances.
     pub trajectories_poses: Vec<(MatchTrajectory, f32)>,
     pub selected_trajectory: usize,
-    pub traj_matching_time: String,
-    pub pose_matching_time: String,
+    pub matching_result: MatchingResult,
+    // pub pose_matching_time: String,
+}
+
+#[derive(Default, Component, Copy, Clone)]
+pub struct MatchingResult {
+    pub avg_time: f64,
+    pub avg_memory: f64,
+    pub runs: usize,
 }

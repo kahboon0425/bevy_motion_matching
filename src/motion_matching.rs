@@ -1,4 +1,11 @@
 use bevy::prelude::*;
+use std::time::Instant;
+
+use kdtree_match::KdTreeMatchPlugin;
+use kmeans_match::KMeansMatchPlugin;
+
+pub mod kdtree_match;
+pub mod kmeans_match;
 
 use crate::bvh_manager::bvh_player::JointMap;
 use crate::motion::chunk::ChunkIterator;
@@ -9,28 +16,51 @@ use crate::motion::motion_player::{
 use crate::motion::{MotionData, MotionHandle};
 use crate::trajectory::{Trajectory, TrajectoryConfig, TrajectoryDistance, TrajectoryPoint};
 use crate::ui::play_mode::MotionMatchingResult;
-use crate::{GameMode, MainSet, BVH_SCALE_RATIO};
+use crate::{GameMode, MainSet, Method, BVH_SCALE_RATIO};
+
+use peak_alloc::PeakAlloc;
+#[global_allocator]
+static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 
 pub struct MotionMatchingPlugin;
 
 impl Plugin for MotionMatchingPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(MatchConfig {
-            max_match_count: 5,
-            match_threshold: 0.2,
-            pred_match_threshold: 0.15,
-        })
-        .add_event::<TrajectoryMatch>()
-        .add_event::<PredictionMatch>()
-        .add_event::<NearestTrajectories>()
-        .add_systems(PreStartup, load_motion_data)
-        .add_systems(
+        app.configure_sets(
             Update,
-            (flow, prediction_match, trajectory_match, pose_match)
+            (
+                MotionMatchingSet::Flow,
+                MotionMatchingSet::PredictionMatch,
+                MotionMatchingSet::GlobalMatch,
+                MotionMatchingSet::PoseMatch,
+            )
                 .chain()
                 .in_set(MainSet::MotionMatching)
                 .run_if(in_state(GameMode::Play)),
         );
+
+        app.add_plugins(KdTreeMatchPlugin)
+            .add_plugins(KMeansMatchPlugin)
+            .insert_resource(MatchConfig {
+                max_match_count: 5,
+                match_threshold: 0.2,
+                pred_match_threshold: 0.15,
+            })
+            .add_event::<TrajectoryMatch>()
+            .add_event::<PredictionMatch>()
+            .add_event::<NearestTrajectories>()
+            .add_systems(PreStartup, load_motion_data)
+            .add_systems(
+                Update,
+                (
+                    flow.in_set(MotionMatchingSet::Flow),
+                    prediction_match.in_set(MotionMatchingSet::PredictionMatch),
+                    trajectory_match
+                        .in_set(MotionMatchingSet::GlobalMatch)
+                        .run_if(in_state(Method::BruteForceKNN)),
+                    pose_match,
+                ),
+            );
     }
 }
 
@@ -171,7 +201,10 @@ fn trajectory_match(
     trajectory_config: Res<TrajectoryConfig>,
     match_config: Res<MatchConfig>,
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
+    mut motion_matching_result: ResMut<MotionMatchingResult>,
 ) {
+    println!("Brute Force KNN Method");
+    PEAK_ALLOC.reset_peak_usage();
     let Some(motion_data) = motion_data.get() else {
         return;
     };
@@ -196,8 +229,10 @@ fn trajectory_match(
             })
             .collect::<Vec<_>>();
 
+        // println!("current traj: {:?}", traj);
         let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
 
+        let start_time = Instant::now();
         for (chunk_index, chunk) in motion_data.trajectory_data.iter_chunk().enumerate() {
             // Number of trajectory in this chunk.
             let num_trajectories = chunk.len() - num_segments;
@@ -249,6 +284,23 @@ fn trajectory_match(
                 nearest_trajs.sort_by(|t0, t1| t0.distance.total_cmp(&t1.distance));
             }
         }
+
+        let knn_search_peak_memory = PEAK_ALLOC.peak_usage_as_mb();
+        let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
+
+        let runs = motion_matching_result.matching_result.runs + 1;
+
+        motion_matching_result.matching_result.avg_time =
+            (motion_matching_result.matching_result.avg_time
+                * motion_matching_result.matching_result.runs as f64
+                + traj_duration)
+                / runs as f64;
+        motion_matching_result.matching_result.avg_memory =
+            (motion_matching_result.matching_result.avg_memory
+                * motion_matching_result.matching_result.runs as f64
+                + knn_search_peak_memory as f64)
+                / runs as f64;
+        motion_matching_result.matching_result.runs = runs;
 
         nearest_trajectories_evw.send(NearestTrajectories {
             trajectories: nearest_trajs,
@@ -381,4 +433,12 @@ pub struct MatchConfig {
     /// Any distance beyond this threshold will not be considered.
     pub match_threshold: f32,
     pub pred_match_threshold: f32,
+}
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MotionMatchingSet {
+    Flow,
+    PredictionMatch,
+    GlobalMatch,
+    PoseMatch,
 }

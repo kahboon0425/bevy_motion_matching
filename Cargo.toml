@@ -53,6 +53,9 @@ leafwing-input-manager = "0.14"
 
 # debug editor (run with debug feature to enable it)
 bevy-inspector-egui = { version = "0.25", optional = true }
+kdtree = "0.7.0"
+peak_alloc = "0.2.1"
+clustering = "0.2.1"
 
 [dev-dependencies]
 bevy-inspector-egui = { version = "0.25" }
