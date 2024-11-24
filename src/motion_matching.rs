@@ -375,8 +375,8 @@ fn pose_match(
             pose_dist /= motion_asset.joints().len() as f32;
             pose_dist *= BVH_SCALE_RATIO;
 
-            if pose_dist < smallest_pose_dist {
-                smallest_pose_dist = pose_dist;
+            if pose_dist + traj.distance < smallest_pose_dist {
+                smallest_pose_dist = pose_dist + traj.distance;
                 best_traj_index = i;
             }
 
