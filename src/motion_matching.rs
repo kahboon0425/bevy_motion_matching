@@ -427,7 +427,7 @@ pub struct BestPoseResult {
     pub pose_distance: f32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MatchTrajectory {
     /// Error distance from this trajectory to the trajecctory that is being compared to.
     pub distance: f32,

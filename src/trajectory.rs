@@ -178,7 +178,7 @@ fn draw_trajectory_axes(
                 Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
                 velocity_magnitude * 0.1,
                 palette
-                    .green
+                    .blue
                     .mix(&palette.red, velocity_magnitude / movement_config.run_speed),
             );
         }

@@ -26,21 +26,23 @@ impl Plugin for PlayerPlugin {
 }
 
 fn movement_direction(
-    mut q_movement_directions: Query<(&mut MovementDirection, &Transform2d)>,
+    mut q_movement_directions: Query<&mut MovementDirection>,
     movement_config: Res<MovementConfig>,
     action: Res<ActionState<PlayerAction>>,
     time: Res<Time>,
+    q_camera: Query<&Transform, With<Camera>>,
 ) {
+    let camera_transform = q_camera.single();
     let mut action_axis = action
         .clamped_axis_pair(&PlayerAction::Walk)
         .map(|axis| axis.xy().normalize_or_zero())
         .unwrap_or_default();
     action_axis.x = -action_axis.x;
 
-    for (mut movement_direction, transform2d) in q_movement_directions.iter_mut() {
+    for mut movement_direction in q_movement_directions.iter_mut() {
         let mut target_direction = Vec2::ZERO;
-        target_direction += transform2d.forward() * action_axis.y;
-        target_direction += transform2d.right() * action_axis.x;
+        target_direction += camera_transform.forward().xz().normalize_or_zero() * action_axis.y;
+        target_direction += camera_transform.left().xz().normalize_or_zero() * action_axis.x;
 
         **movement_direction = Vec2::lerp(
             **movement_direction,
@@ -61,8 +63,8 @@ fn draw_player_direction(
                 Quat::from_rotation_y(transform2d.angle),
                 transform2d.translation3d(),
             ),
-            0.5,
-            palette.green,
+            0.3,
+            palette.green.with_alpha(0.5),
         );
     }
 }

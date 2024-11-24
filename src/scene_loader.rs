@@ -1,20 +1,18 @@
-use bevy::color::palettes::css::WHITE;
 use bevy::prelude::*;
 use bevy::render::mesh::VertexAttributeValues;
 use bevy::render::texture::{
     ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
 };
-use bevy_bvh_anim::prelude::{BvhAsset, JointMatrices};
+use bevy_bvh_anim::prelude::JointMatrices;
 
-use crate::bvh_manager::bvh_player::JointMap;
 use crate::draw_axes::{ColorPalette, DrawAxes};
 use crate::motion::chunk::ChunkIterator;
 use crate::motion::motion_player::MotionPlayerBundle;
-use crate::motion::{motion_asset, MotionData};
+use crate::motion::MotionData;
 use crate::motion_matching::{NearestPose, NearestTrajectories};
-use crate::player::{MovementConfig, PlayerBundle, PlayerMarker};
-use crate::trajectory::{TrajectoryBundle, TrajectoryConfig, TrajectoryPoint};
-use crate::transform2d::Transform2d;
+use crate::player::{PlayerBundle, PlayerMarker};
+use crate::trajectory::{TrajectoryBundle, TrajectoryConfig};
+use crate::ui::play_mode::MotionMatchingResult;
 use crate::BVH_SCALE_RATIO;
 
 /// Load glb file and setup the scene.
@@ -44,8 +42,15 @@ fn draw_nearest_traj_arrow(
     palette: Res<ColorPalette>,
     mut axes: ResMut<DrawAxes>,
     q_player_transform: Query<&Transform, With<PlayerMarker>>,
-    mut nearest_traj: Local<Option<(NearestTrajectories, Mat4)>>,
+    mut nearest_traj: Local<Vec<(NearestTrajectories, Mat4, usize)>>,
+    motion_matching_result: Res<MotionMatchingResult>,
 ) {
+    const MAX_TRAJ: usize = 5;
+
+    if nearest_traj.len() > MAX_TRAJ {
+        nearest_traj.remove(0);
+    }
+
     let Some(motion_asset) = motion_data.get() else {
         return;
     };
@@ -55,56 +60,56 @@ fn draw_nearest_traj_arrow(
     };
     let curr_player_matrix = player_transform.compute_matrix();
 
-    let num_segments = trajectory_config.num_segments();
     let num_points = trajectory_config.num_points();
 
     for trajs in nearest_trajectories_evr.read() {
         if trajs.is_empty() {
             continue;
         }
-        *nearest_traj = Some((trajs.clone(), curr_player_matrix));
+
+        nearest_traj.push((
+            trajs.clone(),
+            curr_player_matrix,
+            motion_matching_result.selected_trajectory,
+        ));
     }
 
-    let Some((trajs, snapped_player_matrix)) = nearest_traj.as_ref() else {
-        return;
-    };
+    for (trajs, snapped_player_matrix, selected_index) in nearest_traj.iter() {
+        for (i, traj) in trajs.iter().enumerate() {
+            let color = match i == *selected_index {
+                true => palette.green,
+                false => palette.base4.with_alpha(0.8),
+            };
 
-    for traj in trajs.iter() {
-        let chunk = motion_asset.trajectory_data.get_chunk(traj.chunk_index);
+            let chunk = motion_asset.trajectory_data.get_chunk(traj.chunk_index);
 
-        if let Some(chunk) = chunk {
-            println!("Original Traj Count: {}", chunk.len());
-            println!("Chunk Offset: {}", traj.chunk_offset);
-            let num_trajectories = chunk.len() - traj.chunk_offset - num_segments;
-            println!("Remaining Traj Count: {}", num_trajectories);
+            if let Some(chunk) = chunk {
+                let data_traj = &chunk[traj.chunk_offset..traj.chunk_offset + num_points];
+                // Center point of trajectory
+                let data_inv_matrix = data_traj[trajectory_config.history_count].matrix.inverse();
 
-            let data_traj = &chunk[traj.chunk_offset..traj.chunk_offset + num_points];
-            // Center point of trajectory
-            let data_inv_matrix = data_traj[trajectory_config.history_count].matrix.inverse();
+                for point in data_traj {
+                    let (.., translation) = point.matrix.to_scale_rotation_translation();
+                    let mut translation =
+                        data_inv_matrix.transform_point3(translation) * BVH_SCALE_RATIO;
+                    translation.y = 0.0;
 
-            for point in data_traj {
-                let (.., translation) = point.matrix.to_scale_rotation_translation();
-                let mut translation =
-                    data_inv_matrix.transform_point3(translation) * BVH_SCALE_RATIO;
-                translation.y = 0.0;
+                    let velocity = point.velocity * BVH_SCALE_RATIO;
+                    let velocity = Vec3::new(velocity.x, 0.0, velocity.y);
+                    let velocity_magnitude = velocity.length();
 
-                let velocity = point.velocity * BVH_SCALE_RATIO;
-                let velocity = Vec3::new(velocity.x, 0.0, velocity.y);
-                let velocity_magnitude = velocity.length();
+                    translation = snapped_player_matrix.transform_point3(translation);
+                    let velocity = snapped_player_matrix.transform_vector3(velocity).xz();
+                    let angle = f32::atan2(velocity.x, velocity.y);
 
-                translation = snapped_player_matrix.transform_point3(translation);
-                let velocity = snapped_player_matrix.transform_vector3(velocity).xz();
-                let angle = f32::atan2(velocity.x, velocity.y);
-
-                axes.draw_forward(
-                    Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
-                    velocity_magnitude * 0.1,
-                    palette.purple,
-                );
+                    axes.draw_forward(
+                        Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
+                        velocity_magnitude * 0.1,
+                        color,
+                    );
+                }
             }
         }
-
-        // break;
     }
 }
 
@@ -130,8 +135,6 @@ fn draw_nearest_pose_armature(
     let mut joint_matrices = JointMatrices::new(motion_asset.joints());
 
     for (i, pose) in nearest_pose.nearest_pose.iter().enumerate() {
-        // println!("Nearest Pose Count: {}", i);
-
         joint_matrices.apply_frame(&pose);
 
         let pose_translation_offset = Vec3::new(i as f32 * POSE_OFFSET, 0.0, 0.0);
