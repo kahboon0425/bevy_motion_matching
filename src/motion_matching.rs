@@ -13,6 +13,7 @@ use crate::motion::motion_asset::MotionAsset;
 use crate::motion::motion_player::{
     JumpToPose, MotionPlayer, MotionPlayerConfig, MotionPose, TrajectoryPosePair,
 };
+use crate::motion::pose_data::Pose;
 use crate::motion::{MotionData, MotionHandle};
 use crate::trajectory::{Trajectory, TrajectoryConfig, TrajectoryDistance, TrajectoryPoint};
 use crate::ui::play_mode::MotionMatchingResult;
@@ -41,6 +42,7 @@ impl Plugin for MotionMatchingPlugin {
 
         app.add_plugins(KdTreeMatchPlugin)
             .add_plugins(KMeansMatchPlugin)
+            .init_resource::<NearestPose>()
             .insert_resource(MatchConfig {
                 max_match_count: 5,
                 match_threshold: 0.2,
@@ -203,7 +205,7 @@ fn trajectory_match(
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
     mut motion_matching_result: ResMut<MotionMatchingResult>,
 ) {
-    println!("Brute Force KNN Method");
+    // println!("Brute Force KNN Method");
     PEAK_ALLOC.reset_peak_usage();
     let Some(motion_data) = motion_data.get() else {
         return;
@@ -316,7 +318,10 @@ fn pose_match(
     mut nearest_trajectories_evr: EventReader<NearestTrajectories>,
     mut motion_matching_result: ResMut<MotionMatchingResult>,
     mut jump_evw: EventWriter<JumpToPose>,
+    mut nearest_pose: ResMut<NearestPose>,
 ) {
+    nearest_pose.best_post_index = None;
+
     let Some(motion_asset) = motion_data.get() else {
         return;
     };
@@ -345,6 +350,12 @@ fn pose_match(
                 .and_then(|poses| poses.get(traj.chunk_offset))
                 .unwrap();
 
+            if nearest_pose.nearest_pose.len() <= trajs.len() {
+                nearest_pose.nearest_pose.push(pose.clone());
+            } else {
+                nearest_pose.nearest_pose[i] = pose.clone();
+            }
+
             let mut pose_dist = 0.0;
 
             for joint_info in motion_asset.joints() {
@@ -369,6 +380,8 @@ fn pose_match(
                 best_traj_index = i;
             }
 
+            nearest_pose.best_post_index = Some(best_traj_index);
+
             motion_matching_result
                 .trajectories_poses
                 .push((*traj, pose_dist));
@@ -387,6 +400,12 @@ fn pose_match(
             entity: trajs.entity,
         });
     }
+}
+
+#[derive(Resource, Default, Debug)]
+pub struct NearestPose {
+    pub nearest_pose: Vec<Pose>,
+    pub best_post_index: Option<usize>,
 }
 
 #[derive(Event, Debug, Deref, DerefMut)]
@@ -419,11 +438,11 @@ pub struct MatchTrajectory {
 }
 
 /// A vec of [`MatchTrajectory`] that has the least [`MatchTrajectory::distance`].
-#[derive(Event, Debug, Deref, DerefMut)]
+#[derive(Event, Debug, Deref, DerefMut, Clone)]
 pub struct NearestTrajectories {
     #[deref]
-    trajectories: Vec<MatchTrajectory>,
-    entity: Entity,
+    pub trajectories: Vec<MatchTrajectory>,
+    pub entity: Entity,
 }
 
 #[derive(Resource, Debug)]

@@ -89,7 +89,7 @@ fn trajectory_match_with_kdtree(
     kd_tree: Res<KdTreeResource>,
     mut motion_matching_result: ResMut<MotionMatchingResult>,
 ) {
-    println!("KDTree Method");
+    // println!("KDTree Method");
     PEAK_ALLOC.reset_peak_usage();
     for traj_match in match_evr.read() {
         let entity = **traj_match;

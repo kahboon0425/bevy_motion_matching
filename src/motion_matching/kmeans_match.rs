@@ -107,7 +107,7 @@ fn trajectory_match_with_kmeans(
     kmeans: Res<KMeansResource>,
     mut motion_matching_result: ResMut<MotionMatchingResult>,
 ) {
-    println!("KMeans Method");
+    // println!("KMeans Method");
     PEAK_ALLOC.reset_peak_usage();
     for traj_match in match_evr.read() {
         let entity = **traj_match;
