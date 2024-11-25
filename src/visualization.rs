@@ -7,7 +7,7 @@ use crate::{
     motion_matching::NearestTrajectories,
     player::PlayerMarker,
     trajectory::TrajectoryConfig,
-    ui::play_mode::MotionMatchingResult,
+    ui::play_mode::{DrawNearestPoseArmature, DrawNearestTrajectory, MotionMatchingResult},
     BVH_SCALE_RATIO,
 };
 
@@ -34,7 +34,11 @@ fn draw_nearest_traj_arrow(
     mut nearest_trajectories_evr: EventReader<NearestTrajectories>,
     mut gizmos: Gizmos,
     palette: Res<ColorPalette>,
+    draw: Res<DrawNearestTrajectory>,
 ) {
+    if **draw == false {
+        return;
+    }
     const MAX_TRAJ: usize = 15;
 
     if nearest_traj.len() > MAX_TRAJ {
@@ -111,7 +115,11 @@ fn draw_nearest_pose_armature(
     mut gizmos: Gizmos,
     palette: Res<ColorPalette>,
     mut nearest_traj: Local<Vec<(NearestTrajectories, Mat4, usize)>>,
+    draw: Res<DrawNearestPoseArmature>,
 ) {
+    if **draw == false {
+        return;
+    }
     const MAX_TRAJ: usize = 15;
 
     if nearest_traj.len() > MAX_TRAJ {

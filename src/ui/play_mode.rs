@@ -18,6 +18,9 @@ pub fn play_mode_panel(ui: &mut egui::Ui, world: &mut World) {
     ui.heading("Play Mode");
     ui.add_space(10.0);
     data_inspector(ui, world);
+    motion_matching_method(ui, world);
+    trajectory_matching_visualization(ui, world);
+    motion_matching_result(ui, world);
 }
 
 fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
@@ -25,23 +28,9 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         MotionData,
         ResMut<NextState<GameMode>>,
         Res<State<GameMode>>,
-        ResMut<MotionMatchingResult>,
-        Res<TrajectoryPlot>,
-        Res<TrajectoryConfig>,
-        Res<State<Method>>,
-        ResMut<NextState<Method>>,
     )>::new(world);
 
-    let (
-        motion_data,
-        mut next_game_mode,
-        game_mode,
-        mut motion_matching_result,
-        traj_plot,
-        traj_config,
-        method_state,
-        mut next_method_state,
-    ) = params.get_mut(world);
+    let (motion_data, mut next_game_mode, game_mode) = params.get_mut(world);
 
     let Some(motion_asset) = motion_data.get() else {
         return;
@@ -84,8 +73,17 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
             _ => next_game_mode.set(GameMode::Play),
         }
     }
-
     ui.add_space(10.0);
+}
+
+fn motion_matching_method(ui: &mut egui::Ui, world: &mut World) {
+    let mut params = SystemState::<(
+        ResMut<MotionMatchingResult>,
+        Res<State<Method>>,
+        ResMut<NextState<Method>>,
+    )>::new(world);
+
+    let (mut motion_matching_result, method_state, mut next_method_state) = params.get_mut(world);
 
     ui.horizontal(|ui| {
         ui.label("Method:");
@@ -112,8 +110,22 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
 
         next_method_state.set(new_method);
     });
-
     ui.add_space(10.0);
+}
+
+fn trajectory_matching_visualization(ui: &mut egui::Ui, world: &mut World) {
+    let mut params = SystemState::<(
+        MotionData,
+        Res<MotionMatchingResult>,
+        Res<TrajectoryPlot>,
+        Res<TrajectoryConfig>,
+    )>::new(world);
+
+    let (motion_data, motion_matching_result, traj_plot, traj_config) = params.get_mut(world);
+
+    let Some(motion_asset) = motion_data.get() else {
+        return;
+    };
 
     groupbox(ui, |ui| {
         ui.label("Trajectory Matching Visualization");
@@ -191,8 +203,14 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
                 plot_ui.arrows(traj_arrows);
             });
     });
-
     ui.add_space(10.0);
+}
+
+fn motion_matching_result(ui: &mut egui::Ui, world: &mut World) {
+    let mut params = SystemState::<(Res<MotionMatchingResult>,)>::new(world);
+
+    let (motion_matching_result,) = params.get_mut(world);
+
     ui.label("Motion Matching Result");
 
     ui.group(|ui| {
@@ -244,7 +262,6 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
                 }
             });
     });
-
     ui.add_space(10.0);
 
     let result = motion_matching_result.matching_result;
@@ -253,7 +270,34 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
         result.avg_time,
     ));
     ui.label(format!("Average Memory Usage: {:.3} ms", result.avg_memory,));
-    ui.add_space(10.0);
+}
+
+fn draw_nearest_pose_armature_checkbox(ui: &mut egui::Ui, world: &mut World) {
+    let mut draw_main_armature = world.resource_mut::<DrawNearestPoseArmature>();
+    ui.checkbox(&mut draw_main_armature, "Show Nearest Pose Armature");
+}
+
+fn draw_nearest_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
+    let mut draw_trajectory = world.resource_mut::<DrawNearestTrajectory>();
+    ui.checkbox(&mut draw_trajectory, "Show Nearest Trajectory Arrows");
+}
+
+#[derive(Resource, Deref, DerefMut)]
+pub struct DrawNearestPoseArmature(bool);
+
+impl Default for DrawNearestPoseArmature {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
+#[derive(Resource, Deref, DerefMut)]
+pub struct DrawNearestTrajectory(bool);
+
+impl Default for DrawNearestTrajectory {
+    fn default() -> Self {
+        Self(true)
+    }
 }
 
 #[derive(Default, Resource)]
