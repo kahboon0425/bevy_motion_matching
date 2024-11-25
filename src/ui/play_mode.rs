@@ -18,6 +18,8 @@ pub fn play_mode_panel(ui: &mut egui::Ui, world: &mut World) {
     ui.heading("Play Mode");
     ui.add_space(10.0);
     data_inspector(ui, world);
+    draw_nearest_pose_armature_checkbox(ui, world);
+    draw_nearest_trajectory_checkbox(ui, world);
     motion_matching_method(ui, world);
     trajectory_matching_visualization(ui, world);
     motion_matching_result(ui, world);
@@ -73,6 +75,17 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
             _ => next_game_mode.set(GameMode::Play),
         }
     }
+    ui.add_space(10.0);
+}
+
+fn draw_nearest_pose_armature_checkbox(ui: &mut egui::Ui, world: &mut World) {
+    let mut draw_main_armature = world.resource_mut::<DrawNearestPoseArmature>();
+    ui.checkbox(&mut draw_main_armature, "Show Nearest Pose Armature");
+}
+
+fn draw_nearest_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
+    let mut draw_trajectory = world.resource_mut::<DrawNearestTrajectory>();
+    ui.checkbox(&mut draw_trajectory, "Show Nearest Trajectory Arrows");
     ui.add_space(10.0);
 }
 
@@ -270,16 +283,6 @@ fn motion_matching_result(ui: &mut egui::Ui, world: &mut World) {
         result.avg_time,
     ));
     ui.label(format!("Average Memory Usage: {:.3} ms", result.avg_memory,));
-}
-
-fn draw_nearest_pose_armature_checkbox(ui: &mut egui::Ui, world: &mut World) {
-    let mut draw_main_armature = world.resource_mut::<DrawNearestPoseArmature>();
-    ui.checkbox(&mut draw_main_armature, "Show Nearest Pose Armature");
-}
-
-fn draw_nearest_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
-    let mut draw_trajectory = world.resource_mut::<DrawNearestTrajectory>();
-    ui.checkbox(&mut draw_trajectory, "Show Nearest Trajectory Arrows");
 }
 
 #[derive(Resource, Deref, DerefMut)]
