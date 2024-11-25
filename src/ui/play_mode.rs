@@ -1,4 +1,3 @@
-use bevy::core_pipeline::motion_blur;
 use bevy::ecs::system::SystemState;
 use bevy::prelude::*;
 use bevy_egui::egui;
@@ -268,7 +267,7 @@ fn motion_matching_result(ui: &mut egui::Ui, world: &mut World) {
                         row.col(|ui| {
                             let x = &motion_asset.animation_file[trajectory.chunk_index];
                             ui.visuals_mut().override_text_color = row_color;
-                            ui.label(format!("{}", x));
+                            ui.label(x.to_string());
                             ui.separator();
                         });
                         row.col(|ui| {
