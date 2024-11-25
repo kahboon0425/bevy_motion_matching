@@ -8,9 +8,10 @@ use bevy_bvh_anim::prelude::JointMatrices;
 use crate::draw_axes::{ColorPalette, DrawAxes};
 use crate::motion::chunk::ChunkIterator;
 use crate::motion::motion_player::MotionPlayerBundle;
+use crate::motion::pose_data::Pose;
 use crate::motion::trajectory_data::TrajectoryDataPoint;
 use crate::motion::MotionData;
-use crate::motion_matching::{NearestPose, NearestTrajectories};
+use crate::motion_matching::NearestTrajectories;
 use crate::player::{PlayerBundle, PlayerMarker};
 use crate::trajectory::{TrajectoryBundle, TrajectoryConfig};
 use crate::ui::play_mode::MotionMatchingResult;
@@ -38,14 +39,13 @@ pub struct MainScene;
 
 fn draw_nearest_traj_arrow(
     motion_data: MotionData,
-    mut nearest_trajectories_evr: EventReader<NearestTrajectories>,
     trajectory_config: Res<TrajectoryConfig>,
-    palette: Res<ColorPalette>,
-    mut axes: ResMut<DrawAxes>,
     q_player_transform: Query<&Transform, With<PlayerMarker>>,
-    mut nearest_traj: Local<Vec<(NearestTrajectories, Mat4, usize)>>,
     motion_matching_result: Res<MotionMatchingResult>,
+    mut nearest_traj: Local<Vec<(NearestTrajectories, Mat4, usize)>>,
+    mut nearest_trajectories_evr: EventReader<NearestTrajectories>,
     mut gizmos: Gizmos,
+    palette: Res<ColorPalette>,
 ) {
     const MAX_TRAJ: usize = 10;
 
@@ -60,6 +60,7 @@ fn draw_nearest_traj_arrow(
     let Ok(player_transform) = q_player_transform.get_single() else {
         return;
     };
+
     let curr_player_matrix = player_transform.compute_matrix();
 
     let num_points = trajectory_config.num_points();
@@ -87,6 +88,7 @@ fn draw_nearest_traj_arrow(
 
             if let Some(chunk) = chunk {
                 let data_traj = &chunk[traj.chunk_offset..traj.chunk_offset + num_points];
+
                 // Center point of trajectory
                 let data_inv_matrix = data_traj[trajectory_config.history_count].matrix.inverse();
 
@@ -104,23 +106,9 @@ fn draw_nearest_traj_arrow(
                 for point in data_traj[1..].iter() {
                     let translation = get_translation(point);
 
-                    let velocity = point.velocity * BVH_SCALE_RATIO;
-                    let velocity = Vec3::new(velocity.x, 0.0, velocity.y);
-                    let velocity_magnitude = velocity.length();
-
-                    let velocity = snapped_player_matrix.transform_vector3(velocity).xz();
-
-                    let angle = f32::atan2(velocity.x, velocity.y);
-
                     gizmos.line(translation, previous_translation, color);
                     gizmos.arrow(previous_translation, translation, color);
                     previous_translation = translation;
-
-                    // axes.draw_forward(
-                    //     Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
-                    //     velocity_magnitude * 0.1,
-                    //     color,
-                    // );
                 }
             }
         }
@@ -129,78 +117,78 @@ fn draw_nearest_traj_arrow(
 
 fn draw_nearest_pose_armature(
     motion_data: MotionData,
-    q_camera: Query<(&Camera, &GlobalTransform)>,
-    nearest_pose: Res<NearestPose>,
+    q_player_transform: Query<&Transform, With<PlayerMarker>>,
+    mut nearest_trajectories_evr: EventReader<NearestTrajectories>,
+    motion_matching_result: Res<MotionMatchingResult>,
     mut gizmos: Gizmos,
     palette: Res<ColorPalette>,
+    mut nearest_traj: Local<Vec<(NearestTrajectories, Mat4, usize)>>,
 ) {
+    const MAX_TRAJ: usize = 10;
+
+    if nearest_traj.len() > MAX_TRAJ {
+        nearest_traj.remove(0);
+    }
+
     let Some(motion_asset) = motion_data.get() else {
         return;
     };
 
-    const POSE_OFFSET: f32 = 1.0;
-    const OFFSET: Vec3 = Vec3::new(-15.0, 20.0, 1.0);
-    const SCALING: f32 = 0.1;
+    let Ok(player_transform) = q_player_transform.get_single() else {
+        return;
+    };
 
-    let (camera, camera_transform) = q_camera.single();
-    let cam_matrix = camera_transform.compute_matrix();
-    let inv_cam_matrix = camera_transform.compute_matrix().inverse();
+    let curr_player_matrix = player_transform.compute_matrix();
+
+    for trajs in nearest_trajectories_evr.read() {
+        if trajs.is_empty() {
+            continue;
+        }
+
+        nearest_traj.push((
+            trajs.clone(),
+            curr_player_matrix,
+            motion_matching_result.selected_trajectory,
+        ));
+    }
+
+    const POSE_OFFSET: f32 = 1.0;
 
     let mut joint_matrices = JointMatrices::new(motion_asset.joints());
 
-    for (i, pose) in nearest_pose.nearest_pose.iter().enumerate() {
-        joint_matrices.apply_frame(&pose);
+    for (i, (trajs, snapped_player_matrix, selected_pose)) in nearest_traj.iter().enumerate() {
+        for (i, traj) in trajs.iter().enumerate() {
+            let pose = motion_asset
+                .pose_data
+                .get_chunk(traj.chunk_index)
+                .and_then(|poses| poses.get(traj.chunk_offset))
+                .unwrap();
+            joint_matrices.apply_frame(&pose);
 
-        let pose_translation_offset = Vec3::new(i as f32 * POSE_OFFSET, 0.0, 0.0);
-        for (joint_index, joint) in joint_matrices.joints().iter().enumerate() {
-            let Some(parent_index) = joint.parent_index() else {
-                continue;
-            };
+            let pose_translation_offset = Vec3::new(i as f32 * POSE_OFFSET, 0.0, 0.0);
+            for (joint_index, joint) in joint_matrices.joints().iter().enumerate() {
+                let Some(parent_index) = joint.parent_index() else {
+                    continue;
+                };
 
-            let (.., parent_translation) =
-                joint_matrices.world_matrices()[parent_index].to_scale_rotation_translation();
-            let (.., curr_translation) =
-                joint_matrices.world_matrices()[joint_index].to_scale_rotation_translation();
+                let (.., parent_translation) =
+                    joint_matrices.world_matrices()[parent_index].to_scale_rotation_translation();
+                let (.., curr_translation) =
+                    joint_matrices.world_matrices()[joint_index].to_scale_rotation_translation();
 
-            let mut parent_position =
-                (parent_translation * BVH_SCALE_RATIO) + pose_translation_offset;
-            let mut current_position =
-                (curr_translation * BVH_SCALE_RATIO) + pose_translation_offset;
+                let mut parent_position =
+                    (parent_translation * BVH_SCALE_RATIO) + pose_translation_offset;
+                let mut current_position =
+                    (curr_translation * BVH_SCALE_RATIO) + pose_translation_offset;
 
-            // let offset = camera_transform.right() * OFFSET.x
-            //     + camera_transform.up() * OFFSET.y
-            //     + camera_transform.forward() * OFFSET.z;
-
-            parent_position = cam_matrix.project_point3(parent_position + OFFSET);
-            current_position = cam_matrix.project_point3(current_position + OFFSET);
-
-            parent_position *= SCALING;
-            current_position *= SCALING;
-
-            if let Some(best_pose_i) = nearest_pose.best_post_index {
-                // println!("Best Pose Index......{}", best_pose_i);
-                let color = match best_pose_i == i {
+                parent_position = snapped_player_matrix.transform_point3(parent_position);
+                current_position = snapped_player_matrix.transform_point3(current_position);
+                let color = match *selected_pose == i {
                     true => palette.green,
                     false => palette.base4.with_alpha(0.8),
                 };
 
-                gizmos.line(
-                    // Constant scaling factor of the Bvh data.
-                    // parent_translation * BVH_SCALE_RATIO,
-                    // curr_translation * BVH_SCALE_RATIO,
-                    parent_position,
-                    current_position,
-                    color,
-                );
-            } else {
-                gizmos.line(
-                    // Constant scaling factor of the Bvh data.
-                    // parent_translation * BVH_SCALE_RATIO,
-                    // curr_translation * BVH_SCALE_RATIO,
-                    parent_position,
-                    current_position,
-                    palette.base4.with_alpha(0.8),
-                );
+                gizmos.line(parent_position, current_position, color);
             }
         }
     }
