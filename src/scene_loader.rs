@@ -8,6 +8,7 @@ use bevy_bvh_anim::prelude::JointMatrices;
 use crate::draw_axes::{ColorPalette, DrawAxes};
 use crate::motion::chunk::ChunkIterator;
 use crate::motion::motion_player::MotionPlayerBundle;
+use crate::motion::trajectory_data::TrajectoryDataPoint;
 use crate::motion::MotionData;
 use crate::motion_matching::{NearestPose, NearestTrajectories};
 use crate::player::{PlayerBundle, PlayerMarker};
@@ -44,8 +45,9 @@ fn draw_nearest_traj_arrow(
     q_player_transform: Query<&Transform, With<PlayerMarker>>,
     mut nearest_traj: Local<Vec<(NearestTrajectories, Mat4, usize)>>,
     motion_matching_result: Res<MotionMatchingResult>,
+    mut gizmos: Gizmos,
 ) {
-    const MAX_TRAJ: usize = 5;
+    const MAX_TRAJ: usize = 10;
 
     if nearest_traj.len() > MAX_TRAJ {
         nearest_traj.remove(0);
@@ -88,25 +90,37 @@ fn draw_nearest_traj_arrow(
                 // Center point of trajectory
                 let data_inv_matrix = data_traj[trajectory_config.history_count].matrix.inverse();
 
-                for point in data_traj {
+                let get_translation = |point: &TrajectoryDataPoint| -> Vec3 {
                     let (.., translation) = point.matrix.to_scale_rotation_translation();
                     let mut translation =
                         data_inv_matrix.transform_point3(translation) * BVH_SCALE_RATIO;
                     translation.y = 0.0;
+                    translation = snapped_player_matrix.transform_point3(translation);
+                    translation
+                };
+
+                let mut previous_translation = get_translation(&data_traj[0]);
+
+                for point in data_traj[1..].iter() {
+                    let translation = get_translation(point);
 
                     let velocity = point.velocity * BVH_SCALE_RATIO;
                     let velocity = Vec3::new(velocity.x, 0.0, velocity.y);
                     let velocity_magnitude = velocity.length();
 
-                    translation = snapped_player_matrix.transform_point3(translation);
                     let velocity = snapped_player_matrix.transform_vector3(velocity).xz();
+
                     let angle = f32::atan2(velocity.x, velocity.y);
 
-                    axes.draw_forward(
-                        Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
-                        velocity_magnitude * 0.1,
-                        color,
-                    );
+                    gizmos.line(translation, previous_translation, color);
+                    gizmos.arrow(previous_translation, translation, color);
+                    previous_translation = translation;
+
+                    // axes.draw_forward(
+                    //     Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
+                    //     velocity_magnitude * 0.1,
+                    //     color,
+                    // );
                 }
             }
         }
