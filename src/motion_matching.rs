@@ -13,7 +13,6 @@ use crate::motion::motion_asset::MotionAsset;
 use crate::motion::motion_player::{
     JumpToPose, MotionPlayer, MotionPlayerConfig, MotionPose, TrajectoryPosePair,
 };
-use crate::motion::pose_data::Pose;
 use crate::motion::{MotionData, MotionHandle};
 use crate::trajectory::{Trajectory, TrajectoryConfig, TrajectoryDistance, TrajectoryPoint};
 use crate::ui::play_mode::MotionMatchingResult;

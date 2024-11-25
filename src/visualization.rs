@@ -152,14 +152,14 @@ fn draw_nearest_pose_armature(
 
     let mut joint_matrices = JointMatrices::new(motion_asset.joints());
 
-    for (i, (trajs, snapped_player_matrix, selected_pose)) in nearest_traj.iter().enumerate() {
+    for (trajs, snapped_player_matrix, selected_pose) in nearest_traj.iter() {
         for (i, traj) in trajs.iter().enumerate() {
             let pose = motion_asset
                 .pose_data
                 .get_chunk(traj.chunk_index)
                 .and_then(|poses| poses.get(traj.chunk_offset))
                 .unwrap();
-            joint_matrices.apply_frame(&pose);
+            joint_matrices.apply_frame(pose);
 
             let pose_translation_offset = Vec3::new(i as f32 * POSE_OFFSET, 0.0, 0.0);
             for (joint_index, joint) in joint_matrices.joints().iter().enumerate() {
