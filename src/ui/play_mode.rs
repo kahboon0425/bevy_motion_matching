@@ -1,3 +1,4 @@
+use bevy::core_pipeline::motion_blur;
 use bevy::ecs::system::SystemState;
 use bevy::prelude::*;
 use bevy_egui::egui;
@@ -220,26 +221,37 @@ fn trajectory_matching_visualization(ui: &mut egui::Ui, world: &mut World) {
 }
 
 fn motion_matching_result(ui: &mut egui::Ui, world: &mut World) {
-    let mut params = SystemState::<(Res<MotionMatchingResult>,)>::new(world);
+    let mut params = SystemState::<(Res<MotionMatchingResult>, MotionData)>::new(world);
 
-    let (motion_matching_result,) = params.get_mut(world);
+    let (motion_matching_result, motion_data) = params.get_mut(world);
+
+    let Some(motion_asset) = motion_data.get() else {
+        return;
+    };
 
     ui.label("Motion Matching Result");
 
     ui.group(|ui| {
         TableBuilder::new(ui)
-            .columns(Column::auto(), 3)
+            .column(Column::initial(150.0))
+            .column(Column::auto())
+            .column(Column::auto())
+            .column(Column::auto())
             .header(20.0, |mut header| {
                 header.col(|ui| {
-                    ui.heading(egui::RichText::new("Index:Offset").size(12.0).strong());
+                    ui.heading(egui::RichText::new("File Name").size(12.0).strong());
                     ui.separator();
                 });
                 header.col(|ui| {
-                    ui.heading(egui::RichText::new("Traj Dist.").size(12.0).strong());
+                    ui.heading(egui::RichText::new("Traj Idx").size(12.0).strong());
                     ui.separator();
                 });
                 header.col(|ui| {
-                    ui.heading(egui::RichText::new("Pose Dist.").size(12.0).strong());
+                    ui.heading(egui::RichText::new("Traj Dist").size(12.0).strong());
+                    ui.separator();
+                });
+                header.col(|ui| {
+                    ui.heading(egui::RichText::new("Pose Dist").size(12.0).strong());
                     ui.separator();
                 });
             })
@@ -254,11 +266,14 @@ fn motion_matching_result(ui: &mut egui::Ui, world: &mut World) {
 
                     body.row(20.0, |mut row| {
                         row.col(|ui| {
+                            let x = &motion_asset.animation_file[trajectory.chunk_index];
                             ui.visuals_mut().override_text_color = row_color;
-                            ui.label(format!(
-                                "{}:{}",
-                                trajectory.chunk_index, trajectory.chunk_offset
-                            ));
+                            ui.label(format!("{}", x));
+                            ui.separator();
+                        });
+                        row.col(|ui| {
+                            ui.visuals_mut().override_text_color = row_color;
+                            ui.label(format!("{}", trajectory.chunk_offset));
                             ui.separator();
                         });
                         row.col(|ui| {
