@@ -18,10 +18,54 @@ impl Plugin for PlayerPlugin {
         })
         .add_systems(
             Update,
-            (movement_direction, draw_player_direction)
+            (
+                preset_movement_direction,
+                // movement_direction,
+                draw_player_direction,
+            )
                 .chain()
                 .in_set(MainSet::Action),
         );
+    }
+}
+
+fn preset_movement_direction(
+    mut q_movement_directions: Query<&mut MovementDirection>,
+    time: Res<Time>,
+    mut state: Local<(usize, f32)>,
+) {
+    let directions = [
+        // Up
+        Vec2::new(0.0, 1.0),
+        // Right
+        Vec2::new(1.0, 0.0),
+        // Down
+        Vec2::new(0.0, -1.0),
+        // Left
+        Vec2::new(-1.0, 0.0),
+    ];
+
+    let direction_durations = [6.0, 5.0, 5.0, 5.0];
+
+    let (current_direction, elapsed_time) = *state;
+
+    let new_elapsed_time = elapsed_time + time.delta_seconds();
+
+    let current_direction_duration = direction_durations[current_direction];
+
+    let mut new_direction = current_direction;
+    let mut reset_time = new_elapsed_time;
+
+    if new_elapsed_time >= current_direction_duration {
+        new_direction = (current_direction + 1) % directions.len();
+        reset_time = 0.0;
+    }
+
+    *state = (new_direction, reset_time);
+
+    let direction = directions[new_direction];
+    for mut movement_direction in q_movement_directions.iter_mut() {
+        **movement_direction = direction;
     }
 }
 
