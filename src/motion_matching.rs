@@ -333,7 +333,7 @@ fn pose_match(
             continue;
         };
 
-        let mut smallest_pose_dist = f32::MAX;
+        let mut smallest_dist = f32::MAX;
         let mut best_traj_index = 0;
 
         for (i, traj) in trajs.iter().enumerate() {
@@ -364,8 +364,10 @@ fn pose_match(
             pose_dist /= motion_asset.joints().len() as f32;
             pose_dist *= BVH_SCALE_RATIO;
 
-            if pose_dist + traj.distance < smallest_pose_dist {
-                smallest_pose_dist = pose_dist + traj.distance;
+            let dist = pose_dist + traj.distance;
+
+            if dist < smallest_dist {
+                smallest_dist = dist;
                 best_traj_index = i;
             }
 
