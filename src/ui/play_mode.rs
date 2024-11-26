@@ -20,6 +20,7 @@ pub fn play_mode_panel(ui: &mut egui::Ui, world: &mut World) {
     data_inspector(ui, world);
     draw_nearest_pose_armature_checkbox(ui, world);
     draw_nearest_trajectory_checkbox(ui, world);
+    run_preset_direction(ui, world);
     motion_matching_method(ui, world);
     trajectory_matching_visualization(ui, world);
     motion_matching_result(ui, world);
@@ -86,6 +87,11 @@ fn draw_nearest_pose_armature_checkbox(ui: &mut egui::Ui, world: &mut World) {
 fn draw_nearest_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
     let mut draw_trajectory = world.resource_mut::<DrawNearestTrajectory>();
     ui.checkbox(&mut draw_trajectory, "Show Nearest Trajectory Arrows");
+}
+
+fn run_preset_direction(ui: &mut egui::Ui, world: &mut World) {
+    let mut run_preset_movement = world.resource_mut::<RunPresetDirection>();
+    ui.checkbox(&mut run_preset_movement, "Run Preset Movement");
     ui.add_space(10.0);
 }
 
@@ -312,6 +318,15 @@ impl Default for DrawNearestPoseArmature {
 pub struct DrawNearestTrajectory(bool);
 
 impl Default for DrawNearestTrajectory {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
+#[derive(Resource, Deref, DerefMut)]
+pub struct RunPresetDirection(bool);
+
+impl Default for RunPresetDirection {
     fn default() -> Self {
         Self(true)
     }

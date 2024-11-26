@@ -28,6 +28,7 @@ impl Plugin for UiPlugin {
             .init_resource::<config::DrawMainArmature>()
             .init_resource::<play_mode::DrawNearestTrajectory>()
             .init_resource::<play_mode::DrawNearestPoseArmature>()
+            .init_resource::<play_mode::RunPresetDirection>()
             .init_resource::<config::DrawTrajectory>()
             .init_resource::<builder::BuildConfigs>()
             .init_resource::<play_mode::MotionMatchingResult>()

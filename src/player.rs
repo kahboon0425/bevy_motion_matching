@@ -5,6 +5,7 @@ use crate::action::PlayerAction;
 use crate::draw_axes::{ColorPalette, DrawAxes};
 use crate::trajectory::MovementDirection;
 use crate::transform2d::Transform2d;
+use crate::ui::play_mode::RunPresetDirection;
 use crate::MainSet;
 
 pub struct PlayerPlugin;
@@ -20,7 +21,7 @@ impl Plugin for PlayerPlugin {
             Update,
             (
                 preset_movement_direction,
-                // movement_direction,
+                movement_direction,
                 draw_player_direction,
             )
                 .chain()
@@ -32,8 +33,14 @@ impl Plugin for PlayerPlugin {
 fn preset_movement_direction(
     mut q_movement_directions: Query<&mut MovementDirection>,
     time: Res<Time>,
+    movement_config: Res<MovementConfig>,
     mut state: Local<(usize, f32)>,
+    run_preset_direction: Res<RunPresetDirection>,
 ) {
+    if **run_preset_direction == false {
+        return;
+    }
+
     let directions = [
         // Up
         Vec2::new(0.0, 1.0),
@@ -65,7 +72,13 @@ fn preset_movement_direction(
 
     let direction = directions[new_direction];
     for mut movement_direction in q_movement_directions.iter_mut() {
-        **movement_direction = direction;
+        // **movement_direction = direction;
+
+        **movement_direction = Vec2::lerp(
+            **movement_direction,
+            direction,
+            f32::min(1.0, movement_config.lerp_factor * time.delta_seconds()),
+        );
     }
 }
 
@@ -75,7 +88,11 @@ fn movement_direction(
     action: Res<ActionState<PlayerAction>>,
     time: Res<Time>,
     q_camera: Query<&Transform, With<Camera>>,
+    run_preset_direction: Res<RunPresetDirection>,
 ) {
+    if **run_preset_direction {
+        return;
+    }
     let camera_transform = q_camera.single();
     let mut action_axis = action
         .clamped_axis_pair(&PlayerAction::Walk)
