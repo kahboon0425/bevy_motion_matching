@@ -4,6 +4,7 @@ use crate::draw_axes::{ColorPalette, DrawAxes};
 use crate::player::MovementConfig;
 use crate::record::{Records, RecordsBundle};
 use crate::transform2d::Transform2d;
+use crate::ui::config::DrawTrajectory;
 use crate::MainSet;
 
 pub struct TrajectoryPlugin;
@@ -162,7 +163,11 @@ fn draw_trajectory_axes(
     mut axes: ResMut<DrawAxes>,
     movement_config: Res<MovementConfig>,
     palette: Res<ColorPalette>,
+    draw_trajectory: Res<DrawTrajectory>,
 ) {
+    if !**draw_trajectory {
+        return;
+    }
     for trajectory in q_trajectories.iter() {
         for point in trajectory.iter() {
             let angle = f32::atan2(point.velocity.x, point.velocity.y);
@@ -173,7 +178,7 @@ fn draw_trajectory_axes(
                 Mat4::from_rotation_translation(Quat::from_rotation_y(angle), translation),
                 velocity_magnitude * 0.1,
                 palette
-                    .green
+                    .blue
                     .mix(&palette.red, velocity_magnitude / movement_config.run_speed),
             );
         }

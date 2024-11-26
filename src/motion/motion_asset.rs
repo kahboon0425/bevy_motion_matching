@@ -31,6 +31,7 @@ pub struct MotionAsset {
     pub trajectory_data: TrajectoryData,
     /// Pose data for pose matching and animation sampling.
     pub pose_data: PoseData,
+    pub animation_file: Vec<String>,
 }
 
 impl MotionAsset {
@@ -42,6 +43,7 @@ impl MotionAsset {
                 .collect(),
             trajectory_data: TrajectoryData::new(config),
             pose_data: PoseData::new(bvh.frame_time().as_secs_f32()),
+            animation_file: Vec::new(),
         }
     }
 
@@ -52,7 +54,13 @@ impl MotionAsset {
         let mut trajectory_chunk = Vec::<TrajectoryDataPoint>::new();
 
         for bvh in bvhs {
-            info!("Building {}...", bvh.name());
+            let name = bvh.name();
+            info!("Building {}...", name);
+
+            let mut formatted_name = name.clone();
+            let _ = formatted_name.split_off(name.len() - 4);
+
+            self.animation_file.push(formatted_name);
 
             let num_frames = bvh.num_frames();
             let frame_time = bvh.frame_time().as_secs_f32();
@@ -160,6 +168,8 @@ impl MotionAsset {
                 .append_trajectory_chunk(&mut trajectory_chunk);
             self.pose_data.append_frames(bvh);
         }
+        println!("Bvh File Names: {:?}", self.animation_file);
+        println!("Bvh File Len: {}", self.animation_file.len());
     }
 }
 

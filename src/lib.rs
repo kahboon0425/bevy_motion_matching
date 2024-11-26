@@ -14,6 +14,7 @@ pub mod scene_loader;
 pub mod trajectory;
 pub mod transform2d;
 pub mod ui;
+pub mod visualization;
 
 pub const BVH_SCALE_RATIO: f32 = 0.01;
 pub const LARGE_EPSILON: f32 = 0.0001;
@@ -52,6 +53,7 @@ impl Plugin for MotionMatchingAppPlugin {
             player::PlayerPlugin,
             motion_matching::MotionMatchingPlugin,
             draw_axes::DrawAxesPlugin,
+            visualization::VisualizationPlugin,
         ));
 
         app.init_state::<GameMode>().init_state::<Method>();

@@ -203,7 +203,7 @@ fn trajectory_match(
     mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
     mut motion_matching_result: ResMut<MotionMatchingResult>,
 ) {
-    println!("Brute Force KNN Method");
+    // println!("Brute Force KNN Method");
     PEAK_ALLOC.reset_peak_usage();
     let Some(motion_data) = motion_data.get() else {
         return;
@@ -333,7 +333,7 @@ fn pose_match(
             continue;
         };
 
-        let mut smallest_pose_dist = f32::MAX;
+        let mut smallest_dist = f32::MAX;
         let mut best_traj_index = 0;
 
         for (i, traj) in trajs.iter().enumerate() {
@@ -364,8 +364,10 @@ fn pose_match(
             pose_dist /= motion_asset.joints().len() as f32;
             pose_dist *= BVH_SCALE_RATIO;
 
-            if pose_dist < smallest_pose_dist {
-                smallest_pose_dist = pose_dist;
+            let dist = pose_dist + traj.distance;
+
+            if dist < smallest_dist {
+                smallest_dist = dist;
                 best_traj_index = i;
             }
 
@@ -408,7 +410,7 @@ pub struct BestPoseResult {
     pub pose_distance: f32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MatchTrajectory {
     /// Error distance from this trajectory to the trajecctory that is being compared to.
     pub distance: f32,
@@ -419,11 +421,11 @@ pub struct MatchTrajectory {
 }
 
 /// A vec of [`MatchTrajectory`] that has the least [`MatchTrajectory::distance`].
-#[derive(Event, Debug, Deref, DerefMut)]
+#[derive(Event, Debug, Deref, DerefMut, Clone)]
 pub struct NearestTrajectories {
     #[deref]
-    trajectories: Vec<MatchTrajectory>,
-    entity: Entity,
+    pub trajectories: Vec<MatchTrajectory>,
+    pub entity: Entity,
 }
 
 #[derive(Resource, Debug)]

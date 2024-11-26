@@ -4,7 +4,7 @@ use bevy_bvh_anim::prelude::*;
 use serde::{Deserialize, Serialize};
 
 /// Serializable joint with minimal required data.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct JointInfo {
     /// Name of joint.
     name: String,
@@ -67,7 +67,7 @@ impl JointTrait for JointInfo {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct PoseRef {
     pose_index: usize,
     data_type: PoseDataType,
@@ -102,7 +102,7 @@ impl From<Channel> for PoseRef {
 /// The available degrees of freedom along which a `Joint` may be manipulated.
 ///
 /// A complete serializable match of [`ChannelType`].
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum PoseDataType {
     /// Can be rotated along the `x` axis.
     RotationX,
