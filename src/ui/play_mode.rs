@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use bevy::ecs::system::SystemState;
 use bevy::prelude::*;
 use bevy_egui::egui;
@@ -7,6 +9,7 @@ use egui_plot::{Arrows, Legend, Line, Plot, PlotPoints};
 use crate::motion::chunk::ChunkIterator;
 use crate::motion::MotionData;
 use crate::motion_matching::MatchTrajectory;
+use crate::trajectory::TestingData;
 use crate::trajectory::TrajectoryConfig;
 use crate::trajectory::TrajectoryPlot;
 use crate::{GameMode, Method, BVH_SCALE_RATIO};
@@ -18,6 +21,7 @@ pub fn play_mode_panel(ui: &mut egui::Ui, world: &mut World) {
     ui.heading("Play Mode");
     ui.add_space(10.0);
     data_inspector(ui, world);
+    generate_testing_data(ui, world);
     draw_nearest_pose_armature_checkbox(ui, world);
     draw_nearest_trajectory_checkbox(ui, world);
     run_preset_direction(ui, world);
@@ -75,6 +79,26 @@ fn data_inspector(ui: &mut egui::Ui, world: &mut World) {
             GameMode::Play => next_game_mode.set(GameMode::None),
             _ => next_game_mode.set(GameMode::Play),
         }
+    }
+    ui.add_space(10.0);
+}
+
+fn generate_testing_data(ui: &mut egui::Ui, world: &mut World) {
+    let mut params = SystemState::<(Res<TestingData>,)>::new(world);
+
+    let testing_data = params.get_mut(world);
+
+    if ui.button("Generate Testing Data").clicked() {
+        let convert_to_json = serde_json::to_string(&*testing_data.0).unwrap();
+
+        let mut asset_file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open("assets/testing_dataset.json")
+            .unwrap();
+
+        asset_file.write_all(convert_to_json.as_bytes()).unwrap();
     }
     ui.add_space(10.0);
 }
@@ -324,7 +348,7 @@ impl Default for DrawNearestTrajectory {
 }
 
 #[derive(Resource, Deref, DerefMut)]
-pub struct RunPresetDirection(bool);
+pub struct RunPresetDirection(pub bool);
 
 impl Default for RunPresetDirection {
     fn default() -> Self {

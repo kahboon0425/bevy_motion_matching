@@ -13,6 +13,7 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(MovementConfig {
+            // walk_speed: 4.0,
             walk_speed: 2.0,
             run_speed: 4.0,
             lerp_factor: 10.0,
@@ -37,11 +38,13 @@ fn preset_movement_direction(
     mut state: Local<(usize, f32)>,
     run_preset_direction: Res<RunPresetDirection>,
 ) {
+    let (current_direction, elapsed_time) = *state;
+
     if **run_preset_direction == false {
         return;
     }
 
-    let directions = [
+    const DIRECTIONS: [Vec2; 4] = [
         // Up
         Vec2::new(0.0, 1.0),
         // Right
@@ -52,25 +55,23 @@ fn preset_movement_direction(
         Vec2::new(-1.0, 0.0),
     ];
 
-    let direction_durations = [6.0, 5.0, 5.0, 5.0];
-
-    let (current_direction, elapsed_time) = *state;
+    const DIRECTION_DURATIONS: [f32; 4] = [6.0, 5.0, 5.0, 5.0];
 
     let new_elapsed_time = elapsed_time + time.delta_seconds();
 
-    let current_direction_duration = direction_durations[current_direction];
+    let current_direction_duration = DIRECTION_DURATIONS[current_direction];
 
     let mut new_direction = current_direction;
     let mut reset_time = new_elapsed_time;
 
     if new_elapsed_time >= current_direction_duration {
-        new_direction = (current_direction + 1) % directions.len();
+        new_direction = (current_direction + 1) % DIRECTIONS.len();
         reset_time = 0.0;
     }
 
     *state = (new_direction, reset_time);
 
-    let direction = directions[new_direction];
+    let direction = DIRECTIONS[new_direction];
     for mut movement_direction in q_movement_directions.iter_mut() {
         // **movement_direction = direction;
 

@@ -1,0 +1,12 @@
+(
+    meta_format_version: "1.0",
+    processed_info: Some((
+        hash: (58, 75, 21, 40, 102, 176, 204, 111, 157, 104, 71, 3, 176, 217, 6, 163, 239, 168, 213, 79, 114, 142, 23, 242, 64, 45, 161, 222, 225, 105, 207, 83),
+        full_hash: (58, 75, 21, 40, 102, 176, 204, 111, 157, 104, 71, 3, 176, 217, 6, 163, 239, 168, 213, 79, 114, 142, 23, 242, 64, 45, 161, 222, 225, 105, 207, 83),
+        process_dependencies: [],
+    )),
+    asset: Load(
+        loader: "bevy_motion_matching::motion::motion_asset::MotionAssetLoader",
+        settings: (),
+    ),
+)

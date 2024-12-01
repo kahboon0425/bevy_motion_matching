@@ -9,6 +9,7 @@ use bevy_egui::EguiPlugin;
 
 #[cfg(feature = "debug")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use play_mode::RunPresetDirection;
 
 pub mod builder;
 pub mod config;
@@ -28,7 +29,7 @@ impl Plugin for UiPlugin {
             .init_resource::<config::DrawMainArmature>()
             .init_resource::<play_mode::DrawNearestTrajectory>()
             .init_resource::<play_mode::DrawNearestPoseArmature>()
-            .init_resource::<play_mode::RunPresetDirection>()
+            .insert_resource(RunPresetDirection(false))
             .init_resource::<config::DrawTrajectory>()
             .init_resource::<builder::BuildConfigs>()
             .init_resource::<play_mode::MotionMatchingResult>()
