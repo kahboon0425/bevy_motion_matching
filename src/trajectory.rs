@@ -1,6 +1,3 @@
-use std::fs::File;
-use std::io::Write;
-
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -102,23 +99,6 @@ fn save_traj_matrices(
         testing_data.push(traj);
     }
 }
-
-// fn write_to_csv(traj_data: Vec<Vec2>, file_path: &str) {
-//     // Create or overwrite the file
-//     let file = File::create(file_path).expect("Failed to create CSV file");
-//     let mut writer = csv::Writer::from_writer(file);
-
-//     writer
-//         .write_record(vec!["Trajectories".to_string()])
-//         .expect("Failed to write CSV headers");
-
-//     let traj_str = format!("{:#?}", traj_data);
-
-//     writer
-//         .write_record(&[traj_str])
-//         .expect("Failed to write CSV record");
-//     writer.flush().expect("Failed to flush CSV writer");
-// }
 
 fn current_trajectory(
     mut q_trajectories: Query<(&mut Trajectory, &Transform2d, &Velocity)>,

@@ -11,6 +11,7 @@ pub mod motion_matching;
 pub mod player;
 pub mod record;
 pub mod scene_loader;
+pub mod testing;
 pub mod trajectory;
 pub mod transform2d;
 pub mod ui;
@@ -54,7 +55,8 @@ impl Plugin for MotionMatchingAppPlugin {
             motion_matching::MotionMatchingPlugin,
             draw_axes::DrawAxesPlugin,
             visualization::VisualizationPlugin,
-        ));
+        ))
+        .add_plugins(testing::TestingPlugin);
 
         app.init_state::<GameMode>().init_state::<Method>();
     }
