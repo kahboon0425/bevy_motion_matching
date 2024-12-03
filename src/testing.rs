@@ -23,7 +23,7 @@ impl Plugin for TestingPlugin {
             .add_systems(
                 PreUpdate,
                 (
-                    populate_kmeans::<8, 10>.run_if(not(resource_exists::<KMeansResource>)),
+                    populate_kmeans::<20, 150>.run_if(not(resource_exists::<KMeansResource>)),
                     populate_kdtree.run_if(not(resource_exists::<KdTreeStructure>)),
                 ),
             )
@@ -103,7 +103,7 @@ fn traj_matching_with_knn(
     let num_points = trajectory_config.num_points();
 
     let mut nearest_trajs = Vec::new();
-    for (i, traj) in test_data.iter().enumerate() {
+    for traj in test_data.iter() {
         let mut nearest_traj = MatchTrajectory {
             distance: f32::MAX,
             chunk_index: 0,
@@ -126,31 +126,26 @@ fn traj_matching_with_knn(
                     .collect::<Vec<_>>();
 
                 let distance = distance(traj, &data_traj);
-                // println!("Distance: {}", distance);
 
                 if distance > match_config.match_threshold {
                     continue;
                 }
 
                 if distance < nearest_traj.distance {
-                    println!("Distance: {}", distance);
                     nearest_traj = MatchTrajectory {
                         distance,
                         chunk_index,
                         chunk_offset,
                     };
                 }
-                // println!("Distance: {}", distance);
             }
         }
         nearest_trajs.push(nearest_traj);
-        println!("Nearest Traj knn {}: {:?}", i, nearest_traj);
     }
     nearest_trajectories.knn = nearest_trajs;
-    // println!("Nearest Traj: {:?}", nearest_traj);
 }
 
-fn distance(lhs: &Vec<Vec2>, rhs: &Vec<Vec2>) -> f32 {
+fn distance(lhs: &[Vec2], rhs: &[Vec2]) -> f32 {
     let len = lhs.len();
     assert_eq!(len, rhs.len());
 
@@ -214,7 +209,7 @@ fn populate_kdtree(
     commands.insert_resource(KdTreeStructure(kdtree));
 }
 
-pub fn traj_matching_with_kdtree(
+fn traj_matching_with_kdtree(
     match_config: Res<MatchConfig>,
     kd_tree: Res<KdTreeStructure>,
     mut nearest_trajectories: ResMut<NearestTrajectory>,
@@ -222,7 +217,7 @@ pub fn traj_matching_with_kdtree(
 ) {
     let mut nearest_trajs = Vec::new();
 
-    for (i, traj) in test_data.iter().enumerate() {
+    for traj in test_data.iter() {
         let mut nearest_traj = MatchTrajectory {
             distance: f32::MAX,
             chunk_index: 0,
@@ -252,7 +247,6 @@ pub fn traj_matching_with_kdtree(
             }
         }
         nearest_trajs.push(nearest_traj);
-        println!("Nearest Traj kdtree {}: {:?}", i, nearest_traj);
     }
     nearest_trajectories.kdtree = nearest_trajs;
 }
@@ -313,13 +307,11 @@ fn populate_kmeans<const K: usize, const MAX_ITER: usize>(
 
     commands.insert_resource(KMeansStructure {
         centroids: clustering.centroids,
-        cluster_memberships: clustering.membership,
-        trajectory_offsets,
         cluster_members,
     })
 }
 
-pub fn traj_matching_with_kmeans(
+fn traj_matching_with_kmeans(
     match_config: Res<MatchConfig>,
     kmeans: Res<KMeansStructure>,
     mut nearest_trajectories: ResMut<NearestTrajectory>,
@@ -327,7 +319,7 @@ pub fn traj_matching_with_kmeans(
 ) {
     let mut nearest_trajs = Vec::new();
 
-    for (i, traj) in test_data.iter().enumerate() {
+    for traj in test_data.iter() {
         let mut nearest_traj = MatchTrajectory {
             distance: f32::MAX,
             chunk_index: 0,
@@ -375,18 +367,20 @@ pub fn traj_matching_with_kmeans(
         }
 
         nearest_trajs.push(nearest_traj);
-        println!("Nearest Traj kmeans {}: {:?}", i, nearest_traj);
     }
     nearest_trajectories.kmeans = nearest_trajs;
 }
 
 fn write_to_csv(test_data: Res<TestData>, nearest_trajectories: Res<NearestTrajectory>) {
-    // println!("KNN: {:?}", nearest_trajectories.knn);
-    // println!("KDTree: {:?}", nearest_trajectories.kdtree);
-    // println!("KMeans: {:?}", nearest_trajectories.kmeans);
-
     let file = File::create("assets/traj_matching_result.csv").expect("Failed to create CSV file");
     let mut writer = csv::Writer::from_writer(file);
+
+    let mut kd_tree_chunk_index_score = 0;
+    let mut kd_tree_chunk_offset_score = 0;
+    let mut kmeans_chunk_index_score = 0;
+    let mut kmeans_chunk_offset_score = 0;
+
+    let data_count = nearest_trajectories.knn.len();
 
     writer
         .write_record(vec![
@@ -407,6 +401,19 @@ fn write_to_csv(test_data: Res<TestData>, nearest_trajectories: Res<NearestTraje
             nearest_trajectories.kdtree.get(i),
             nearest_trajectories.kmeans.get(i),
         ) {
+            if kdtree.chunk_index == knn.chunk_index {
+                kd_tree_chunk_index_score += 1;
+            }
+            if kdtree.chunk_offset == knn.chunk_offset {
+                kd_tree_chunk_offset_score += 1;
+            }
+            if kmeans.chunk_index == knn.chunk_index {
+                kmeans_chunk_index_score += 1;
+            }
+            if kmeans.chunk_offset == knn.chunk_offset {
+                kmeans_chunk_offset_score += 1;
+            }
+
             writer
                 .write_record(&[
                     traj_str,
@@ -421,17 +428,32 @@ fn write_to_csv(test_data: Res<TestData>, nearest_trajectories: Res<NearestTraje
             writer.flush().expect("Failed to flush CSV writer");
         }
     }
+
+    // println!("kd_tree_chunk_index_score: {}", kd_tree_chunk_index_score);
+    // println!("kd_tree_chunk_offset_score: {}", kd_tree_chunk_offset_score);
+    // println!("kmeans_chunk_index_score: {}", kmeans_chunk_index_score);
+    // println!("kmeans_chunk_offset_score: {}", kmeans_chunk_offset_score);
+
+    let kdtree_accuracy = (kd_tree_chunk_index_score as f64 + kd_tree_chunk_offset_score as f64)
+        / (data_count as f64 * 2.0)
+        * 100.0;
+
+    let kmeans_accuracy = (kmeans_chunk_index_score as f64 + kmeans_chunk_offset_score as f64)
+        / (data_count as f64 * 2.0)
+        * 100.0;
+
+    println!("kd_tree_accuracy: {:.2} %", kdtree_accuracy);
+    println!(
+        "kmeans_accuracy (k: 20, max_iter: 150): {:.2} %",
+        kmeans_accuracy
+    );
 }
 
-fn load_csv() {}
-
-fn calculate_accuracy() {}
-
 #[derive(Resource, Debug, Default, Deref, DerefMut, Serialize, Deserialize)]
-pub struct TestData(Vec<Vec<Vec2>>);
+struct TestData(Vec<Vec<Vec2>>);
 
 #[derive(Resource, Debug, Clone, Default)]
-pub struct NearestTrajectory {
+struct NearestTrajectory {
     knn: Vec<MatchTrajectory>,
     kmeans: Vec<MatchTrajectory>,
     kdtree: Vec<MatchTrajectory>,
@@ -446,13 +468,10 @@ enum TestingState {
 }
 
 #[derive(Resource, Deref, DerefMut)]
-pub struct KdTreeStructure(KdTree<f32, (usize, usize), Vec<f32>>);
+struct KdTreeStructure(KdTree<f32, (usize, usize), Vec<f32>>);
 
 #[derive(Resource)]
-pub struct KMeansStructure {
-    pub centroids: Vec<Centroid>,
-    pub cluster_memberships: Vec<usize>,
-    // trajectory offsets with chunk index and chunk offset
-    pub trajectory_offsets: Vec<(Vec<f32>, usize, usize)>,
-    pub cluster_members: Vec<Vec<(usize, usize, Vec<f32>)>>,
+struct KMeansStructure {
+    centroids: Vec<Centroid>,
+    cluster_members: Vec<Vec<(usize, usize, Vec<f32>)>>,
 }
