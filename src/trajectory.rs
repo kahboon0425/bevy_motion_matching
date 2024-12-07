@@ -51,28 +51,37 @@ fn predict_trajectory(
     action: Res<ActionState<PlayerAction>>,
     trajectory_config: Res<TrajectoryConfig>,
     movement_config: Res<MovementConfig>,
+    time: Res<Time>,
+    mut speed: Local<f32>,
 ) {
-    const DAMPING: f32 = 0.9;
-    // const STOP_DAMPING: f32 = 0.8;
+    let damping = match action.pressed(&PlayerAction::Walk) {
+        true => 0.9,
+        false => 0.6,
+    };
 
-    let speed = match action.pressed(&PlayerAction::Run) {
+    let target_speed = match action.pressed(&PlayerAction::Run) {
         true => movement_config.run_speed,
         false => movement_config.walk_speed,
     };
+
+    *speed = speed.lerp(
+        target_speed,
+        time.delta_seconds() * movement_config.lerp_factor,
+    );
 
     for (mut trajectory, transform2d, velocity, direction) in q_trajectories.iter_mut() {
         // Predict trajectory.
         let mut translation = transform2d.translation;
         let mut velocity = **velocity;
 
-        let velocity_addition = **direction * speed;
+        let velocity_addition = **direction * *speed;
 
         for i in 0..trajectory_config.predict_count {
-            velocity += velocity_addition * trajectory_config.interval_time;
+            velocity += velocity_addition;
+            // Accelerate to max speed.
+            velocity = Vec2::clamp_length(velocity, 0.0, *speed);
             translation += velocity * trajectory_config.interval_time;
-            // Accelerate to walk speed max.
-            velocity = Vec2::clamp_length(velocity, 0.0, speed);
-            velocity *= DAMPING;
+            velocity *= damping;
 
             trajectory[i + trajectory_config.history_count + 1] = TrajectoryPoint {
                 translation,
