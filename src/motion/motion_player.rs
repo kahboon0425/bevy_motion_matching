@@ -47,7 +47,7 @@ impl Plugin for MotionPlayerPlugin {
                     update_interp_factor,
                 )
                     .in_set(MotionPlayerSet::Interpolate),
-                test.before(MotionPlayerSet::JumpToPose),
+                // _test.before(MotionPlayerSet::JumpToPose),
             )
                 .run_if(in_state(GameMode::Play)),
         );
@@ -57,7 +57,7 @@ impl Plugin for MotionPlayerPlugin {
 // /// Reset root and joint transforms to T-Pose.
 // fn init_pose() {}
 
-fn test(
+fn _test(
     // q_entities: Query<Entity, With<TrajectoryPosePair>>,
     // mut jump_evw: EventWriter<JumpToPose>,
     input: Res<ButtonInput<KeyCode>>,

@@ -304,7 +304,7 @@ fn motion_matching_result(ui: &mut egui::Ui, world: &mut World) {
         "Average Trajactory Matching Time: {:.3} ms",
         result.avg_time,
     ));
-    ui.label(format!("Average Memory Usage: {:.3} ms", result.avg_memory,));
+    ui.label(format!("Average Memory Usage: {:.3} MB", result.avg_memory,));
 }
 
 #[derive(Resource, Deref, DerefMut)]

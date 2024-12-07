@@ -1,6 +1,8 @@
 use bevy::prelude::*;
+use leafwing_input_manager::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use crate::action::PlayerAction;
 use crate::draw_axes::{ColorPalette, DrawAxes};
 use crate::motion_matching::TrajectoryMatch;
 use crate::player::MovementConfig;
@@ -46,24 +48,30 @@ impl Plugin for TrajectoryPlugin {
 
 fn predict_trajectory(
     mut q_trajectories: Query<(&mut Trajectory, &Transform2d, &Velocity, &MovementDirection)>,
+    action: Res<ActionState<PlayerAction>>,
     trajectory_config: Res<TrajectoryConfig>,
     movement_config: Res<MovementConfig>,
 ) {
     const DAMPING: f32 = 0.9;
     // const STOP_DAMPING: f32 = 0.8;
 
+    let speed = match action.pressed(&PlayerAction::Run) {
+        true => movement_config.run_speed,
+        false => movement_config.walk_speed,
+    };
+
     for (mut trajectory, transform2d, velocity, direction) in q_trajectories.iter_mut() {
         // Predict trajectory.
         let mut translation = transform2d.translation;
         let mut velocity = **velocity;
 
-        let velocity_addition = **direction * movement_config.walk_speed;
+        let velocity_addition = **direction * speed;
 
         for i in 0..trajectory_config.predict_count {
             velocity += velocity_addition * trajectory_config.interval_time;
             translation += velocity * trajectory_config.interval_time;
             // Accelerate to walk speed max.
-            velocity = Vec2::clamp_length(velocity, 0.0, movement_config.walk_speed);
+            velocity = Vec2::clamp_length(velocity, 0.0, speed);
             velocity *= DAMPING;
 
             trajectory[i + trajectory_config.history_count + 1] = TrajectoryPoint {
@@ -95,7 +103,6 @@ fn save_traj_matrices(
                 point.translation
             })
             .collect::<Vec<_>>();
-        // println!("Traj: {:?}", traj);
         testing_data.push(traj);
     }
 }
