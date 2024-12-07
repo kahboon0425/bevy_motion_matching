@@ -213,7 +213,7 @@ pub struct SelectedBvhAsset(pub AssetId<BvhAsset>);
 #[derive(Debug, Deref)]
 pub struct FrameData<'a>(pub &'a Frame);
 
-impl<'a> FrameData<'a> {
+impl FrameData<'_> {
     pub fn get_pos_rot(&self, channels: &[Channel]) -> (Vec3, Quat) {
         let mut pos = Vec3::ZERO;
         let mut euler = Vec3::ZERO;

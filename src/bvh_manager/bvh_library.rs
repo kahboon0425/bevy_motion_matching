@@ -33,7 +33,7 @@ pub struct BvhLibraryManager<'w> {
     bvh_library: ResMut<'w, BvhLibrary>,
 }
 
-impl<'w> BvhLibraryManager<'w> {
+impl BvhLibraryManager<'_> {
     /// Loads Bvh data from disk.
     /// # Warning
     /// A warning will be issued if specified asset has been loaded before.
