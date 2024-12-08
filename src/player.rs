@@ -12,23 +12,28 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(MovementConfig {
-            // walk_speed: 4.0,
-            walk_speed: 2.0,
-            run_speed: 4.0,
-            lerp_factor: 10.0,
-        })
-        .add_systems(
-            Update,
-            (
-                preset_movement_direction,
-                movement_direction,
-                draw_player_direction,
-            )
-                .chain()
-                .in_set(MainSet::Action),
-        );
+        app.add_event::<ResetPlayer>()
+            .insert_resource(MovementConfig {
+                // walk_speed: 4.0,
+                walk_speed: 2.0,
+                run_speed: 4.0,
+                lerp_factor: 10.0,
+            })
+            .add_systems(
+                Update,
+                (
+                    preset_movement_direction,
+                    movement_direction,
+                    draw_player_direction,
+                )
+                    .chain()
+                    .in_set(MainSet::Action),
+            );
     }
+}
+
+fn reset_player(mut evr_reset_player: EventReader<ResetPlayer>) {
+    for reset_player in evr_reset_player.read() {}
 }
 
 fn preset_movement_direction(
@@ -155,3 +160,6 @@ pub struct MovementConfig {
     pub run_speed: f32,
     pub lerp_factor: f32,
 }
+
+#[derive(Event, Default, Clone, Copy)]
+pub struct ResetPlayer;
