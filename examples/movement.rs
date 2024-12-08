@@ -29,7 +29,7 @@ fn main() -> AppExit {
         RecordPlugin::<Velocity>::default(),
     ))
     .insert_resource(MovementConfig {
-        walk_speed: 1.5,
+        walk_speed: 1.0,
         run_speed: 2.0,
         lerp_factor: 10.0,
     })

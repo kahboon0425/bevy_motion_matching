@@ -16,7 +16,7 @@ impl Plugin for PlayerPlugin {
             .insert_resource(MovementConfig {
                 // walk_speed: 4.0,
                 walk_speed: 2.0,
-                run_speed: 4.0,
+                run_speed: 2.5,
                 lerp_factor: 10.0,
             })
             .add_systems(

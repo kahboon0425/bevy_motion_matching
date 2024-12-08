@@ -1,0 +1,44 @@
+Begin bvh_not_use\Jog\Jogging Backwards.bvh
+Begin bvh_not_use\Jog\Slow Jogging Backwards.bvh
+Begin bvh_not_use\Run\Fast Run.bvh
+Begin bvh_not_use\Run\Idle to Sprint.bvh
+Begin bvh_not_use\Run\Run to Left Turn.bvh
+Begin bvh_not_use\Run\Run to Right Turn.bvh
+Begin bvh_not_use\Run\Running backward Left Turn.bvh
+Begin bvh_not_use\Run\Running Backward Right Turn.bvh
+Begin bvh_not_use\Run\Running Change Direction.bvh
+Begin bvh_not_use\Run\Running backwards.bvh
+Begin bvh_not_use\Run\Running Forward Arc Left.bvh
+Begin bvh_not_use\Run\Running Forward Arc Right.bvh
+End bvh_not_use\Jog\Jogging Backwards.bvh
+End bvh_not_use\Jog\Slow Jogging Backwards.bvh
+Begin bvh_not_use\Run\Running Forward.bvh
+Begin bvh_not_use\Run\Running Turn Left 180.bvh
+Begin bvh_not_use\Run\Running To Turn.bvh
+Begin bvh_not_use\Run\Sprint.bvh
+Begin bvh_not_use\Run\Running Turn Right 180.bvh
+End bvh_not_use\Run\Fast Run.bvh
+Begin bvh_not_use\Run\Sprint Turn.bvh
+End bvh_not_use\Run\Run to Left Turn.bvh
+Begin bvh_not_use\Run\Standard Run.bvh
+End bvh_not_use\Run\Idle to Sprint.bvh
+End bvh_not_use\Run\Run to Right Turn.bvh
+Begin bvh_not_use\Run\Turn To Running.bvh
+Begin bvh_not_use\Walk\Walk Backwards.bvh
+End bvh_not_use\Run\Running backward Left Turn.bvh
+End bvh_not_use\Walk\Walk Backwards.bvh
+End bvh_not_use\Run\Running Change Direction.bvh
+End bvh_not_use\Run\Running Backward Right Turn.bvh
+End bvh_not_use\Run\Running Forward Arc Right.bvh
+End bvh_not_use\Run\Running Forward Arc Left.bvh
+End bvh_not_use\Run\Running backwards.bvh
+End bvh_not_use\Run\Running Forward.bvh
+End bvh_not_use\Run\Running To Turn.bvh
+End bvh_not_use\Run\Running Turn Left 180.bvh
+End bvh_not_use\Run\Standard Run.bvh
+End bvh_not_use\Run\Turn To Running.bvh
+End bvh_not_use\Run\Sprint.bvh
+End bvh_not_use\Run\Running Turn Right 180.bvh
+End bvh_not_use\Run\Sprint Turn.bvh
+Begin motion_data\motion_data.json
+End motion_data\motion_data.json
