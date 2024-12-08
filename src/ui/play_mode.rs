@@ -331,12 +331,6 @@ impl Default for DrawNearestTrajectory {
 #[derive(Resource, Deref, DerefMut)]
 pub struct RunPresetDirection(pub bool);
 
-impl Default for RunPresetDirection {
-    fn default() -> Self {
-        Self(true)
-    }
-}
-
 #[derive(Default, Resource)]
 pub struct MotionMatchingResult {
     /// Match trajectories and pose distances.

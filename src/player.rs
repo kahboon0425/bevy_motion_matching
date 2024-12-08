@@ -50,6 +50,7 @@ fn preset_movement_direction(
         return;
     }
 
+    // move in circle
     const DIRECTIONS: [Vec2; 4] = [
         // Up
         Vec2::new(0.0, 1.0),
@@ -61,7 +62,7 @@ fn preset_movement_direction(
         Vec2::new(-1.0, 0.0),
     ];
 
-    const DIRECTION_DURATIONS: [f32; 4] = [6.0, 5.0, 5.0, 5.0];
+    const DIRECTION_DURATIONS: [f32; 4] = [2.0, 2.0, 2.0, 2.0];
 
     let new_elapsed_time = elapsed_time + time.delta_seconds();
 

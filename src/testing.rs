@@ -6,20 +6,20 @@ use clustering::{kmeans, Centroid};
 use kdtree::{distance::squared_euclidean, KdTree};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    motion::{chunk::ChunkIterator, MotionData},
-    motion_matching::{
-        kdtree_match::offset_distance, kmeans_match::KMeansResource, MatchConfig, MatchTrajectory,
-    },
-    trajectory::{TestingData, TrajectoryConfig},
-    BVH_SCALE_RATIO,
-};
+use crate::motion::chunk::ChunkIterator;
+use crate::motion::MotionData;
+use crate::motion_matching::kdtree_match::offset_distance;
+use crate::motion_matching::kmeans_match::KMeansResource;
+use crate::motion_matching::{MatchConfig, MatchTrajectory, TrajectoryMatch};
+use crate::trajectory::{Trajectory, TrajectoryConfig};
+use crate::BVH_SCALE_RATIO;
 
 pub struct TestingPlugin;
 
 impl Plugin for TestingPlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<TestingState>()
+            .init_resource::<TestingData>()
             .add_systems(
                 PreUpdate,
                 (
@@ -42,7 +42,33 @@ impl Plugin for TestingPlugin {
                 )
                     .chain(),
             )
-            .add_systems(OnEnter(TestingState::Save), write_to_csv);
+            .add_systems(OnEnter(TestingState::Save), write_to_csv)
+            .add_systems(Update, save_traj_matrices);
+    }
+}
+
+fn save_traj_matrices(
+    q_trajectory: Query<(&Trajectory, &Transform)>,
+    mut match_evr: EventReader<TrajectoryMatch>,
+    mut testing_data: ResMut<TestingData>,
+) {
+    for traj_match in match_evr.read() {
+        let entity = **traj_match;
+        let Ok((traj, transform)) = q_trajectory.get(entity) else {
+            continue;
+        };
+
+        let inv_matrix = transform.compute_matrix().inverse();
+        let traj = traj
+            .iter()
+            .map(|&(mut point)| {
+                point.translation = inv_matrix
+                    .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
+                    .xz();
+                point.translation
+            })
+            .collect::<Vec<_>>();
+        testing_data.push(traj);
     }
 }
 
@@ -448,6 +474,9 @@ fn write_to_csv(test_data: Res<TestData>, nearest_trajectories: Res<NearestTraje
         kmeans_accuracy
     );
 }
+
+#[derive(Resource, Debug, Default, Deref, DerefMut, Serialize, Deserialize)]
+pub struct TestingData(Vec<Vec<Vec2>>);
 
 #[derive(Resource, Debug, Default, Deref, DerefMut, Serialize, Deserialize)]
 struct TestData(Vec<Vec<Vec2>>);

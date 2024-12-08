@@ -1,10 +1,8 @@
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
-use serde::{Deserialize, Serialize};
 
 use crate::action::PlayerAction;
 use crate::draw_axes::{ColorPalette, DrawAxes};
-use crate::motion_matching::TrajectoryMatch;
 use crate::player::MovementConfig;
 use crate::record::{Records, RecordsBundle};
 use crate::transform2d::Transform2d;
@@ -21,17 +19,11 @@ impl Plugin for TrajectoryPlugin {
             history_count: 1,
         })
         .init_resource::<TrajectoryPlot>()
-        .init_resource::<TestingData>()
         .add_systems(
             Update,
             (
                 resize_trajectory.run_if(resource_changed::<TrajectoryConfig>),
-                (
-                    predict_trajectory,
-                    current_trajectory,
-                    history_trajectory,
-                    save_traj_matrices,
-                ),
+                (predict_trajectory, current_trajectory, history_trajectory),
             )
                 .chain()
                 .in_set(MainSet::Trajectory),
@@ -88,31 +80,6 @@ fn predict_trajectory(
                 velocity,
             };
         }
-    }
-}
-
-fn save_traj_matrices(
-    q_trajectory: Query<(&Trajectory, &Transform)>,
-    mut match_evr: EventReader<TrajectoryMatch>,
-    mut testing_data: ResMut<TestingData>,
-) {
-    for traj_match in match_evr.read() {
-        let entity = **traj_match;
-        let Ok((traj, transform)) = q_trajectory.get(entity) else {
-            continue;
-        };
-
-        let inv_matrix = transform.compute_matrix().inverse();
-        let traj = traj
-            .iter()
-            .map(|&(mut point)| {
-                point.translation = inv_matrix
-                    .transform_point3(Vec3::new(point.translation.x, 0.0, point.translation.y))
-                    .xz();
-                point.translation
-            })
-            .collect::<Vec<_>>();
-        testing_data.push(traj);
     }
 }
 
@@ -442,6 +409,3 @@ impl TrajectoryConfig {
 
 #[derive(Resource, Debug, Default, Deref, DerefMut)]
 pub struct TrajectoryPlot(Vec<[f64; 2]>);
-
-#[derive(Resource, Debug, Default, Deref, DerefMut, Serialize, Deserialize)]
-pub struct TestingData(Vec<Vec<Vec2>>);

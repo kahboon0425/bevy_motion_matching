@@ -79,9 +79,9 @@ fn populate_kmeans(
         .collect();
 
     // Number of clusters, 8 random centroid will be chosen
-    let k = 8;
+    let k = 10;
     // Max iterations
-    let max_iter = 10;
+    let max_iter = 150;
     let clustering = kmeans(k, &data, max_iter);
 
     let mut cluster_members: Vec<Vec<(usize, usize, Vec<f32>)>> = vec![Vec::new(); k];
