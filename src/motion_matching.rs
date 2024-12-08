@@ -43,7 +43,7 @@ impl Plugin for MotionMatchingPlugin {
             .add_plugins(KMeansMatchPlugin)
             .insert_resource(MatchConfig {
                 max_match_count: 5,
-                match_threshold: 0.2,
+                match_threshold: 0.3,
                 pred_match_threshold: 0.15,
             })
             .add_event::<TrajectoryMatch>()
@@ -58,7 +58,7 @@ impl Plugin for MotionMatchingPlugin {
                     trajectory_match
                         .in_set(MotionMatchingSet::GlobalMatch)
                         .run_if(in_state(Method::BruteForceKNN)),
-                    pose_match,
+                    pose_match.in_set(MotionMatchingSet::PoseMatch),
                 ),
             );
     }
@@ -75,7 +75,7 @@ fn flow(
     q_players: Query<(&MotionPlayer, &TrajectoryPosePair, Entity)>,
     trajectory_config: Res<TrajectoryConfig>,
     motion_player_config: Res<MotionPlayerConfig>,
-    mut match_evw: EventWriter<TrajectoryMatch>,
+    mut traj_match_evw: EventWriter<TrajectoryMatch>,
     mut pred_match_evw: EventWriter<PredictionMatch>,
 ) {
     let predict_time = trajectory_config.predict_time();
@@ -91,7 +91,7 @@ fn flow(
         let index = motion_player.target_pair_index();
         let Some(traj_pose) = &traj_pose_pair[index] else {
             // Find a new animation to play.
-            match_evw.send(TrajectoryMatch(entity));
+            traj_match_evw.send(TrajectoryMatch(entity));
             continue;
         };
 
@@ -119,7 +119,7 @@ fn prediction_match(
     match_config: Res<MatchConfig>,
     trajectory_config: Res<TrajectoryConfig>,
     mut pred_match_evr: EventReader<PredictionMatch>,
-    mut match_evw: EventWriter<TrajectoryMatch>,
+    mut traj_match_evw: EventWriter<TrajectoryMatch>,
 ) {
     let Some(motion_asset) = motion_data.get() else {
         return;
@@ -154,7 +154,7 @@ fn prediction_match(
             trajectory_data.get_chunk(pred_match.chunk_index),
             pose_data.is_chunk_loopable(pred_match.chunk_index),
         ) else {
-            match_evw.send(TrajectoryMatch(pred_match.entity));
+            traj_match_evw.send(TrajectoryMatch(pred_match.entity));
             continue;
         };
 
@@ -163,7 +163,7 @@ fn prediction_match(
             match loopable {
                 true => chunk_offset = 0,
                 false => {
-                    match_evw.send(TrajectoryMatch(pred_match.entity));
+                    traj_match_evw.send(TrajectoryMatch(pred_match.entity));
                     continue;
                 }
             }
@@ -186,7 +186,7 @@ fn prediction_match(
             .collect::<Vec<_>>();
 
         if traj.distance(&data_traj) > match_config.pred_match_threshold {
-            match_evw.send(TrajectoryMatch(pred_match.entity));
+            traj_match_evw.send(TrajectoryMatch(pred_match.entity));
         }
     }
 }
@@ -197,11 +197,11 @@ fn prediction_match(
 fn trajectory_match(
     motion_data: MotionData,
     q_trajectory: Query<(&Trajectory, &Transform)>,
-    mut match_evr: EventReader<TrajectoryMatch>,
     trajectory_config: Res<TrajectoryConfig>,
     match_config: Res<MatchConfig>,
-    mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
     mut motion_matching_result: ResMut<MotionMatchingResult>,
+    mut match_evr: EventReader<TrajectoryMatch>,
+    mut nearest_trajectories_evw: EventWriter<NearestTrajectories>,
 ) {
     // println!("Brute Force KNN Method");
     PEAK_ALLOC.reset_peak_usage();
@@ -229,7 +229,6 @@ fn trajectory_match(
             })
             .collect::<Vec<_>>();
 
-        // println!("current traj: {:?}", traj);
         let mut nearest_trajs = Vec::with_capacity(match_config.max_match_count);
 
         let start_time = Instant::now();
@@ -410,7 +409,7 @@ pub struct BestPoseResult {
     pub pose_distance: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct MatchTrajectory {
     /// Error distance from this trajectory to the trajecctory that is being compared to.
     pub distance: f32,

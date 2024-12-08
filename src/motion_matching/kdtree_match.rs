@@ -122,7 +122,6 @@ fn trajectory_match_with_kdtree(
             .nearest(
                 &traj_offsets,
                 match_config.max_match_count,
-                // &offset_distance,
                 &squared_euclidean,
             )
             .unwrap()
@@ -134,8 +133,6 @@ fn trajectory_match_with_kdtree(
                 chunk_offset,
             })
             .collect::<Vec<_>>();
-
-        // println!("{:?}", nearest_trajs);
 
         let traj_duration = start_time.elapsed().as_secs_f64() * 1000.0;
 

@@ -60,8 +60,6 @@ impl MotionAsset {
             let mut formatted_name = name.clone();
             let _ = formatted_name.split_off(name.len() - 4);
 
-            self.animation_file.push(formatted_name);
-
             let num_frames = bvh.num_frames();
             let frame_time = bvh.frame_time().as_secs_f32();
             let root_joint = bvh
@@ -94,6 +92,7 @@ impl MotionAsset {
                 );
                 continue;
             }
+            self.animation_file.push(formatted_name);
 
             let mut prev_time = 0.0;
 

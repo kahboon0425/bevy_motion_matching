@@ -7,6 +7,7 @@ use egui_plot::{Arrows, Legend, Line, Plot, PlotPoints};
 use crate::motion::chunk::ChunkIterator;
 use crate::motion::MotionData;
 use crate::motion_matching::MatchTrajectory;
+use crate::testing::generate_testing_data;
 use crate::trajectory::TrajectoryConfig;
 use crate::trajectory::TrajectoryPlot;
 use crate::{GameMode, Method, BVH_SCALE_RATIO};
@@ -18,8 +19,10 @@ pub fn play_mode_panel(ui: &mut egui::Ui, world: &mut World) {
     ui.heading("Play Mode");
     ui.add_space(10.0);
     data_inspector(ui, world);
+    generate_testing_data(ui, world);
     draw_nearest_pose_armature_checkbox(ui, world);
     draw_nearest_trajectory_checkbox(ui, world);
+    run_preset_direction(ui, world);
     motion_matching_method(ui, world);
     trajectory_matching_visualization(ui, world);
     motion_matching_result(ui, world);
@@ -86,6 +89,11 @@ fn draw_nearest_pose_armature_checkbox(ui: &mut egui::Ui, world: &mut World) {
 fn draw_nearest_trajectory_checkbox(ui: &mut egui::Ui, world: &mut World) {
     let mut draw_trajectory = world.resource_mut::<DrawNearestTrajectory>();
     ui.checkbox(&mut draw_trajectory, "Show Nearest Trajectory Arrows");
+}
+
+fn run_preset_direction(ui: &mut egui::Ui, world: &mut World) {
+    let mut run_preset_movement = world.resource_mut::<RunPresetDirection>();
+    ui.checkbox(&mut run_preset_movement, "Run Preset Movement");
     ui.add_space(10.0);
 }
 
@@ -187,34 +195,37 @@ fn trajectory_matching_visualization(ui: &mut egui::Ui, world: &mut World) {
         .name("Data Trajectory (Matched)");
 
         // Entity's trajectory.
-        let traj_arrows = Arrows::new(
-            PlotPoints::from_iter(traj_plot[..traj_plot.len() - 2].iter().cloned()),
-            PlotPoints::from_iter(traj_plot[1..].iter().cloned()),
-        )
-        .color(Color32::LIGHT_BLUE)
-        .name("Trajectory");
+        if traj_plot.len() >= 2 {
+            let traj_arrows = Arrows::new(
+                PlotPoints::from_iter(traj_plot[..traj_plot.len() - 2].iter().cloned()),
+                PlotPoints::from_iter(traj_plot[1..].iter().cloned()),
+            )
+            .color(Color32::LIGHT_BLUE)
+            .name("Trajectory");
 
-        // Plot the graph.
-        Plot::new("trajectory_match_viz")
-            .width(300.0)
-            .height(300.0)
-            .legend(Legend::default())
-            .center_x_axis(true)
-            .center_y_axis(true)
-            .data_aspect(1.0)
-            .show(ui, |plot_ui| {
-                // x-axis
-                plot_ui.line(
-                    Line::new(PlotPoints::from_iter([[0.0, 0.0], [0.2, 0.0]])).color(Color32::RED),
-                );
-                // y-axis
-                plot_ui.line(
-                    Line::new(PlotPoints::from_iter([[0.0, 0.0], [0.0, 0.2]]))
-                        .color(Color32::GREEN),
-                );
-                plot_ui.arrows(data_traj_arrows);
-                plot_ui.arrows(traj_arrows);
-            });
+            // Plot the graph.
+            Plot::new("trajectory_match_viz")
+                .width(300.0)
+                .height(300.0)
+                .legend(Legend::default())
+                .center_x_axis(true)
+                .center_y_axis(true)
+                .data_aspect(1.0)
+                .show(ui, |plot_ui| {
+                    // x-axis
+                    plot_ui.line(
+                        Line::new(PlotPoints::from_iter([[0.0, 0.0], [0.2, 0.0]]))
+                            .color(Color32::RED),
+                    );
+                    // y-axis
+                    plot_ui.line(
+                        Line::new(PlotPoints::from_iter([[0.0, 0.0], [0.0, 0.2]]))
+                            .color(Color32::GREEN),
+                    );
+                    plot_ui.arrows(data_traj_arrows);
+                    plot_ui.arrows(traj_arrows);
+                });
+        }
     });
     ui.add_space(10.0);
 }
@@ -296,7 +307,7 @@ fn motion_matching_result(ui: &mut egui::Ui, world: &mut World) {
         "Average Trajactory Matching Time: {:.3} ms",
         result.avg_time,
     ));
-    ui.label(format!("Average Memory Usage: {:.3} ms", result.avg_memory,));
+    ui.label(format!("Average Memory Usage: {:.3} MB", result.avg_memory,));
 }
 
 #[derive(Resource, Deref, DerefMut)]
@@ -316,6 +327,9 @@ impl Default for DrawNearestTrajectory {
         Self(true)
     }
 }
+
+#[derive(Resource, Deref, DerefMut)]
+pub struct RunPresetDirection(pub bool);
 
 #[derive(Default, Resource)]
 pub struct MotionMatchingResult {

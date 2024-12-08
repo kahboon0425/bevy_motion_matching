@@ -9,6 +9,9 @@ use bevy_egui::EguiPlugin;
 
 #[cfg(feature = "debug")]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use play_mode::RunPresetDirection;
+
+use crate::player::ResetPlayer;
 
 pub mod builder;
 pub mod config;
@@ -28,6 +31,7 @@ impl Plugin for UiPlugin {
             .init_resource::<config::DrawMainArmature>()
             .init_resource::<play_mode::DrawNearestTrajectory>()
             .init_resource::<play_mode::DrawNearestPoseArmature>()
+            .insert_resource(RunPresetDirection(false))
             .init_resource::<config::DrawTrajectory>()
             .init_resource::<builder::BuildConfigs>()
             .init_resource::<play_mode::MotionMatchingResult>()
@@ -64,10 +68,15 @@ enum RightPanelPage {
     PlayMode,
 }
 
-fn right_panel(world: &mut World, params: &mut SystemState<(EguiContexts, Local<RightPanelPage>)>) {
+fn right_panel(
+    world: &mut World,
+    params: &mut SystemState<(EguiContexts, Local<RightPanelPage>)>,
+    reset_player: &mut SystemState<EventWriter<ResetPlayer>>,
+) {
     let (mut contexts, mut page) = params.get_mut(world);
 
     let ctx = contexts.ctx_mut().clone();
+
     egui::SidePanel::left("left_panel")
         .resizable(true)
         .show(&ctx, |ui| {
@@ -84,6 +93,11 @@ fn right_panel(world: &mut World, params: &mut SystemState<(EguiContexts, Local<
                 }
             });
 
+            if ui.button("Reset Player").clicked() {
+                let mut evw_reset_player = reset_player.get_mut(world);
+                evw_reset_player.send(ResetPlayer);
+            }
+
             egui::ScrollArea::vertical().show(ui, |ui| match *page {
                 RightPanelPage::Config => config::config_panel(ui, world),
                 RightPanelPage::Builder => builder::builder_panel(ui, world),
@@ -91,7 +105,7 @@ fn right_panel(world: &mut World, params: &mut SystemState<(EguiContexts, Local<
                     // play_mode::play_mode_panel(ui, world)
                     play_mode::play_mode_panel(ui, world)
                 }
-            })
+            });
         });
 
     if ctx.is_pointer_over_area() {
