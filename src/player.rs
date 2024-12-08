@@ -1,8 +1,13 @@
 use bevy::prelude::*;
+use bevy_bvh_anim::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 use crate::action::PlayerAction;
+use crate::bvh_manager::bvh_library::BvhLibrary;
+use crate::bvh_manager::bvh_player::{FrameData, JointMap};
 use crate::draw_axes::{ColorPalette, DrawAxes};
+use crate::motion::motion_player::MotionPlayerBundle;
+use crate::scene_loader::MainScene;
 use crate::trajectory::MovementDirection;
 use crate::transform2d::Transform2d;
 use crate::ui::play_mode::RunPresetDirection;
@@ -14,7 +19,6 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<ResetPlayer>()
             .insert_resource(MovementConfig {
-                // walk_speed: 4.0,
                 walk_speed: 2.0,
                 run_speed: 2.5,
                 lerp_factor: 10.0,
@@ -28,12 +32,9 @@ impl Plugin for PlayerPlugin {
                 )
                     .chain()
                     .in_set(MainSet::Action),
-            );
+            )
+            .add_systems(Last, reset_player);
     }
-}
-
-fn reset_player(mut evr_reset_player: EventReader<ResetPlayer>) {
-    for reset_player in evr_reset_player.read() {}
 }
 
 fn preset_movement_direction(
@@ -133,6 +134,58 @@ fn draw_player_direction(
             0.3,
             palette.green.with_alpha(0.5),
         );
+    }
+}
+
+fn reset_player(
+    mut commands: Commands,
+    bvh_library: Res<BvhLibrary>,
+    bvh_assets: Res<Assets<BvhAsset>>,
+    mut evr_reset_player: EventReader<ResetPlayer>,
+    mut q_transforms: Query<&mut Transform>,
+    q_scene: Query<(&JointMap, Entity), With<MainScene>>,
+) {
+    let Some(map) = bvh_library.get_map().and_then(|bvh| bvh_assets.get(bvh)) else {
+        return;
+    };
+
+    for _ in evr_reset_player.read() {
+        let frame = FrameData(
+            map.frames()
+                .next()
+                .expect("There should be at least one frame in the bvh map."),
+        );
+
+        for (joint_map, entity) in q_scene.iter() {
+            commands.entity(entity).insert((
+                PlayerBundle::default(),
+                Transform2d::default(),
+                MotionPlayerBundle::default(),
+            ));
+
+            for joint in map.joints() {
+                let joint_data = joint.data();
+                let bone_name = joint_data.name().to_str().unwrap();
+
+                let Some(&bone_entity) = joint_map.get(bone_name) else {
+                    continue;
+                };
+                // Get bone transform
+                let Ok(mut transform) = q_transforms.get_mut(bone_entity) else {
+                    continue;
+                };
+
+                let channels = joint_data.channels();
+                let o = joint_data.offset();
+                let offset = Vec3::new(o.x, o.y, o.z);
+
+                (transform.translation, transform.rotation) = frame.get_pos_rot(channels);
+
+                if channels.len() == 3 {
+                    transform.translation += offset;
+                }
+            }
+        }
     }
 }
 
