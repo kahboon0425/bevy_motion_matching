@@ -1,7 +1,9 @@
 # Bevy Motion Matching
 
-> [!Warning]
-> This project is still in its early phase and currently undergoing heavy development!
+> [!Note]
+> This project's initial phase research has been completed!
+> If anyone is interested in continuing making this into a publishable product, feel free to reach out to us!
+> We might revisit this project in the future, but for now, our focus has shifted elsewhere...
 
 Motion matching enables characters to smoothly transition between animations by finding the best matching pose and trajectory from an extensive database, without the need to create state machines.
 Gameplay logic can be embedded side by side with motion matching by querying animations with the desired attributes.
