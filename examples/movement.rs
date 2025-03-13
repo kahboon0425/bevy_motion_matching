@@ -64,7 +64,7 @@ fn movement_test(
     time: Res<Time>,
 ) {
     for (mut transform2d, direction) in q_movements.iter_mut() {
-        transform2d.translation += **direction * movement_config.walk_speed * time.delta_seconds();
+        transform2d.translation += **direction * movement_config.walk_speed * time.delta_secs();
     }
 }
 
@@ -74,11 +74,8 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     commands.spawn((
-        MaterialMeshBundle {
-            mesh: meshes.add(Cuboid::from_size(Vec3::splat(0.1))),
-            material: materials.add(Color::WHITE),
-            ..default()
-        },
+        Mesh3d(meshes.add(Cuboid::from_size(Vec3::splat(0.1)))),
+        MeshMaterial3d(materials.add(Color::WHITE)),
         TrajectoryBundle::new(100),
     ));
 }

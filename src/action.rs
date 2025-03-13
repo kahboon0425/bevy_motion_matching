@@ -13,6 +13,7 @@ impl Plugin for ActionPlugin {
 
 #[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 pub enum PlayerAction {
+    #[actionlike(DualAxis)]
     Walk,
     Run,
 }
@@ -23,11 +24,11 @@ impl PlayerAction {
         let mut input_map = InputMap::default();
 
         // Default gamepad input bindings
-        input_map.insert(Self::Walk, DualAxis::left_stick());
-        input_map.insert(Self::Run, GamepadButtonType::South);
+        input_map.insert_dual_axis(Self::Walk, GamepadStick::LEFT);
+        input_map.insert(Self::Run, GamepadButton::South);
 
         // Default kbm input bindings
-        input_map.insert(Self::Walk, VirtualDPad::wasd());
+        input_map.insert_dual_axis(Self::Walk, VirtualDPad::wasd());
         input_map.insert(Self::Run, KeyCode::ShiftLeft);
 
         input_map

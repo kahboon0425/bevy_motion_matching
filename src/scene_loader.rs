@@ -1,8 +1,6 @@
+use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor};
 use bevy::prelude::*;
 use bevy::render::mesh::VertexAttributeValues;
-use bevy::render::texture::{
-    ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor,
-};
 
 use crate::draw_axes::ColorPalette;
 use crate::motion::motion_player::MotionPlayerBundle;
@@ -25,22 +23,17 @@ fn spawn_scene(mut commands: Commands, asset_server: Res<AssetServer>) {
     // spawn the first scene in the file
     let scene: Handle<Scene> = asset_server.load("glb/model_skeleton_mixamo.glb#Scene0");
     info!("Loaded scene: {:?}", scene);
-    commands
-        .spawn((MainScene, SceneBundle { scene, ..default() }))
-        .insert((
-            PlayerBundle::default(),
-            TrajectoryBundle::new(100),
-            MotionPlayerBundle::default(),
-        ));
+    commands.spawn((MainScene, SceneRoot(scene))).insert((
+        PlayerBundle::default(),
+        TrajectoryBundle::new(100),
+        MotionPlayerBundle::default(),
+    ));
 }
 
 fn spawn_light(mut commands: Commands) {
     commands
-        .spawn(DirectionalLightBundle {
-            directional_light: DirectionalLight {
-                shadows_enabled: true,
-                ..default()
-            },
+        .spawn(DirectionalLight {
+            shadows_enabled: true,
             ..default()
         })
         .insert(Transform::from_rotation(Quat::from_euler(
@@ -70,30 +63,27 @@ fn spawn_ground(
     };
 
     commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(plane_mesh),
-            material: materials.add(StandardMaterial {
-                base_color: palette.base2,
-                base_color_texture: Some(asset_server.load_with_settings(
-                    "textures/Grid.png",
-                    |s: &mut _| {
-                        *s = ImageLoaderSettings {
-                            sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
-                                // rewriting mode to repeat image,
-                                address_mode_u: ImageAddressMode::Repeat,
-                                address_mode_v: ImageAddressMode::Repeat,
-                                ..default()
-                            }),
+        Mesh3d(meshes.add(plane_mesh)),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: palette.base2,
+            base_color_texture: Some(asset_server.load_with_settings(
+                "textures/Grid.png",
+                |s: &mut _| {
+                    *s = ImageLoaderSettings {
+                        sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
+                            // rewriting mode to repeat image,
+                            address_mode_u: ImageAddressMode::Repeat,
+                            address_mode_v: ImageAddressMode::Repeat,
                             ..default()
-                        }
-                    },
-                )),
-                reflectance: 0.5,
-                metallic: 0.5,
-                ..default()
-            }),
+                        }),
+                        ..default()
+                    }
+                },
+            )),
+            reflectance: 0.5,
+            metallic: 0.5,
             ..default()
-        },
+        })),
         GroundPlane,
     ));
 }

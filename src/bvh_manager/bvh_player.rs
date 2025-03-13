@@ -28,18 +28,18 @@ impl Plugin for BvhPlayerPlugin {
 
 fn generate_bone_map(
     mut commands: Commands,
-    q_character: Query<(Entity, &Handle<Scene>), (With<MainScene>, Without<JointMap>)>,
+    q_character: Query<(Entity, &SceneRoot), (With<MainScene>, Without<JointMap>)>,
     q_names: Query<&Name>,
     q_children: Query<&Children>,
     q_transforms: Query<&Transform>,
     server: Res<AssetServer>,
     mut asset_loaded: Local<bool>,
 ) {
-    let Ok((entity, scene_handle)) = q_character.get_single() else {
+    let Ok((entity, scene_root)) = q_character.get_single() else {
         return;
     };
 
-    let Some(load_states) = server.get_load_states(scene_handle) else {
+    let Some(load_states) = server.get_load_states(&**scene_root) else {
         return;
     };
 
@@ -176,7 +176,7 @@ fn bvh_player(
     // otherwise, local_time will be set to the mutated value.
     *local_time = bvh_player.current_time;
     if bvh_player.is_playing {
-        *local_time += time.delta_seconds();
+        *local_time += time.delta_secs();
         bvh_player.current_time = *local_time % bvh_player.duration
     }
 }

@@ -46,7 +46,7 @@ fn predict_trajectory(
     time: Res<Time>,
     mut speed: Local<f32>,
 ) {
-    let damping = match action.pressed(&PlayerAction::Walk) {
+    let damping = match action.axis_pair(&PlayerAction::Walk) != Vec2::ZERO {
         true => 0.9,
         false => 0.6,
     };
@@ -58,7 +58,7 @@ fn predict_trajectory(
 
     *speed = speed.lerp(
         target_speed,
-        time.delta_seconds() * movement_config.lerp_factor,
+        time.delta_secs() * movement_config.lerp_factor,
     );
 
     for (mut trajectory, transform2d, velocity, direction) in q_trajectories.iter_mut() {
@@ -123,10 +123,10 @@ fn history_trajectory(
         let mut vel_end = *velocity_record[0].value;
 
         // Accumulate the record time.
-        let mut record_time = time.delta_seconds();
+        let mut record_time = time.delta_secs();
         // Keep track of our last used record index
         let mut record_index = 0;
-        let mut curr_delta_time = time.delta_seconds();
+        let mut curr_delta_time = time.delta_secs();
 
         for i in 1..=trajectory_config.history_count {
             let target_time = i as f32 * trajectory_config.interval_time;
@@ -207,13 +207,12 @@ fn update_velocities(
     time: Res<Time>,
 ) {
     // Prevent division by 0
-    if time.delta_seconds() < f32::EPSILON {
+    if time.delta_secs() < f32::EPSILON {
         return;
     }
 
     for (mut velocity, prev_transform2d, transform2d) in q_velocities.iter_mut() {
-        **velocity =
-            (transform2d.translation - prev_transform2d.translation) / time.delta_seconds();
+        **velocity = (transform2d.translation - prev_transform2d.translation) / time.delta_secs();
     }
 }
 
