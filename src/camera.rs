@@ -2,7 +2,7 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 use bevy::{
     core_pipeline::{
-        bloom::BloomSettings,
+        bloom::Bloom,
         tonemapping::{DebandDither, Tonemapping},
     },
     input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
@@ -18,8 +18,7 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Msaa>()
-            .init_resource::<CameraFocus>()
+        app.init_resource::<CameraFocus>()
             .add_systems(Startup, spawn_camera)
             .add_systems(
                 PreUpdate,
@@ -31,9 +30,9 @@ impl Plugin for CameraPlugin {
 }
 
 /// Bundle to spawn our custom camera easily.
-#[derive(Bundle, Default)]
+#[derive(Default, Bundle)]
 pub struct PanOrbitCameraBundle {
-    pub camera: Camera3dBundle,
+    pub camera: Camera3d,
     pub state: PanOrbitState,
     pub settings: PanOrbitSettings,
 }
@@ -129,16 +128,16 @@ fn spawn_camera(mut commands: Commands) {
     camera.state.radius = 5.0;
     camera.state.pitch = -15.0f32.to_radians();
     camera.state.yaw = 30.0f32.to_radians();
-    camera.camera = Camera3dBundle {
-        camera: Camera {
+    commands.spawn((
+        camera,
+        Camera {
             hdr: true,
             ..default()
         },
-        deband_dither: DebandDither::Enabled,
-        tonemapping: Tonemapping::AcesFitted,
-        ..default()
-    };
-    commands.spawn(camera).insert(BloomSettings::default());
+        Bloom::default(),
+        DebandDither::Enabled,
+        Tonemapping::AcesFitted,
+    ));
 }
 
 fn pan_orbit_camera(

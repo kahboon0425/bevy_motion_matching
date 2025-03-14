@@ -64,7 +64,7 @@ fn preset_movement_direction(
 
     const DIRECTION_DURATIONS: [f32; 4] = [2.0, 2.0, 2.0, 2.0];
 
-    let new_elapsed_time = elapsed_time + time.delta_seconds();
+    let new_elapsed_time = elapsed_time + time.delta_secs();
 
     let current_direction_duration = DIRECTION_DURATIONS[current_direction];
 
@@ -85,7 +85,7 @@ fn preset_movement_direction(
         **movement_direction = Vec2::lerp(
             **movement_direction,
             direction,
-            f32::min(1.0, movement_config.lerp_factor * time.delta_seconds()),
+            f32::min(1.0, movement_config.lerp_factor * time.delta_secs()),
         );
     }
 }
@@ -104,8 +104,7 @@ fn movement_direction(
     let camera_transform = q_camera.single();
     let mut action_axis = action
         .clamped_axis_pair(&PlayerAction::Walk)
-        .map(|axis| axis.xy().normalize_or_zero())
-        .unwrap_or_default();
+        .normalize_or_zero();
     action_axis.x = -action_axis.x;
 
     for mut movement_direction in q_movement_directions.iter_mut() {
@@ -116,7 +115,7 @@ fn movement_direction(
         **movement_direction = Vec2::lerp(
             **movement_direction,
             target_direction,
-            f32::min(1.0, movement_config.lerp_factor * time.delta_seconds()),
+            f32::min(1.0, movement_config.lerp_factor * time.delta_secs()),
         );
     }
 }

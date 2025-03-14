@@ -26,7 +26,7 @@ fn record<T: Recordable>(mut q_records: Query<(&T, &mut Records<T>)>, time: Res<
         record.pop_back();
         record.push_front(Record {
             value,
-            delta_time: time.delta_seconds(),
+            delta_time: time.delta_secs(),
         });
     }
 }

@@ -128,6 +128,6 @@ fn groupbox<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R)
         .inner_margin(6.0)
         // .outer_margin(4.0)
         .stroke((1.0, Color32::DARK_GRAY))
-        .rounding(5.0)
+        .corner_radius(5.0)
         .show(ui, add_contents);
 }

@@ -248,7 +248,7 @@ fn update_interp_factor(
 
     for mut motion_player in q_motion_players.iter_mut() {
         motion_player
-            .update_interp_factor(time.delta_seconds() / motion_player_config.interp_duration);
+            .update_interp_factor(time.delta_secs() / motion_player_config.interp_duration);
     }
 }
 
@@ -258,7 +258,7 @@ fn update_trajectory_pose_time(
 ) {
     for mut traj_pose_pair in q_traj_pose_pairs.iter_mut() {
         for traj_pose in traj_pose_pair.iter_mut().filter_map(Some).flatten() {
-            traj_pose.update_time(time.delta_seconds());
+            traj_pose.update_time(time.delta_secs());
         }
     }
 }
@@ -504,9 +504,9 @@ impl TrajectoryPose {
     }
 
     /// Increase [`Self::elapsed_time`] and [`Self::motion_pose`] time.
-    pub fn update_time(&mut self, delta_seconds: f32) {
-        self.elapsed_time += delta_seconds;
-        self.motion_pose.time += delta_seconds;
+    pub fn update_time(&mut self, delta_secs: f32) {
+        self.elapsed_time += delta_secs;
+        self.motion_pose.time += delta_secs;
     }
 }
 
